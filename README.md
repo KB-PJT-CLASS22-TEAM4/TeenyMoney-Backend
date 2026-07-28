@@ -171,8 +171,15 @@ MyBatis Mapper XML은 Java 패키지와 대응하도록
 ```
 
 실패 응답은 `success=false`로 반환하며, `code`에는 서버에서 정의한
-`ErrorCode` enum의 코드 값을 사용합니다. 내부 예외 메시지, SQL, 서버 경로는
+에러 코드 값을 사용합니다. 내부 예외 메시지, SQL, 서버 경로는
 응답에 노출하지 않고 서버 로그에만 기록합니다.
+
+에러 코드는 `ErrorCode` 인터페이스(`getStatus`, `getMessage`, `getCode`)로 정의합니다.
+공통 인프라 오류와 시큐리티 교차 관심사(`AUTH_UNAUTHORIZED`, `AUTH_FORBIDDEN`)는
+`CommonErrorCode`에서 관리하고, 도메인 업무 오류는 도메인별 enum(예: `AuthErrorCode`)이
+`ErrorCode`를 구현해 `domain/<도메인>/exception`에 둡니다. 각 enum의 `getCode()`는
+`name()`을 반환하며, 공통 파일(`CommonErrorCode`, `GlobalExceptionAdvice`, `ApiResponse`)에
+도메인 코드를 추가하지 않습니다.
 
 성공 응답의 `code`는 공통으로 `OK`를 사용합니다. 도메인별 성공 코드는 별도
 팀 결정 없이 추가하지 않습니다.
