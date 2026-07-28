@@ -2,7 +2,7 @@ package com.teenyfin.teenymoney.global.response;
 
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import com.teenyfin.teenymoney.global.exception.GlobalExceptionAdvice;
-import com.teenyfin.teenymoney.global.exception.ErrorCode;
+import com.teenyfin.teenymoney.global.exception.CommonErrorCode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,7 +30,7 @@ class ApiResponseFormatTest {
 
         @GetMapping("/fail")
         ApiResponse<Void> fail() {
-            throw new BusinessException(ErrorCode.AUTH_FORBIDDEN);
+            throw new BusinessException(CommonErrorCode.AUTH_FORBIDDEN);
         }
     }
 

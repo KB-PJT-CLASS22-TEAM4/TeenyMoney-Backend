@@ -1,7 +1,7 @@
 package com.teenyfin.teenymoney.global.health.service;
 
 import com.teenyfin.teenymoney.global.exception.BusinessException;
-import com.teenyfin.teenymoney.global.exception.ErrorCode;
+import com.teenyfin.teenymoney.global.exception.CommonErrorCode;
 import com.teenyfin.teenymoney.global.health.dto.response.DatabaseHealthResponseDTO;
 import com.teenyfin.teenymoney.global.health.mapper.HealthMapper;
 import com.teenyfin.teenymoney.global.health.vo.DatabaseHealthVO;
@@ -35,7 +35,7 @@ public class HealthService {
             );
 
             throw new BusinessException(
-                    ErrorCode.COMMON_SERVICE_UNAVAILABLE
+                    CommonErrorCode.COMMON_SERVICE_UNAVAILABLE
             );
         }
     }
@@ -45,7 +45,7 @@ public class HealthService {
     ) {
         if (databaseHealthVO == null) {
             throw new BusinessException(
-                    ErrorCode.COMMON_SERVICE_UNAVAILABLE
+                    CommonErrorCode.COMMON_SERVICE_UNAVAILABLE
             );
         }
 
@@ -53,14 +53,14 @@ public class HealthService {
                 databaseHealthVO.getCheckResult()
         )) {
             throw new BusinessException(
-                    ErrorCode.COMMON_SERVICE_UNAVAILABLE
+                    CommonErrorCode.COMMON_SERVICE_UNAVAILABLE
             );
         }
 
         if (databaseHealthVO.getDatabaseName() == null
                 || databaseHealthVO.getDatabaseName().isBlank()) {
             throw new BusinessException(
-                    ErrorCode.COMMON_SERVICE_UNAVAILABLE
+                    CommonErrorCode.COMMON_SERVICE_UNAVAILABLE
             );
         }
     }

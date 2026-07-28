@@ -9,6 +9,15 @@ import lombok.Getter;
  *   throw new BusinessException(WalletErrorCode.INSUFFICIENT_BALANCE);
  *
  * Controller에서 try-catch 하지 말 것. 그대로 통과시키면 된다.
+ *
+ *   예시)
+ *   Controller
+ *     -> Service
+ *        -> 업무 조건 검사 실패
+ *        -> BusinessException 발생
+ *     -> GlobalExceptionAdvice
+ *     -> ErrorCode에 맞는 HTTP 응답 반환
+ *
  */
 @Getter
 public class BusinessException extends RuntimeException {
