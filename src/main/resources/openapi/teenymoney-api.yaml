@@ -1,0 +1,164 @@
+openapi: 3.0.3
+
+info:
+  title: TeenyMoney API
+  description: |
+    부모와 자녀가 함께 사용하는 가족 금융 서비스 티니머니의 REST API 문서입니다.
+  version: 0.1.0
+
+servers:
+  - url: /
+    description: 현재 Swagger가 실행 중인 서버
+  - url: http://localhost:8080
+    description: 로컬 개발 서버
+  - url: https://www.teenymoney.kro.kr
+    description: 개발 통합 서버
+
+tags:
+  - name: Health
+    description: 애플리케이션과 데이터베이스 상태 확인
+
+paths:
+  /api/v1/health:
+    get:
+      tags:
+        - Health
+      summary: 애플리케이션 상태 확인
+      description: |
+        Nginx, Tomcat, Spring MVC 애플리케이션이 정상적으로 응답하는지 확인합니다.
+        데이터베이스에는 접근하지 않습니다.
+      operationId: getApplicationHealth
+      responses:
+        "200":
+          description: 애플리케이션이 정상적으로 실행 중
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthApiResponse"
+              example:
+                success: true
+                code: OK
+                message: 성공
+                data:
+                  status: UP
+                  time: "2026-07-28 10:20:00"
+
+  /api/v1/health/db:
+    get:
+      tags:
+        - Health
+      summary: 데이터베이스 상태 확인
+      description: |
+        MyBatis Mapper를 통해 MySQL에 SELECT 1과 DATABASE()를 실행합니다.
+      operationId: getDatabaseHealth
+      responses:
+        "200":
+          description: 데이터베이스 연결 및 SQL 실행 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DatabaseHealthApiResponse"
+              example:
+                success: true
+                code: OK
+                message: 성공
+                data:
+                  database: teenymoney
+
+        "503":
+          description: 데이터베이스 연결 또는 SQL 실행 실패
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorApiResponse"
+              example:
+                success: false
+                code: COMMON_SERVICE_UNAVAILABLE
+                message: 서비스를 일시적으로 사용할 수 없습니다.
+                data: null
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - time
+      properties:
+        status:
+          type: string
+          example: UP
+        time:
+          type: string
+          example: "2026-07-28 10:20:00"
+
+    DatabaseHealthResponse:
+      type: object
+      required:
+        - database
+      properties:
+        database:
+          type: string
+          example: teenymoney
+
+    HealthApiResponse:
+      type: object
+      required:
+        - success
+        - code
+        - message
+        - data
+      properties:
+        success:
+          type: boolean
+          example: true
+        code:
+          type: string
+          example: OK
+        message:
+          type: string
+          example: 성공
+        data:
+          $ref: "#/components/schemas/HealthResponse"
+
+    DatabaseHealthApiResponse:
+      type: object
+      required:
+        - success
+        - code
+        - message
+        - data
+      properties:
+        success:
+          type: boolean
+          example: true
+        code:
+          type: string
+          example: OK
+        message:
+          type: string
+          example: 성공
+        data:
+          $ref: "#/components/schemas/DatabaseHealthResponse"
+
+    ErrorApiResponse:
+      type: object
+      required:
+        - success
+        - code
+        - message
+        - data
+      properties:
+        success:
+          type: boolean
+          example: false
+        code:
+          type: string
+          example: COMMON_SERVICE_UNAVAILABLE
+        message:
+          type: string
+          example: 서비스를 일시적으로 사용할 수 없습니다.
+        data:
+          type: object
+          nullable: true
+          example: null
