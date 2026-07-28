@@ -1,7 +1,6 @@
 package com.teenyfin.teenymoney.global.exception;
 
 import com.teenyfin.teenymoney.global.response.ApiResponse;
-import lombok.extern.log4j.Log4j2;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -34,7 +33,7 @@ public class GlobalExceptionAdvice {
         ErrorCode code = e.getErrorCode();
         log.warn("BusinessException: {} - {}", code.getCode(), e.getMessage());
         return ResponseEntity.status(code.getStatus())
-                .body(ApiResponse.error(code, e.getMessage(), null));
+                .body(ApiResponse.error(code));
     }
 
     /** @Valid 검증 실패. 어느 필드가 왜 틀렸는지 data에 담아준다. */

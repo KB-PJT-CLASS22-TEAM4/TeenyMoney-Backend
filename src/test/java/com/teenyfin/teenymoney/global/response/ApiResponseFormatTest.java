@@ -11,6 +11,8 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.nio.charset.StandardCharsets;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -47,7 +49,8 @@ class ApiResponseFormatTest {
     @DisplayName("성공 응답은 success=true, code=OK, data 포함")
     void successEnvelope() throws Exception {
         String body = mockMvc.perform(get("/ok"))
-                .andReturn().getResponse().getContentAsString();
+                .andReturn().getResponse()
+                .getContentAsString(StandardCharsets.UTF_8);
 
         assertTrue(body.contains("\"success\":true"), body);
         assertTrue(body.contains("\"code\":\"OK\""), body);
@@ -58,11 +61,12 @@ class ApiResponseFormatTest {
     @DisplayName("BusinessException은 ErrorCode의 상태 코드와 code 문자열로 변환된다")
     void errorEnvelope() throws Exception {
         var response = mockMvc.perform(get("/fail")).andReturn().getResponse();
-        String body = response.getContentAsString();
+        String body = response.getContentAsString(StandardCharsets.UTF_8);
 
         assertEquals(403, response.getStatus());
         assertTrue(body.contains("\"success\":false"), body);
         assertTrue(body.contains("\"code\":\"AUTH_FORBIDDEN\""), body);
+        assertTrue(body.contains("\"message\":\"접근 권한이 없습니다.\""), body);
     }
 
     @Test

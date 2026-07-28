@@ -6,7 +6,6 @@ import com.teenyfin.teenymoney.global.health.dto.response.DatabaseHealthResponse
 import com.teenyfin.teenymoney.global.health.mapper.HealthMapper;
 import com.teenyfin.teenymoney.global.health.vo.DatabaseHealthVO;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.log4j.Log4j2;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;

@@ -1,5 +1,7 @@
 package com.teenyfin.teenymoney.global.exception;
 
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 
 /**
@@ -8,6 +10,8 @@ import org.springframework.http.HttpStatus;
  * 도메인 업무 코드는 각 도메인 enum(예: AuthErrorCode)에 두고 이 파일은 건드리지 않는다.
  * 여기에 도메인 코드를 몰아넣으면 여러 담당자가 같은 파일을 고쳐 충돌한다.
  */
+@Getter
+@RequiredArgsConstructor
 public enum CommonErrorCode implements ErrorCode {
 
     // --- 400 ---
@@ -29,21 +33,6 @@ public enum CommonErrorCode implements ErrorCode {
 
     private final HttpStatus status;
     private final String message;
-
-    CommonErrorCode(HttpStatus status, String message) {
-        this.status = status;
-        this.message = message;
-    }
-
-    @Override
-    public HttpStatus getStatus() {
-        return status;
-    }
-
-    @Override
-    public String getMessage() {
-        return message;
-    }
 
     @Override
     public String getCode() {
