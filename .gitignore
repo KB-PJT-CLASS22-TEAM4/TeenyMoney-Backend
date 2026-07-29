@@ -26,6 +26,9 @@ out/
 *.keystore
 src/main/resources/application-local.properties
 
+### Local planning ###
+docs/superpowers/
+
 ### Eclipse ###
 .apt_generated
 .classpath
