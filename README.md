@@ -375,14 +375,21 @@ CI는 실제 MySQL, Redis 또는 EC2에 연결하지 않으며 배포도 수행�
 - API 변경 시 OpenAPI YAML과 관련 문서를 함께 갱신합니다.
 - 비밀번호, 토큰, SSH 키, 실제 개인정보를 커밋하지 않습니다.
 
-브랜치 예시:
+Issue와 Pull Request의 메타데이터는 다음 기준으로 관리합니다.
+
+- Issue 제목에는 접두어 없이 실제 작업 내용만 작성합니다.
+- Backend와 Frontend 작업은 Repository로 구분합니다.
+- 작업 종류는 Organization Issue Type으로 관리합니다.
+- 우선순위와 작업량은 Organization Issue Field의 `Priority`, `Effort`로 관리합니다.
+- 일정은 `Start date`, `Target date`로 관리합니다.
+- 상위 작업 관계는 Parent issue와 Sub-issue로 연결합니다.
+- `domain:*` Label은 업무 기능 영역, `area:*` Label은 기술 작업 영역을 나타냅니다.
+- 논의가 필요한 작업은 `needs: discussion`, 진행이 차단된 작업은 `status: blocked` Label을 사용합니다.
+
+브랜치 이름은 `<이슈번호>-<타입>-<담당자이니셜>-<작업요약>` 형식을 사용합니다.
 
 ```text
-feature/member-signup
-fix/auth-token-validation
-refactor/member-service
-docs/update-readme
-chore/update-ci
+7-chore-psh-github-templates
 ```
 
 커밋 메시지 예시:
@@ -395,6 +402,10 @@ docs: 로컬 실행 방법 추가
 test: 로그인 서비스 테스트 추가
 chore: Redis 의존성 추가
 ```
+
+Pull Request 제목은 `type(scope): 변경 내용` 형식을 사용합니다. 허용하는 `type`은
+`feat`, `fix`, `refactor`, `test`, `docs`, `chore`이며, `scope`에는 `auth`,
+`member`, `wallet`, `common`, `github`, `infra` 등 변경 영역을 작성합니다.
 
 ## 보안 주의사항
 

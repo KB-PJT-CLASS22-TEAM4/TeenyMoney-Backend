@@ -1,14 +1,60 @@
-## Summary
+<!--
+PR 제목 형식: type(scope): 변경 내용
+허용 type: feat, fix, refactor, test, docs, chore
+scope 예시: auth, member, family, wallet, ledger, payment, deposit, quest,
+notification, common, github, infra
+PR 제목에는 [BE], [FE], [Feature], [Bug] 등의 접두어를 사용하지 않습니다.
+-->
 
+## 관련 이슈
+
+<!--
+자동으로 종료할 이슈만 Closes를 사용합니다.
+단순 관련 이슈는 Related to 또는 Refs를 사용합니다.
+-->
+
+- Closes #
+- Related to #
+
+## 변경 목적
+
+<!-- 왜 이 변경이 필요한지 작성합니다. -->
 -
 
-## Related Issue
+## 주요 변경 내용
 
-Closes #
+<!-- 핵심 변경 사항을 체크리스트 또는 목록으로 작성합니다. -->
+- [ ]
 
-## Checklist
+## 변경 파일 및 영역
 
-- [ ] I tested this locally.
-- [ ] I updated docs if needed.
-- [ ] I did not include secrets or private data.
-- [ ] I attached screenshots for UI changes.
+<!-- 주요 패키지, 파일, 화면, API, DB 등 변경 범위를 작성합니다. -->
+-
+
+## 검증 방법
+
+<!-- 실행한 테스트, API 호출, 화면·Swagger 확인, 빌드 결과 등을 작성합니다. -->
+-
+
+## 영향 범위
+
+<!-- API, DB, 인증, 트랜잭션, 배포 환경 등에 미치는 영향을 작성합니다. -->
+-
+
+## 스크린샷
+
+<!-- Swagger, Postman 또는 응답 확인 이미지가 있다면 첨부합니다. 선택 항목입니다. -->
+
+## 체크리스트
+
+- [ ] PR 제목이 `type(scope): 변경 내용` 형식에 맞습니다.
+- [ ] 연결된 Issue와 구현 범위가 일치합니다.
+- [ ] 불필요한 디버그 코드와 로그를 제거했습니다.
+- [ ] 로컬 빌드 또는 실행 검증을 완료했습니다.
+- [ ] 관련 테스트를 추가하거나 기존 테스트를 실행했습니다.
+- [ ] 공통 규칙 변경 시 문서를 함께 수정했습니다.
+- [ ] 환경변수나 비밀정보를 코드에 포함하지 않았습니다.
+- [ ] API 변경 사항을 OpenAPI YAML 또는 관련 명세에 반영했습니다.
+- [ ] DB 스키마 변경 시 DDL 또는 SQL 문서를 반영했습니다.
+- [ ] 트랜잭션과 예외 처리 영향을 확인했습니다.
+- [ ] 인증·인가 변경 시 정상, 401, 403 시나리오를 확인했습니다.

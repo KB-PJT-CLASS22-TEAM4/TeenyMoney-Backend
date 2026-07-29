@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
-  - name: 팀 컨벤션 확인
-    url: https://app.notion.com/p/b4bf42c11b07821bb0e00124eb2959d8/
-    about: Issue 작성 전 팀 컨벤션을 먼저 확인해주세요.
+  - name: 이슈 작성 가이드 및 팀 컨벤션
+    url: https://app.notion.com/p/8909087b3eed825ba4e101761520a50a
+    about: 이슈 제목, Type, Priority, 라벨, 브랜치 및 PR 작성 규칙을 확인해주세요.

@@ -1,0 +1,119 @@
+name: 논의·의사결정
+description: 정책, 설계, 범위 또는 구현 방향에 대해 팀의 결정이 필요한 작업입니다.
+title: ""
+type: Task
+labels:
+  - "needs: discussion"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### 작성 안내
+        이슈 제목에는 `[BE]`, `[FE]` 등의 접두어 없이 결정이 필요한 실제 내용을 작성합니다.
+        이슈 생성 후 우측 Fields와 Labels에서 구조화된 메타데이터를 설정합니다.
+
+  - type: textarea
+    id: decision-topic
+    attributes:
+      label: 결정이 필요한 내용
+      description: 팀에서 결정해야 하는 정책, 설계, 범위 또는 구현 방향을 작성해주세요.
+      placeholder: 하나의 이슈에서 결정할 핵심 질문을 작성해주세요.
+    validations:
+      required: true
+
+  - type: textarea
+    id: discussion-background
+    attributes:
+      label: 논의 배경
+      description: 이 결정이 필요한 배경과 현재 상황을 작성해주세요.
+      placeholder: 문제의 맥락과 지금 결정해야 하는 이유를 작성해주세요.
+    validations:
+      required: true
+
+  - type: textarea
+    id: available-options
+    attributes:
+      label: 선택 가능한 방안
+      description: 검토 가능한 방안을 번호로 구분해 작성해주세요.
+      placeholder: |
+        1. 방안 A
+        2. 방안 B
+        3. 방안 C
+    validations:
+      required: true
+
+  - type: textarea
+    id: option-tradeoffs
+    attributes:
+      label: 방안별 장점과 단점
+      description: 각 방안의 장점, 단점과 주요 트레이드오프를 작성해주세요.
+      placeholder: |
+        1. 방안 A
+           - 장점:
+           - 단점:
+        2. 방안 B
+           - 장점:
+           - 단점:
+    validations:
+      required: true
+
+  - type: textarea
+    id: recommended-option
+    attributes:
+      label: 작성자 권장안
+      description: 작성자가 권장하는 방안과 그 이유를 작성해주세요.
+      placeholder: 권장 방안과 판단 근거를 작성해주세요.
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact-scope
+    attributes:
+      label: 영향 범위
+      description: 영향을 받는 도메인, API, DB, UI, 일정 등을 작성해주세요.
+      placeholder: 결정 결과가 영향을 주는 기능과 일정을 작성해주세요.
+    validations:
+      required: true
+
+  - type: input
+    id: desired-decision-date
+    attributes:
+      label: 결정 희망 일자
+      description: 결정이 필요한 희망 일자를 작성해주세요.
+      placeholder: YYYY-MM-DD
+    validations:
+      required: false
+
+  - type: textarea
+    id: final-decision
+    attributes:
+      label: 최종 결정 기록
+      description: 초기 생성 시에는 비워두고, 논의 완료 후 결정 내용을 기록해주세요.
+      placeholder: |
+        - 결정 내용:
+        - 결정 일자:
+        - 참여자:
+        - 후속 이슈:
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: decision-record-confirmation
+    attributes:
+      label: 필수 확인
+      options:
+        - label: 논의가 완료되면 최종 결정과 후속 작업을 이슈에 기록합니다.
+          required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ### 이슈 생성 후 확인할 항목
+        - [ ] Assignee 지정
+        - [ ] Priority 지정
+        - [ ] Effort 지정
+        - [ ] 필요한 경우 Start date와 Target date 지정
+        - [ ] 업무 기능에 맞는 `domain:*` Label 지정
+        - [ ] 기술 작업 영역에 맞는 `area:*` Label 지정
+        - [ ] 상위 작업이 있다면 Parent issue 연결
+        - [ ] 진행할 수 없는 상태라면 `status: blocked` Label 지정

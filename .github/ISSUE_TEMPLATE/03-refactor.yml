@@ -1,0 +1,102 @@
+name: 리팩터링
+description: 기능 동작을 변경하지 않고 코드 구조와 유지보수성을 개선하는 작업입니다.
+title: ""
+type: Refactor
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### 작성 안내
+        이슈 제목에는 `[BE]`, `[FE]`, `[Refactor]` 등의 접두어 없이 실제 작업 내용만 작성합니다.
+        이슈 생성 후 우측 Fields와 Labels에서 구조화된 메타데이터를 설정합니다.
+
+  - type: textarea
+    id: current-problem
+    attributes:
+      label: 현재 구조의 문제
+      description: 중복, 결합도, 확장성, 가독성 등 현재 구조의 문제를 작성해주세요.
+      placeholder: 리팩터링이 필요한 구체적인 이유를 작성해주세요.
+    validations:
+      required: true
+
+  - type: textarea
+    id: target-structure
+    attributes:
+      label: 목표 구조
+      description: 변경 후 구조와 설계 의도를 작성해주세요.
+      placeholder: 변경하려는 구조와 선택한 설계의 이유를 작성해주세요.
+    validations:
+      required: true
+
+  - type: textarea
+    id: change-targets
+    attributes:
+      label: 변경 대상
+      description: 변경할 패키지, 파일, 클래스 또는 컴포넌트를 작성해주세요.
+      placeholder: 주요 변경 대상을 경로 또는 이름과 함께 작성해주세요.
+    validations:
+      required: true
+
+  - type: textarea
+    id: affected-references
+    attributes:
+      label: 영향받는 참조 코드
+      description: 함께 변경하거나 확인해야 하는 참조 코드를 작성해주세요.
+      placeholder: 호출부, 구현체, 테스트, 설정 또는 문서를 작성해주세요.
+    validations:
+      required: true
+
+  - type: textarea
+    id: preserved-behavior
+    attributes:
+      label: 유지해야 하는 기존 동작
+      description: 리팩터링 후에도 동일해야 하는 동작을 작성해주세요.
+      placeholder: API 계약, 예외 처리, 데이터 처리 등 유지할 동작을 작성해주세요.
+    validations:
+      required: true
+
+  - type: textarea
+    id: implementation-checklist
+    attributes:
+      label: 구현 체크리스트
+      description: 수행할 작업을 체크리스트 형태로 작성해주세요.
+      placeholder: |
+        - [ ] 변경 작업 1
+        - [ ] 변경 작업 2
+    validations:
+      required: true
+
+  - type: textarea
+    id: verification-method
+    attributes:
+      label: 검증 방법
+      description: 기존 테스트, 신규 테스트, 종단 테스트 또는 빌드 등의 검증 방법을 작성해주세요.
+      placeholder: 변경 전후 동작이 동일함을 확인하는 방법을 작성해주세요.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: required-confirmations
+    attributes:
+      label: 필수 확인
+      description: 리팩터링 원칙을 확인해주세요.
+      options:
+        - label: 사용자에게 노출되는 기능 동작을 의도적으로 변경하지 않습니다.
+          required: true
+        - label: 변경 전후의 동일 동작을 테스트로 검증합니다.
+          required: true
+        - label: 공통 규칙이 변경되면 README 또는 관련 문서를 함께 수정합니다.
+          required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        ### 이슈 생성 후 확인할 항목
+        - [ ] Assignee 지정
+        - [ ] Priority 지정
+        - [ ] Effort 지정
+        - [ ] 필요한 경우 Start date와 Target date 지정
+        - [ ] 업무 기능에 맞는 `domain:*` Label 지정
+        - [ ] 기술 작업 영역에 맞는 `area:*` Label 지정
+        - [ ] 상위 작업이 있다면 Parent issue 연결
+        - [ ] 진행할 수 없는 상태라면 `status: blocked` Label 지정

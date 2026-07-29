@@ -1,0 +1,117 @@
+name: 버그 수정
+description: 기존 기능이 의도한 동작과 다르거나 오류가 발생한 경우 사용하는 작업입니다.
+title: ""
+type: Bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### 작성 안내
+        이슈 제목에는 `[BE]`, `[FE]`, `[Bug]` 등의 접두어 없이 실제 문제 내용만 작성합니다.
+        이슈 생성 후 우측 Fields와 Labels에서 구조화된 메타데이터를 설정합니다.
+
+  - type: textarea
+    id: problem-summary
+    attributes:
+      label: 문제 요약
+      description: 발생한 문제를 간결하고 명확하게 작성해주세요.
+      placeholder: 어떤 기능에서 어떤 문제가 발생했는지 작성해주세요.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environments
+    attributes:
+      label: 발생 환경
+      description: 문제가 발생한 Backend 환경을 모두 선택해주세요.
+      multiple: true
+      options:
+        - 로컬 개발 환경
+        - EC2 배포 환경
+        - Swagger
+        - Postman
+        - MySQL
+        - Redis
+        - Nginx·Tomcat
+        - GitHub Actions
+        - 기타
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction-steps
+    attributes:
+      label: 재현 절차
+      description: 문제를 재현할 수 있는 순서를 작성해주세요.
+      placeholder: |
+        1. 요청 또는 실행 조건을 설정합니다.
+        2. 특정 API나 명령을 실행합니다.
+        3. 오류가 발생하는 것을 확인합니다.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: 실제 동작
+      description: 현재 실제로 발생하는 동작을 작성해주세요.
+      placeholder: 응답 상태, 오류 또는 잘못된 결과를 작성해주세요.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: 기대 동작
+      description: 정상이라면 어떻게 동작해야 하는지 작성해주세요.
+      placeholder: 기대하는 응답과 결과를 작성해주세요.
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact-scope
+    attributes:
+      label: 영향 범위
+      description: 어떤 사용자와 기능이 영향을 받는지 작성해주세요.
+      placeholder: 영향을 받는 사용자, API, 데이터 또는 배포 환경을 작성해주세요.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 로그·오류 메시지
+      description: 민감정보를 제거한 뒤 관련 로그와 오류 메시지를 붙여 넣어주세요.
+      render: shell
+    validations:
+      required: false
+
+  - type: upload
+    id: attachments
+    attributes:
+      label: 스크린샷 또는 첨부 자료
+      description: 문제 확인에 필요한 이미지, 로그 또는 기타 자료를 첨부해주세요.
+    validations:
+      required: false
+
+  - type: textarea
+    id: verification-method
+    attributes:
+      label: 수정 후 검증 방법
+      description: 정상 동작 확인과 회귀 테스트 방법을 작성해주세요.
+      placeholder: 수정 후 실행할 테스트와 확인할 결과를 작성해주세요.
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ### 이슈 생성 후 확인할 항목
+        - [ ] Assignee 지정
+        - [ ] Priority 지정
+        - [ ] Effort 지정
+        - [ ] 필요한 경우 Start date와 Target date 지정
+        - [ ] 업무 기능에 맞는 `domain:*` Label 지정
+        - [ ] 기술 작업 영역에 맞는 `area:*` Label 지정
+        - [ ] 상위 작업이 있다면 Parent issue 연결
+        - [ ] 진행할 수 없는 상태라면 `status: blocked` Label 지정
