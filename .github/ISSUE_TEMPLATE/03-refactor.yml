@@ -1,6 +1,5 @@
 name: 리팩터링
 description: 기능 동작을 변경하지 않고 코드 구조와 유지보수성을 개선하는 작업입니다.
-title: ""
 type: Refactor
 body:
   - type: markdown

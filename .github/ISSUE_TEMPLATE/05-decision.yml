@@ -1,6 +1,5 @@
 name: 논의·의사결정
 description: 정책, 설계, 범위 또는 구현 방향에 대해 팀의 결정이 필요한 작업입니다.
-title: ""
 type: Task
 labels:
   - "needs: discussion"

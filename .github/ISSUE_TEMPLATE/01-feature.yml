@@ -1,6 +1,5 @@
 name: 기능 개발
 description: 사용자에게 새로운 기능, API 또는 화면을 제공하는 작업입니다.
-title: ""
 type: Feature
 body:
   - type: markdown
