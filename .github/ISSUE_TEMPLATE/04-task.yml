@@ -1,6 +1,5 @@
 name: 일반 작업
 description: 기능을 완성하기 위한 세부 구현, 테스트, 문서, 설정 및 협업 환경 관련 작업입니다.
-title: ""
 type: Task
 body:
   - type: markdown
