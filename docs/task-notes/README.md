@@ -25,3 +25,4 @@
 
 - [하위2 Task 1 — JwtProvider와 JWT 프로퍼티](jwt-security-task1-jwtprovider.md)
 - [하위2 Task 2 — MemberPrincipal과 JwtAuthenticationFilter](jwt-security-task2-authentication-filter.md)
+- [하위2 Task 3 — 인증 401·인가 403 실패 응답 핸들러](jwt-security-task3-error-handlers.md)
