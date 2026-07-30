@@ -16,7 +16,7 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 
 @RestController
-@RequestMapping("/api/v1/health")
+@RequestMapping("/health")
 @RequiredArgsConstructor
 public class HealthController {
 

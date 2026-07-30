@@ -23,14 +23,24 @@
 - 공통 API 응답과 전역 예외 처리
 - MyBatis 및 MySQL 연결 설정
 - Redis 및 Spring Security 기본 설정
+- JWT 인증 파이프라인 (토큰 발급·검증, 인증 필터, 401/403 응답)
 - 애플리케이션 상태 확인 API
 - 데이터베이스 연결 확인 API
 - OpenAPI 3.0 명세와 Swagger UI
 - GitHub Actions 테스트 및 WAR 빌드 CI
 
 회원, 인증, 가족 연결, 지갑, 결제, 금융상품, 퀘스트, 알림 도메인은 구현
-예정입니다. 현재 Security 설정은 초기 개발 단계에 맞춰 모든 요청을 허용하므로,
-인증이 필요한 도메인을 배포하기 전에 JWT 인증과 경로별 인가 규칙을 구현해야 합니다.
+예정입니다.
+
+JWT 인증은 **메커니즘만** 구현된 상태입니다. 유효한 Access Token을 보내면 인증
+정보가 채워지고 컨트롤러가 `@AuthenticationPrincipal MemberPrincipal`로 받을 수
+있지만, **전역 인가 규칙은 여전히 모든 요청을 허용합니다**(`permitAll`). 토큰을
+발급하는 로그인 API가 아직 없어, 지금 인증을 강제하면 모든 API를 호출할 수 없기
+때문입니다.
+
+로그인 구현 이후 공개 경로 화이트리스트와 `anyRequest().authenticated()`로
+전환합니다. 그 시점에 `JWT_SECRET` 환경변수도 필수화합니다.
+인증 파이프라인의 설계 근거는 [JWT·Spring Security 구현 플랜](docs/jwt-security-pipeline.md)을 참고합니다.
 
 ## 기술 스택
 
@@ -231,13 +241,30 @@ DB_USERNAME=<LOCAL_MYSQL_USERNAME>
 DB_PASSWORD=<LOCAL_MYSQL_PASSWORD>
 REDIS_HOST=localhost
 REDIS_PORT=6379
+JWT_SECRET=<openssl rand -base64 32 으로 생성한 값>
+JWT_ACCESS_EXPIRATION_MS=1800000
+JWT_REFRESH_EXPIRATION_MS=1209600000
 ```
 
 `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`는 필수입니다. 실제 값은 IntelliJ 실행
 구성, 운영체제 환경변수 또는 Tomcat 실행 환경에 주입하며 저장소에 작성하지 않습니다.
 
-JWT 관련 환경변수는 인증 기능을 구현할 때 정의합니다. 현재 코드에서는 사용하지
-않습니다.
+`JWT_SECRET`은 로컬 개발용 기본값이 `application.properties`에 있어 **설정하지
+않아도 앱이 정상 기동합니다.** 그래서 누락을 알아차릴 수 없습니다. 이 기본값은
+저장소에 공개되어 있으므로 **배포 환경에서는 반드시 override해야 합니다.** 설정하지
+않으면 경고 없이 공개된 키로 토큰이 서명되고, 저장소를 볼 수 있는 누구나 유효한
+토큰을 위조할 수 있습니다.
+
+```bash
+openssl rand -base64 32      # Base64로 인코딩된 32바이트 키를 생성한다
+```
+
+`JWT_ACCESS_EXPIRATION_MS`(기본 30분)와 `JWT_REFRESH_EXPIRATION_MS`(기본 14일)는
+선택 항목입니다. 기본값을 그대로 사용하면 됩니다.
+
+인스턴스를 여러 대로 늘릴 경우 **모든 인스턴스가 같은 `JWT_SECRET`을 가져야
+합니다.** A 서버가 발급한 토큰을 B 서버가 검증하기 때문입니다. 또 `exp` 검증에
+허용 오차가 없으므로 서버 시각(NTP)이 동기화되어 있어야 합니다.
 
 자세한 실행 방법은 [로컬 테스트 문서](docs/LOCAL_TEST.md)를 참고합니다.
 
@@ -351,9 +378,9 @@ CI는 실제 MySQL, Redis 또는 EC2에 연결하지 않으며 배포도 수행�
 
 ## 개발 예정 범위
 
-- 회원가입과 로그인
-- JWT Access Token 및 Refresh Token
-- Redis Refresh Token 관리
+- 회원가입과 로그인 (JWT 토큰 발급)
+- Redis Refresh Token 관리와 토큰 재발급
+- 경로별 인가 규칙 전환 (`permitAll` → `authenticated`)
 - 가족 연결
 - 지갑, 거래 원장, 용돈
 - 결제와 업종별 결제 정책
@@ -410,6 +437,10 @@ Pull Request 제목은 `type(scope): 변경 내용` 형식을 사용합니다. �
 ## 보안 주의사항
 
 - 비밀번호, JWT Secret, DB 자격증명, SSH 키를 저장소와 로그에 남기지 않습니다.
+  단 `application.properties`의 `jwt.secret` 기본값은 **로컬 개발 전용이며 비밀이
+  아닙니다**(환경변수 없이도 앱이 기동하도록 둔 값). 배포 환경에서는 `JWT_SECRET`으로
+  반드시 override합니다.
+- 토큰 값과 서명 키를 로그에 출력하지 않습니다. 인증 필터에 로거를 두지 않은 이유입니다.
 - 실제 개인정보를 테스트 데이터로 사용하지 않습니다.
 - 클라이언트가 전달한 회원 ID와 권한을 그대로 신뢰하지 않습니다.
 - 금융 요청에는 트랜잭션과 멱등성을 적용합니다.

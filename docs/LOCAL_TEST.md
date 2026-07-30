@@ -29,6 +29,15 @@ $env:DB_URL = 'jdbc:mysql://localhost:3306/teenymoney?allowPublicKeyRetrieval=tr
 Redis 기본값은 `localhost:6379`입니다. 다른 Redis를 사용하면 `REDIS_HOST`,
 `REDIS_PORT`도 설정합니다.
 
+JWT는 `application.properties`에 로컬 개발용 기본값이 있어 **환경변수를 설정하지
+않아도 앱이 기동합니다.** 로컬에서는 그대로 두면 되고, 배포 환경에서만 `JWT_SECRET`을
+반드시 주입합니다(자세한 내용은 [README 환경변수](../README.md#환경변수) 참고).
+
+```powershell
+# 로컬에서 운영과 같은 조건으로 확인하려면 (선택)
+$env:JWT_SECRET = '<openssl rand -base64 32 결과>'
+```
+
 ## 2. 테스트와 WAR 빌드
 
 ```powershell
@@ -38,9 +47,16 @@ Redis 기본값은 `localhost:6379`입니다. 다른 Redis를 사용하면 `REDI
 
 `ApiResponseFormatTest`는 DB와 Tomcat 없이 공통 응답 및 예외 계약을 확인합니다.
 
-현재 `InfrastructureConfigTest`는 `RootConfig`도 로딩하므로 전체 테스트에는 유효한
-`DB_URL`, `DB_USERNAME`, `DB_PASSWORD`가 필요합니다. Redis와 Security 빈만 확인할
-목적이라면 테스트 설정에서 `RootConfig.class`를 제외해야 합니다.
+`InfrastructureConfigTest`는 `RedisConfig`와 `SecurityConfig`만 로딩하고 필요한
+값(`redis.*`, `jwt.*`)을 `@TestPropertySource`로 직접 넣습니다. `RootConfig`를
+로딩하지 않으므로 **전체 테스트는 환경변수 없이 실행됩니다.**
+
+```powershell
+.\gradlew.bat clean test     # DB_URL 등을 설정하지 않아도 통과한다
+```
+
+실제 DB나 Redis에 접속하지 않고 빈 등록과 컨텍스트 구성만 확인합니다. 실제 연결
+확인은 Tomcat으로 띄운 뒤 `/api/v1/health/db`에서 합니다.
 
 빌드 결과:
 
