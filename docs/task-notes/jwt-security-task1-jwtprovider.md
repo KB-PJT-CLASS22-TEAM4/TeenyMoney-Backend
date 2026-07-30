@@ -1,6 +1,6 @@
 # 하위2 Task 1 — JwtProvider와 JWT 프로퍼티
 
-> 플랜: [`docs/jwt-security-pipeline.md`](jwt-security-pipeline.md) §Task 1
+> 플랜: [`docs/task-notes/jwt-security-pipeline.md`](jwt-security-pipeline.md) §Task 1
 > 산출물: `global/security/jwt/JwtProvider.java`, `application.properties`, `global/security/jwt/JwtProviderTest.java`
 
 ---

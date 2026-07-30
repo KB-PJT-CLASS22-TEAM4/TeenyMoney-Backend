@@ -1,6 +1,6 @@
 # 하위2 Task 3 — 인증 401·인가 403 실패 응답 핸들러
 
-> 플랜: [`docs/jwt-security-pipeline.md`](../jwt-security-pipeline.md) §Task 3
+> 플랜: [`docs/task-notes/jwt-security-pipeline.md`](jwt-security-pipeline.md) §Task 3
 > 산출물: `global/security/ErrorResponseWriter.java`, `global/security/RestAuthenticationEntryPoint.java`, `global/security/RestAccessDeniedHandler.java`, `global/security/SecurityHandlersTest.java`
 > 선행: [Task 2 — JwtAuthenticationFilter](jwt-security-task2-authentication-filter.md)
 

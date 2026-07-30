@@ -1,6 +1,7 @@
 package com.teenyfin.teenymoney.config;
 
 import org.springframework.context.annotation.ComponentScan;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.method.HandlerTypePredicate;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
@@ -14,8 +15,14 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  * 스캔 대상은 domain, global 두 곳이다. config 패키지는 여기 없으므로
  * RootConfig가 자식 컨텍스트에 중복 등록되지 않는다.
  * (섞여 있으면 DataSource·TransactionManager가 두 벌 생겨 트랜잭션 경계가 깨진다)
+ *
+ * @EnableMethodSecurity가 SecurityConfig(루트)가 아니라 여기 있는 이유:
+ * 이 애노테이션은 '자기가 속한 컨텍스트의 빈'에만 프록시를 건다. @PreAuthorize를 붙일
+ * 컨트롤러·서비스가 이 자식 컨텍스트에 있으므로 여기 둬야 한다. 루트에 두면 애노테이션은
+ * 붙어 있는데 권한 검사가 조용히 통째로 건너뛰어진다(예외도 로그도 없다).
  */
 @EnableWebMvc
+@EnableMethodSecurity
 @ComponentScan(basePackages = {"com.teenyfin.teenymoney.domain",
                                 "com.teenyfin.teenymoney.global"})
 public class ServletConfig implements WebMvcConfigurer {

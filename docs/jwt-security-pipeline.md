@@ -15,7 +15,10 @@
 - JWT 클레임: `sub`=memberId, `role`=PARENT|CHILD, `tokenType`=**ACCESS|REFRESH**(대문자). 권한 문자열 `ROLE_{role}`.
 - 응답은 공통 `ApiResponse` 형식. 상태 코드는 `ErrorCode.getStatus()`.
 - 토큰 값·비밀키를 로그에 남기지 않는다.
-- **이 이슈는 `authenticated` 강제를 켜지 않는다.** `SecurityConfig`는 `permitAll` 유지(메커니즘만). `@EnableMethodSecurity`도 제외(향후 `ServletConfig`에 배치).
+- ~~**이 이슈는 `authenticated` 강제를 켜지 않는다.** `SecurityConfig`는 `permitAll` 유지(메커니즘만). `@EnableMethodSecurity`도 제외(향후 `ServletConfig`에 배치).~~
+  > **[2026-07-30 정정]** 이 제약은 **틀렸다.** 이슈 AC가 *"공개 경로 외 요청은 기본적으로 인증이 필요하다"*, *"CHILD 토큰으로 부모 전용 테스트 API를 호출하면 403이 반환된다"* 를 요구하므로 `authenticated` 강제와 `@EnableMethodSecurity`가 **이 이슈 범위에 포함된다.** 하위3(로그인) 이슈의 AC *"토큰 없이 내 정보를 조회하면 401이 반환된다"* 도 이 전환을 전제하므로, 순서상 하위2가 먼저 켜야 한다.
+  >
+  > **정정된 제약**: 공개 경로 화이트리스트 + `anyRequest().authenticated()`를 켠다. `@EnableMethodSecurity`는 **`ServletConfig`(자식 컨텍스트)** 에 둔다 — 루트에 두면 컨트롤러에 `@PreAuthorize`가 걸리지 않는다. 구현은 [Task 5 노트](jwt-security-task5-authorization.md) 참고.
 - 설계 근거: `docs/superpowers/specs/2026-07-28-auth-foundation-design.md` §4.2~4.6, §패키지 배치 규칙.
 - 패키지 베이스: `com.teenyfin.teenymoney`. 보안 코드 위치: `global/security/**`.
 

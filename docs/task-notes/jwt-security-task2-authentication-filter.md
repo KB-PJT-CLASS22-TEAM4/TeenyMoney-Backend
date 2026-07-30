@@ -1,6 +1,6 @@
 # 하위2 Task 2 — MemberPrincipal과 JwtAuthenticationFilter
 
-> 플랜: [`docs/jwt-security-pipeline.md`](../jwt-security-pipeline.md) §Task 2
+> 플랜: [`docs/task-notes/jwt-security-pipeline.md`](jwt-security-pipeline.md) §Task 2
 > 산출물: `global/security/MemberPrincipal.java`, `global/security/jwt/JwtAuthenticationFilter.java`, `global/security/jwt/JwtAuthenticationFilterTest.java`
 > 선행: [Task 1 — JwtProvider](jwt-security-task1-jwtprovider.md)
 
