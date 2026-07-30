@@ -24,3 +24,4 @@
 ## 목록
 
 - [하위2 Task 1 — JwtProvider와 JWT 프로퍼티](jwt-security-task1-jwtprovider.md)
+- [하위2 Task 2 — MemberPrincipal과 JwtAuthenticationFilter](jwt-security-task2-authentication-filter.md)

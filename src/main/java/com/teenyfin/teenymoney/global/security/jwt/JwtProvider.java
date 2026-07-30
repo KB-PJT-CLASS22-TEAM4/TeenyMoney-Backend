@@ -32,7 +32,7 @@ public class JwtProvider {
     }
 
     public String createAccessToken(Long memberId, String role) {
-        Date now = new Date();/
+        Date now = new Date();
         return Jwts.builder()
                 .subject(String.valueOf(memberId))
                 .claim(CLAIM_ROLE, role)
