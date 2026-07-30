@@ -28,6 +28,7 @@ src/main/resources/application-local.properties
 
 ### Local planning ###
 docs/superpowers/
+docs/task-notes/
 
 ### Eclipse ###
 .apt_generated

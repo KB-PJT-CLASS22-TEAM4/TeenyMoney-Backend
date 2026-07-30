@@ -40,7 +40,7 @@ JWT 인증은 **메커니즘만** 구현된 상태입니다. 유효한 Access To
 
 로그인 구현 이후 공개 경로 화이트리스트와 `anyRequest().authenticated()`로
 전환합니다. 그 시점에 `JWT_SECRET` 환경변수도 필수화합니다.
-설계와 구현 근거는 [Task 노트](docs/task-notes/)에 정리되어 있습니다.
+인증 파이프라인의 설계 근거는 [JWT·Spring Security 구현 플랜](docs/jwt-security-pipeline.md)을 참고합니다.
 
 ## 기술 스택
 
