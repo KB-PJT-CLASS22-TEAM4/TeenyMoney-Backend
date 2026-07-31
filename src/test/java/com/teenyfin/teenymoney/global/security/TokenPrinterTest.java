@@ -30,7 +30,7 @@ class TokenPrinterTest {
     private static final long ACCESS_MS = 1_800_000L;      // 30분
     private static final long REFRESH_MS = 1_209_600_000L; // 14일
 
-    /** sql/seed/local_member_seed.sql 의 비밀번호. 해시를 바꾸려면 이 값을 고치고 다시 실행한다. */
+    /** sql/seed/01_seed_valid_data.sql 의 비밀번호. 해시를 바꾸려면 이 값을 고치고 다시 실행한다. */
     private static final String SEED_PASSWORD = "Local1234!";
 
     private final JwtProvider provider = new JwtProvider(SECRET, ACCESS_MS, REFRESH_MS);
@@ -55,7 +55,8 @@ class TokenPrinterTest {
         System.out.println(" 시크릿 출처: " + (usingEnv ? "JWT_SECRET 환경변수" : "개발 기본값(application.properties)"));
         System.out.println("=".repeat(74));
 
-        // memberId는 sql/seed/local_member_seed.sql 의 회원과 맞춘다.
+        // memberId는 sql/seed/01_seed_valid_data.sql 의 회원과 맞춘다.
+        //   id=1 김부모(PARENT) / id=2 김첫째(CHILD) / id=3 김둘째(CHILD)
         print("PARENT Access (id=1, 정상)", provider.createAccessToken(1L, "PARENT"),
                 "보호 API 200, 부모전용 200");
         print("CHILD Access (id=2, 정상)", provider.createAccessToken(2L, "CHILD"),
@@ -90,7 +91,7 @@ class TokenPrinterTest {
 
         System.out.println();
         System.out.println("=".repeat(74));
-        System.out.println(" seed용 BCrypt 해시  (sql/seed/local_member_seed.sql)");
+        System.out.println(" seed용 BCrypt 해시  (sql/seed/01_seed_valid_data.sql)");
         System.out.println("=".repeat(74));
         System.out.printf(" 평문 : %s%n", SEED_PASSWORD);
         System.out.printf(" 해시 : %s%n", hash);

@@ -19,11 +19,14 @@ sql/
 ## 파일명
 
 ```text
-schema/teenymoney_schema.sql
+schema/teenymoney_schema_renamed.sql
 migration/V001__create_member.sql
 migration/V002__alter_member_payment_lock.sql
-seed/local_member_seed.sql
+seed/01_seed_valid_data.sql
 ```
+
+seed는 실행 순서가 있으므로 `01_`, `02_` 접두사를 붙입니다. FK 참조 때문에
+회원 → 연동 → 지갑 순서로 들어가야 합니다.
 
 migration 번호는 중복되지 않게 순서대로 증가시킵니다. Flyway를 도입하면 기존
 파일의 호환성과 적용 이력을 검토한 뒤 자동 migration으로 전환합니다.

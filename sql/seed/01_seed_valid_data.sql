@@ -5,13 +5,38 @@
 -- ============================================================
 
 -- T_MBR_INFO_M: 부모 1, 자녀 2 (부모 1명 고정 구조)
-INSERT INTO `T_MBR_INFO_M` (`id`, `role`, `name`, `birth_date`, `phone_number`, `email`, `password`, `customer_key`, `status`)
-VALUES (1, 'PARENT', '김부모', '1985-03-11', '010-1111-1111', 'parent1@test.com', 'hashed_pw', 'toss-customer-uuid-1', 'ACTIVE');
+--
+-- 아래 세 값은 인증 API(하위3)의 규칙에 맞춘 것이다. 임의로 되돌리지 말 것.
+--
+--  1) phone_number 는 숫자만 저장한다.
+--     서버가 가입 시 하이픈을 제거해 저장하므로 여기에 하이픈을 넣으면, 같은 번호인데
+--     문자열이 달라져 사전 중복 검사와 UNIQUE 제약을 둘 다 통과한다. 즉 같은 번호로
+--     계정이 두 개 만들어진다. 표시용 하이픈은 프론트가 붙인다.
+--
+--  2) password 는 실제 BCrypt 해시다. 평문 자리표시자를 쓰면 로그인이 불가능하다.
+--     BCryptPasswordEncoder.matches() 가 해시 형식을 보고 즉시 false를 반환하기 때문이다.
+--     평문: Local1234!   (세 회원 공통)
+--     해시를 새로 뽑으려면:
+--       ./gradlew test --tests "*TokenPrinterTest.printSeedPasswordHash" --rerun-tasks -i
+--     BCrypt는 salt가 매번 달라 실행마다 값이 바뀐다. 어느 쪽이든 유효하다.
+--
+--  3) PARENT 의 teeny_score 는 NULL 이다. 컬럼을 생략하면 DB 기본값 600이 들어간다.
+--     등급 판정이 T_TNY_GRADE_A 를 BETWEEN 으로 조회하므로 600이면 부모가
+--     '양호'(600~799)로 매칭되어 우대금리 0.20%와 오늘만허용 3회를 받는다.
+--     스키마 주석도 "(자녀만 사용)"이고 CHECK 가 IS NULL 을 허용한다.
+INSERT INTO `T_MBR_INFO_M` (`id`, `role`, `name`, `birth_date`, `phone_number`, `email`, `password`, `teeny_score`, `customer_key`, `status`)
+VALUES (1, 'PARENT', '김부모', '1985-03-11', '01011111111', 'parent1@test.com',
+        '$2a$10$Ii6qH9kVC2z.mkEdiVas9.dN9yr/wZXPoSUgExNjp7N9Dra8avcSy',
+        NULL, 'toss-customer-uuid-1', 'ACTIVE');
 
+-- payment_password 는 아직 자리표시자다. 결제 비밀번호는 결제 도메인 이슈 범위이고
+-- 인증 API가 읽지 않으므로 그대로 둔다. 결제 도메인 작업 시 실제 해시로 교체한다.
 INSERT INTO `T_MBR_INFO_M` (`id`, `role`, `name`, `birth_date`, `phone_number`, `email`, `password`, `payment_password`, `teeny_score`, `status`)
 VALUES
-(2, 'CHILD', '김첫째', '2013-05-20', '010-2222-2222', 'child1@test.com', 'hashed_pw', 'hashed_pay_pw', 600, 'ACTIVE'),
-(3, 'CHILD', '김둘째', '2015-09-02', '010-3333-3333', 'child2@test.com', 'hashed_pw', 'hashed_pay_pw', 600, 'ACTIVE');
+(2, 'CHILD', '김첫째', '2013-05-20', '01022222222', 'child1@test.com',
+ '$2a$10$Ii6qH9kVC2z.mkEdiVas9.dN9yr/wZXPoSUgExNjp7N9Dra8avcSy', 'hashed_pay_pw', 600, 'ACTIVE'),
+(3, 'CHILD', '김둘째', '2015-09-02', '01033333333', 'child2@test.com',
+ '$2a$10$Ii6qH9kVC2z.mkEdiVas9.dN9yr/wZXPoSUgExNjp7N9Dra8avcSy', 'hashed_pay_pw', 600, 'ACTIVE');
 
 -- T_MBR_CONN_R: 부모-자녀 연동 (부모 1명 고정이므로 자녀당 1건)
 INSERT INTO `T_MBR_CONN_R` (`id`, `parent_id`, `child_id`, `status`)
