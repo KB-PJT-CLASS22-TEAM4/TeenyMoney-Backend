@@ -52,4 +52,9 @@ public class TestProtectedController {
     public ApiResponse<String> phoneVerificationEndpoint() {
         return ApiResponse.ok("public");
     }
+
+    @GetMapping("/api/v1/members/me")
+    public ApiResponse<String> memberMeEndpoint() {
+        return ApiResponse.ok("me");
+    }
 }

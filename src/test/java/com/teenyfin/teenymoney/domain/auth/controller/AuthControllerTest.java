@@ -2,11 +2,14 @@ package com.teenyfin.teenymoney.domain.auth.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.teenyfin.teenymoney.domain.auth.dto.request.LoginRequestDTO;
 import com.teenyfin.teenymoney.domain.auth.dto.request.SignupRequestDTO;
 import com.teenyfin.teenymoney.domain.auth.dto.response.SignupResponseDTO;
 import com.teenyfin.teenymoney.domain.auth.exception.AuthErrorCode;
 import com.teenyfin.teenymoney.domain.auth.service.AuthService;
+import com.teenyfin.teenymoney.domain.auth.service.LoginResult;
 import com.teenyfin.teenymoney.domain.auth.service.PhoneVerificationService;
+import com.teenyfin.teenymoney.global.auth.CookieUtil;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import com.teenyfin.teenymoney.global.exception.GlobalExceptionAdvice;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,10 +23,13 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import java.time.LocalDate;
 import java.nio.charset.StandardCharsets;
 
+import javax.servlet.http.HttpServletResponse;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -35,16 +41,18 @@ class AuthControllerTest {
 
     private AuthService authService;
     private PhoneVerificationService phoneVerificationService;
+    private CookieUtil cookieUtil;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         authService = mock(AuthService.class);
         phoneVerificationService = mock(PhoneVerificationService.class);
+        cookieUtil = mock(CookieUtil.class);
         ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
         mockMvc = MockMvcBuilders.standaloneSetup(
-                        new AuthController(authService, phoneVerificationService))
+                        new AuthController(authService, phoneVerificationService, cookieUtil))
                 .setControllerAdvice(new GlobalExceptionAdvice())
                 .setMessageConverters(new MappingJackson2HttpMessageConverter(objectMapper))
                 .build();
@@ -144,12 +152,87 @@ class AuthControllerTest {
         assertBodyContains(response, "\"password\"");
     }
 
+    @Test
+    void loginReturnsAccessTokenAndMemberSummaryWithoutRefreshTokenInBody() throws Exception {
+        when(authService.login(any(LoginRequestDTO.class))).thenReturn(new LoginResult(
+                "access-token", "refresh-token", 17L, "PARENT", "Test User"));
+
+        var response = mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validLoginJson()))
+                .andReturn().getResponse();
+
+        assertEquals(200, response.getStatus());
+        assertBodyContains(response,
+                "\"accessToken\":\"access-token\"",
+                "\"memberId\":17",
+                "\"role\":\"PARENT\"",
+                "\"name\":\"Test User\"");
+        String body = response.getContentAsString(StandardCharsets.UTF_8);
+        assertFalse(body.contains("refreshToken"), body);
+        assertFalse(body.contains("refresh-token"), body);
+        verify(cookieUtil).addRefreshCookie(
+                any(HttpServletResponse.class), eq("refresh-token"));
+    }
+
+    @Test
+    void loginInvalidRequestReturnsValidationErrors() throws Exception {
+        var response = mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"not-an-email\",\"password\":\"\"}"))
+                .andReturn().getResponse();
+
+        assertEquals(400, response.getStatus());
+        assertBodyContains(response,
+                "\"code\":\"COMMON_INVALID_INPUT\"",
+                "\"email\"", "\"password\"");
+    }
+
+    @Test
+    void loginTrimsEmailBeforeValidation() throws Exception {
+        when(authService.login(any(LoginRequestDTO.class))).thenReturn(new LoginResult(
+                "access-token", "refresh-token", 17L, "PARENT", "Test User"));
+
+        var response = mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validLoginJson().replace(
+                                "user@example.com", "  USER@Example.COM  ")))
+                .andReturn().getResponse();
+
+        assertEquals(200, response.getStatus());
+        ArgumentCaptor<LoginRequestDTO> captor =
+                ArgumentCaptor.forClass(LoginRequestDTO.class);
+        verify(authService).login(captor.capture());
+        assertEquals("USER@Example.COM", captor.getValue().getEmail());
+    }
+
+    @Test
+    void loginBusinessErrorKeepsUnauthorizedStatusAndCode() throws Exception {
+        when(authService.login(any(LoginRequestDTO.class)))
+                .thenThrow(new BusinessException(AuthErrorCode.AUTH_INVALID_CREDENTIALS));
+
+        var response = mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validLoginJson()))
+                .andReturn().getResponse();
+
+        assertEquals(401, response.getStatus());
+        assertBodyContains(response, "\"code\":\"AUTH_INVALID_CREDENTIALS\"");
+    }
+
     private String validSignupJson() {
         return "{"
                 + "\"name\":\"홍길동\","
                 + "\"birthDate\":\"2012-03-04\","
                 + "\"phoneNumber\":\"010-1234-5678\","
                 + "\"verificationCode\":\"123456\","
+                + "\"email\":\"user@example.com\","
+                + "\"password\":\"password123\""
+                + "}";
+    }
+
+    private String validLoginJson() {
+        return "{"
                 + "\"email\":\"user@example.com\","
                 + "\"password\":\"password123\""
                 + "}";

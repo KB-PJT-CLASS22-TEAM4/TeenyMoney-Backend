@@ -1,17 +1,21 @@
 package com.teenyfin.teenymoney.domain.auth.service;
 
+import com.teenyfin.teenymoney.domain.auth.dto.request.LoginRequestDTO;
 import com.teenyfin.teenymoney.domain.auth.dto.request.SignupRequestDTO;
 import com.teenyfin.teenymoney.domain.auth.dto.response.SignupResponseDTO;
 import com.teenyfin.teenymoney.domain.auth.exception.AuthErrorCode;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
+import com.teenyfin.teenymoney.global.auth.RefreshTokenStore;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import com.teenyfin.teenymoney.global.exception.CommonErrorCode;
+import com.teenyfin.teenymoney.global.security.jwt.JwtProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.Clock;
@@ -22,6 +26,7 @@ import java.time.ZoneId;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
@@ -38,6 +43,8 @@ class AuthServiceTest {
     private MemberMapper memberMapper;
     private PasswordEncoder passwordEncoder;
     private PhoneVerificationService phoneVerificationService;
+    private JwtProvider jwtProvider;
+    private RefreshTokenStore refreshTokenStore;
     private AuthService authService;
 
     @BeforeEach
@@ -45,8 +52,15 @@ class AuthServiceTest {
         memberMapper = mock(MemberMapper.class);
         passwordEncoder = mock(PasswordEncoder.class);
         phoneVerificationService = mock(PhoneVerificationService.class);
+        jwtProvider = mock(JwtProvider.class);
+        refreshTokenStore = mock(RefreshTokenStore.class);
         authService = new AuthService(
-                memberMapper, passwordEncoder, phoneVerificationService, CLOCK);
+                memberMapper,
+                passwordEncoder,
+                phoneVerificationService,
+                jwtProvider,
+                refreshTokenStore,
+                CLOCK);
         when(passwordEncoder.encode("password123")).thenReturn("encoded-password");
     }
 
@@ -173,6 +187,94 @@ class AuthServiceTest {
         assertEquals(true, authService.isEmailAvailable(" USER@Example.COM "));
     }
 
+    @Test
+    void loginReturnsTokensAndMemberSummaryAndStoresRefreshToken() {
+        MemberVO member = activeMember();
+        when(memberMapper.selectByEmail("user@example.com")).thenReturn(member);
+        when(passwordEncoder.matches("password123", "encoded-password")).thenReturn(true);
+        when(jwtProvider.createAccessToken(17L, "PARENT")).thenReturn("access-token");
+        when(jwtProvider.createRefreshToken(17L)).thenReturn("refresh-token");
+
+        LoginResult result = authService.login(loginRequest(" USER@Example.COM ", "password123"));
+
+        assertEquals("access-token", result.accessToken());
+        assertEquals("refresh-token", result.refreshToken());
+        assertEquals(17L, result.memberId());
+        assertEquals("PARENT", result.role());
+        assertEquals("Test User", result.name());
+        verify(memberMapper).selectByEmail("user@example.com");
+        verify(refreshTokenStore).save(17L, "refresh-token");
+    }
+
+    @Test
+    void loginWithUnknownEmailReturnsInvalidCredentials() {
+        when(memberMapper.selectByEmail("missing@example.com")).thenReturn(null);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> authService.login(loginRequest("missing@example.com", "password123")));
+
+        assertEquals(AuthErrorCode.AUTH_INVALID_CREDENTIALS, exception.getErrorCode());
+        verify(passwordEncoder).matches(anyString(), anyString());
+        verify(jwtProvider, never()).createAccessToken(any(), any());
+        verify(refreshTokenStore, never()).save(any(), any());
+    }
+
+    @Test
+    void loginWithWrongPasswordReturnsInvalidCredentials() {
+        when(memberMapper.selectByEmail("user@example.com")).thenReturn(activeMember());
+        when(passwordEncoder.matches("wrong-password", "encoded-password")).thenReturn(false);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> authService.login(loginRequest("user@example.com", "wrong-password")));
+
+        assertEquals(AuthErrorCode.AUTH_INVALID_CREDENTIALS, exception.getErrorCode());
+        verify(jwtProvider, never()).createAccessToken(any(), any());
+        verify(refreshTokenStore, never()).save(any(), any());
+    }
+
+    @Test
+    void loginWithInactiveMemberReturnsInactiveMemberAfterPasswordMatches() {
+        MemberVO member = activeMember();
+        member.setStatus("INACTIVE");
+        when(memberMapper.selectByEmail("user@example.com")).thenReturn(member);
+        when(passwordEncoder.matches("password123", "encoded-password")).thenReturn(true);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> authService.login(loginRequest("user@example.com", "password123")));
+
+        assertEquals(AuthErrorCode.AUTH_INACTIVE_MEMBER, exception.getErrorCode());
+        verify(jwtProvider, never()).createAccessToken(any(), any());
+        verify(refreshTokenStore, never()).save(any(), any());
+    }
+
+    @Test
+    void loginDoesNotRevealInactiveMemberWhenPasswordIsWrong() {
+        MemberVO member = activeMember();
+        member.setStatus("INACTIVE");
+        when(memberMapper.selectByEmail("user@example.com")).thenReturn(member);
+        when(passwordEncoder.matches("wrong-password", "encoded-password")).thenReturn(false);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> authService.login(loginRequest("user@example.com", "wrong-password")));
+
+        assertEquals(AuthErrorCode.AUTH_INVALID_CREDENTIALS, exception.getErrorCode());
+    }
+
+    @Test
+    void loginTranslatesRedisFailureToServiceUnavailable() {
+        when(memberMapper.selectByEmail("user@example.com")).thenReturn(activeMember());
+        when(passwordEncoder.matches("password123", "encoded-password")).thenReturn(true);
+        when(jwtProvider.createAccessToken(17L, "PARENT")).thenReturn("access-token");
+        when(jwtProvider.createRefreshToken(17L)).thenReturn("refresh-token");
+        doThrow(new RedisConnectionFailureException("redis unavailable"))
+                .when(refreshTokenStore).save(17L, "refresh-token");
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> authService.login(loginRequest("user@example.com", "password123")));
+
+        assertEquals(CommonErrorCode.COMMON_SERVICE_UNAVAILABLE, exception.getErrorCode());
+    }
+
     private String signupAndCaptureRole(LocalDate birthDate) {
         doAnswer(invocation -> {
             MemberVO member = invocation.getArgument(0);
@@ -195,5 +297,26 @@ class AuthServiceTest {
         request.setEmail("user@example.com");
         request.setPassword("password123");
         return request;
+    }
+
+    private LoginRequestDTO loginRequest(String email, String password) {
+        LoginRequestDTO request = new LoginRequestDTO();
+        request.setEmail(email);
+        request.setPassword(password);
+        return request;
+    }
+
+    private MemberVO activeMember() {
+        MemberVO member = new MemberVO();
+        member.setId(17L);
+        member.setRole("PARENT");
+        member.setName("Test User");
+        member.setBirthDate(LocalDate.of(1990, 1, 2));
+        member.setPhoneNumber("01012345678");
+        member.setEmail("user@example.com");
+        member.setPassword("encoded-password");
+        member.setProfileImageUrl("https://example.com/profile.png");
+        member.setStatus("ACTIVE");
+        return member;
     }
 }

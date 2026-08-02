@@ -1,11 +1,15 @@
 package com.teenyfin.teenymoney.domain.auth.controller;
 
+import com.teenyfin.teenymoney.domain.auth.dto.request.LoginRequestDTO;
 import com.teenyfin.teenymoney.domain.auth.dto.request.PhoneVerificationSendRequestDTO;
 import com.teenyfin.teenymoney.domain.auth.dto.request.SignupRequestDTO;
 import com.teenyfin.teenymoney.domain.auth.dto.response.EmailAvailabilityResponseDTO;
+import com.teenyfin.teenymoney.domain.auth.dto.response.LoginResponseDTO;
 import com.teenyfin.teenymoney.domain.auth.dto.response.SignupResponseDTO;
 import com.teenyfin.teenymoney.domain.auth.service.AuthService;
+import com.teenyfin.teenymoney.domain.auth.service.LoginResult;
 import com.teenyfin.teenymoney.domain.auth.service.PhoneVerificationService;
+import com.teenyfin.teenymoney.global.auth.CookieUtil;
 import com.teenyfin.teenymoney.global.response.ApiResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -16,20 +20,25 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import javax.servlet.http.HttpServletResponse;
 import javax.validation.Valid;
 
+// HTTP 요청을 받는 진입점
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
 
     private final AuthService authService;
     private final PhoneVerificationService phoneVerificationService;
+    private final CookieUtil cookieUtil;
 
     public AuthController(
             AuthService authService,
-            PhoneVerificationService phoneVerificationService) {
+            PhoneVerificationService phoneVerificationService,
+            CookieUtil cookieUtil) {
         this.authService = authService;
         this.phoneVerificationService = phoneVerificationService;
+        this.cookieUtil = cookieUtil;
     }
 
     @PostMapping("/phone-verification/send")
@@ -51,5 +60,14 @@ public class AuthController {
             @Valid @RequestBody SignupRequestDTO request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.ok(authService.signup(request)));
+    }
+
+    @PostMapping("/login")
+    public ApiResponse<LoginResponseDTO> login(
+            @Valid @RequestBody LoginRequestDTO request,
+            HttpServletResponse response) {
+        LoginResult result = authService.login(request);
+        cookieUtil.addRefreshCookie(response, result.refreshToken());
+        return ApiResponse.ok(result.toResponse());
     }
 }
