@@ -51,6 +51,7 @@ public class SecurityConfig {
             "/api/v1/auth/signup",    // 회원가입 — 토큰이 있을 수 없다 (하위3)
             "/api/v1/auth/login",     // 로그인 — 토큰을 받으러 오는 곳 (하위3)
             "/api/v1/auth/reissue",   // 재발급 — Access가 만료된 상태로 온다 (하위4)
+            "/api/v1/auth/check-email", // 이메일 중복 확인 — 가입 전이라 토큰이 없다 (하위3)
             "/api/v1/health",         // 헬스체크 — 모니터링이 토큰 없이 호출
             "/api/v1/health/**",
             "/swagger-ui/**",         // API 문서

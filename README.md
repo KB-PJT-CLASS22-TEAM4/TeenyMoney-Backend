@@ -45,6 +45,7 @@
 | `/api/v1/auth/signup` | 회원가입 — 토큰이 있을 수 없다 |
 | `/api/v1/auth/login` | 로그인 — 토큰을 받으러 오는 곳 |
 | `/api/v1/auth/reissue` | 재발급 — Access가 만료된 상태로 온다 |
+| `/api/v1/auth/check-email` | 이메일 중복 확인 — 가입 전이라 토큰이 없다 |
 | `/api/v1/health`, `/api/v1/health/**` | 모니터링이 토큰 없이 호출 |
 | `/swagger-ui/**`, `/api-docs/**` | API 문서 |
 
@@ -56,7 +57,7 @@
 경로는 **존재하지 않는 경로여도 404가 아니라 401**이 돌아옵니다. 인가 판단이
 DispatcherServlet보다 먼저 끝나기 때문입니다.
 
-`auth` 3개 경로는 화이트리스트에만 등록되어 있고 처리할 컨트롤러가 없어 호출하면
+`auth` 경로 4개는 화이트리스트에만 등록되어 있고 처리할 컨트롤러가 없어 호출하면
 401이 아니라 404입니다. 프론트엔드 연동은 인증 API 구현 이후에 시작합니다.
 
 수동 확인용 토큰이 필요하면 `TokenPrinterTest`로 발급합니다. 출력된 토큰을
@@ -277,6 +278,7 @@ REDIS_PORT=6379
 JWT_SECRET=<openssl rand -base64 32 으로 생성한 값>
 JWT_ACCESS_EXPIRATION_MS=1800000
 JWT_REFRESH_EXPIRATION_MS=1209600000
+COOKIE_SECURE=false
 ```
 
 `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`는 필수입니다. 실제 값은 IntelliJ 실행
@@ -294,6 +296,11 @@ openssl rand -base64 32      # Base64로 인코딩된 32바이트 키를 생성�
 
 `JWT_ACCESS_EXPIRATION_MS`(기본 30분)와 `JWT_REFRESH_EXPIRATION_MS`(기본 14일)는
 선택 항목입니다. 기본값을 그대로 사용하면 됩니다.
+
+`COOKIE_SECURE`는 Refresh Token 쿠키에 `Secure` 속성을 붙일지 결정합니다. 로컬은
+http이므로 기본값 `false`를 그대로 둡니다. `true`로 켜면 브라우저가 http 응답의
+쿠키를 저장하지 않아 로그인은 되는데 재발급만 실패합니다. **HTTPS 배포 환경에서는
+반드시 `true`로 설정합니다.**
 
 인스턴스를 여러 대로 늘릴 경우 **모든 인스턴스가 같은 `JWT_SECRET`을 가져야
 합니다.** A 서버가 발급한 토큰을 B 서버가 검증하기 때문입니다. 또 `exp` 검증에
