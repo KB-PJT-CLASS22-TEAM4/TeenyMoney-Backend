@@ -33,6 +33,10 @@ class TokenPrinterTest {
     /** sql/seed/01_seed_valid_data.sql 의 비밀번호. 해시를 바꾸려면 이 값을 고치고 다시 실행한다. */
     private static final String SEED_PASSWORD = "Local1234!";
 
+    /** sql/seed/01_seed_valid_data.sql 의 T_MBR_INFO_M.password 에 실제로 들어가 있는 해시. */
+    private static final String SEED_PASSWORD_HASH =
+            "$2a$10$Ii6qH9kVC2z.mkEdiVas9.dN9yr/wZXPoSUgExNjp7N9Dra8avcSy";
+
     private final JwtProvider provider = new JwtProvider(SECRET, ACCESS_MS, REFRESH_MS);
 
     private static String resolveSecret() {
@@ -99,9 +103,13 @@ class TokenPrinterTest {
         System.out.println("=".repeat(74));
         System.out.println();
 
-        // 생성한 해시가 실제로 그 비밀번호와 맞는지는 확인해 둔다.
-        // 여기가 깨지면 seed의 해시로 로그인이 안 된다는 뜻이다.
-        org.junit.jupiter.api.Assertions.assertTrue(encoder.matches(SEED_PASSWORD, hash));
+        // seed 파일에 '실제로 커밋된' 해시가 그 비밀번호와 맞는지 확인한다.
+        // 방금 만든 hash 로 검사하면 어떤 비밀번호를 넣어도 항상 통과해서, seed에 잘린 해시나
+        // 다른 비밀번호의 해시를 붙여넣어도 못 잡는다. 여기가 깨지면 seed의 해시로 로그인이 안 된다는 뜻이다.
+        org.junit.jupiter.api.Assertions.assertTrue(
+                encoder.matches(SEED_PASSWORD, SEED_PASSWORD_HASH),
+                "seed의 해시가 " + SEED_PASSWORD + " 와 맞지 않는다. "
+                        + "위에 출력된 해시를 sql/seed/01_seed_valid_data.sql 과 SEED_PASSWORD_HASH 양쪽에 반영할 것.");
     }
 
     private void print(String label, String token, String expected) {
