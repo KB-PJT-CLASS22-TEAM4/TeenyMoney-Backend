@@ -54,6 +54,39 @@ $env:JWT_SECRET = '<openssl rand -base64 32 결과>'
 $env:COOKIE_SECURE = 'false'
 ```
 
+### IntelliJ에서 실제 DB를 사용하는 MemberMapper 테스트
+
+`MemberMapperTest`는 Tomcat 없이 JUnit으로 실행하며, EC2 MySQL에 연결할 때는 먼저
+별도 PowerShell 창에서 SSH 터널을 열어 둡니다.
+
+```powershell
+ssh -N teenymoney
+Test-NetConnection 127.0.0.1 -Port 13306
+```
+
+`TcpTestSucceeded`가 `True`이면 IntelliJ에서 다음 순서로 실행 구성을 만듭니다.
+
+1. `MemberMapperTest.java`를 열고 클래스 왼쪽의 실행 아이콘을 누릅니다.
+2. **Modify Run Configuration...** 또는 **Run > Edit Configurations...**를 엽니다.
+3. JUnit 실행 구성의 **Environment variables**에 아래 값을 입력합니다.
+
+```text
+DB_URL=jdbc:log4jdbc:mysql://127.0.0.1:13306/teenymoney?serverTimezone=Asia/Seoul&characterEncoding=UTF-8&allowPublicKeyRetrieval=true&useSSL=false
+DB_USERNAME=<EC2 MySQL 사용자>
+DB_PASSWORD=<EC2 MySQL 비밀번호>
+```
+
+4. `MemberMapperTest` 클래스 전체를 다시 실행합니다.
+
+정상이라면 테스트 3개가 모두 통과합니다. `insertAppliesRoleSpecificTeenyScorePolicy`
+테스트가 부모의 `teeny_score`는 `NULL`, 자녀는 DB 기본값 `600`인지 실제 DB에서
+확인합니다. 각 테스트는 `@Transactional`로 롤백되므로 생성한 회원 행은 남지 않습니다.
+
+테스트가 실패하지 않고 **Skipped**로 표시되면 위 환경변수 중 하나가 해당 JUnit 실행
+구성에 빠진 것입니다. 이 테스트에는 Redis, JWT, Cookie 환경변수가 필요하지 않습니다.
+IntelliJ 실행 구성의 비밀번호는 로컬 `.idea/workspace.xml`에만 두고 공유하거나 저장소에
+커밋하지 않습니다.
+
 ## 2. 테스트와 WAR 빌드
 
 ```powershell
@@ -64,15 +97,17 @@ $env:COOKIE_SECURE = 'false'
 `ApiResponseFormatTest`는 DB와 Tomcat 없이 공통 응답 및 예외 계약을 확인합니다.
 
 `InfrastructureConfigTest`는 `RedisConfig`와 `SecurityConfig`만 로딩하고 필요한
-값(`redis.*`, `jwt.*`)을 `@TestPropertySource`로 직접 넣습니다. `RootConfig`를
-로딩하지 않으므로 **전체 테스트는 환경변수 없이 실행됩니다.**
+값(`redis.*`, `jwt.*`)을 `@TestPropertySource`로 직접 넣습니다. 실제 DB를 사용하는
+`MemberMapperTest`는 `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`가 없으면 건너뛰므로
+**전체 테스트 명령 자체는 환경변수 없이도 통과합니다.**
 
 ```powershell
 .\gradlew.bat clean test     # DB_URL 등을 설정하지 않아도 통과한다
 ```
 
-실제 DB나 Redis에 접속하지 않고 빈 등록과 컨텍스트 구성만 확인합니다. 실제 연결
-확인은 Tomcat으로 띄운 뒤 `/api/v1/health/db`에서 합니다.
+환경변수 없이 실행할 때는 실제 DB나 Redis에 접속하지 않고 빈 등록과 컨텍스트 구성을
+확인합니다. 실제 DB 연결은 위 `MemberMapperTest` 또는 Tomcat의 `/api/v1/health/db`로
+확인합니다.
 
 빌드 결과:
 
