@@ -24,6 +24,7 @@
 - MyBatis 및 MySQL 연결 설정
 - Redis 및 Spring Security 기본 설정
 - JWT 인증 파이프라인 (토큰 발급·검증, 인증 필터, 401/403 응답)
+- 공개 경로를 제외한 전 요청 인증 강제 (`anyRequest().authenticated()`)
 - 애플리케이션 상태 확인 API
 - 데이터베이스 연결 확인 API
 - OpenAPI 3.0 명세와 Swagger UI
@@ -32,14 +33,46 @@
 회원, 인증, 가족 연결, 지갑, 결제, 금융상품, 퀘스트, 알림 도메인은 구현
 예정입니다.
 
-JWT 인증은 **메커니즘만** 구현된 상태입니다. 유효한 Access Token을 보내면 인증
-정보가 채워지고 컨트롤러가 `@AuthenticationPrincipal MemberPrincipal`로 받을 수
-있지만, **전역 인가 규칙은 여전히 모든 요청을 허용합니다**(`permitAll`). 토큰을
-발급하는 로그인 API가 아직 없어, 지금 인증을 강제하면 모든 API를 호출할 수 없기
-때문입니다.
+## 인가 규칙
 
-로그인 구현 이후 공개 경로 화이트리스트와 `anyRequest().authenticated()`로
-전환합니다. 그 시점에 `JWT_SECRET` 환경변수도 필수화합니다.
+**공개 경로를 제외한 모든 요청은 인증이 필요합니다.** 이 규칙은 이미 적용되어
+있습니다(`SecurityConfig`의 `anyRequest().authenticated()`).
+
+공개 경로의 유일한 기준은 `SecurityConfig.PUBLIC_ENDPOINTS`입니다.
+
+| 경로 | 공개 이유 |
+| --- | --- |
+| `/api/v1/auth/signup` | 회원가입 — 토큰이 있을 수 없다 |
+| `/api/v1/auth/login` | 로그인 — 토큰을 받으러 오는 곳 |
+| `/api/v1/auth/reissue` | 재발급 — Access가 만료된 상태로 온다 |
+| `/api/v1/health`, `/api/v1/health/**` | 모니터링이 토큰 없이 호출 |
+| `/swagger-ui/**`, `/api-docs/**` | API 문서 |
+
+유효한 Access Token을 보내면 인증 정보가 채워지고 컨트롤러가
+`@AuthenticationPrincipal MemberPrincipal`로 받습니다.
+
+**단, 토큰을 발급하는 로그인 API는 아직 없습니다**(인증 API는 구현 중). 그래서
+현재 실제로 호출할 수 있는 것은 위 표의 `health` 2개와 문서 경로뿐이고, 그 밖의
+경로는 **존재하지 않는 경로여도 404가 아니라 401**이 돌아옵니다. 인가 판단이
+DispatcherServlet보다 먼저 끝나기 때문입니다.
+
+`auth` 3개 경로는 화이트리스트에만 등록되어 있고 처리할 컨트롤러가 없어 호출하면
+401이 아니라 404입니다. 프론트엔드 연동은 인증 API 구현 이후에 시작합니다.
+
+수동 확인용 토큰이 필요하면 `TokenPrinterTest`로 발급합니다. 출력된 토큰을
+`Authorization: Bearer <토큰>` 헤더에 넣어 사용합니다.
+
+```bash
+./gradlew test --tests "*TokenPrinterTest" --rerun-tasks -i
+```
+
+토큰을 발급하는 개발용 엔드포인트는 배포물에 백도어가 되므로 만들지 않습니다.
+`src/test`에 두면 WAR에 포함되지 않습니다.
+
+`JWT_SECRET`은 아직 필수가 아닙니다. 미설정 시 저장소에 공개된 개발 기본값으로
+서명되며 앱은 정상 기동합니다. **배포 환경에서는 반드시 override합니다**
+(아래 [환경변수](#환경변수) 참고).
+
 인증 파이프라인의 설계 근거는 [JWT·Spring Security 구현 플랜](docs/jwt-security-pipeline.md)을 참고합니다.
 
 ## 기술 스택
@@ -378,9 +411,9 @@ CI는 실제 MySQL, Redis 또는 EC2에 연결하지 않으며 배포도 수행�
 
 ## 개발 예정 범위
 
-- 회원가입과 로그인 (JWT 토큰 발급)
-- Redis Refresh Token 관리와 토큰 재발급
-- 경로별 인가 규칙 전환 (`permitAll` → `authenticated`)
+- 회원가입과 로그인 (JWT 토큰 발급) — **진행 중**
+- Redis Refresh Token 관리와 토큰 재발급 — **진행 중**
+- `JWT_SECRET` 미설정 시 기동 실패 처리 (현재는 개발 기본값으로 기동)
 - 가족 연결
 - 지갑, 거래 원장, 용돈
 - 결제와 업종별 결제 정책

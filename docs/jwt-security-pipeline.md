@@ -785,10 +785,16 @@ git commit -m "feat(auth): SecurityConfig에 JWT 필터·핸들러·PasswordEnco
 
 ## 향후 (이 이슈 범위 밖, 조율 필요)
 
-- **`authenticated` 전환**: 로그인(하위3)이 토큰을 발급할 수 있게 된 뒤, `permitAll` → 공개경로 화이트리스트 + `anyRequest().authenticated()`로 전환. 팀 공지 후 별도 작은 PR.
-- **`@EnableMethodSecurity`**: 처음 role 게이팅이 필요한 이슈에서 **`ServletConfig`(자식 컨텍스트)** 에 추가한다(컨트롤러/서비스가 자식 컨텍스트에 있어 루트에 두면 `@PreAuthorize`가 안 걸린다).
+> **[2026-08-02 정정]** 아래 첫 두 항목은 **이 이슈(#11)에서 이미 완료됐다.**
+> 11행의 정정 블록대로 범위가 바뀌었기 때문이다. 따라서 Task 4 본문(638행 이하)의
+> "permitAll 유지" 서술과 `anyRequest().permitAll()` 코드는 **실제 구현과 다르다** —
+> 실제 코드는 공개 경로 화이트리스트 + `anyRequest().authenticated()`다.
+> 현재 인가 규칙의 기준은 `SecurityConfig.PUBLIC_ENDPOINTS`와 README의 "인가 규칙" 절이다.
+
+- ~~**`authenticated` 전환**~~ → **완료**(#11). 공개경로 화이트리스트 + `anyRequest().authenticated()` 적용.
+- ~~**`@EnableMethodSecurity`**~~ → **완료**(#11). **`ServletConfig`(자식 컨텍스트)** 에 있다(컨트롤러/서비스가 자식 컨텍스트에 있어 루트에 두면 `@PreAuthorize`가 안 걸린다).
 - **`CookieUtil`·`RefreshTokenStore`·`cookie.secure`**: 하위3/하위4에서 생성.
-- **README/`setenv.sh`**: `authenticated` 전환 시 환경변수 필수화(`JWT_SECRET`)와 함께 갱신.
+- **`JWT_SECRET` 필수화**: 아직 적용하지 않았다. 현재는 개발 기본값으로 기동한다. 미설정 시 기동 실패 처리는 별도 작업으로 남아 있다(README "개발 예정 범위").
 
 ## 완료 기준 (하위2 이슈 AC 매핑)
 
