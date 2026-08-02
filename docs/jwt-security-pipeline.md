@@ -197,13 +197,13 @@ In `src/main/resources/application.properties`, 파일 끝에 추가:
 
 # JWT
 # secret은 Base64로 인코딩된 무작위 키다. 생성: openssl rand -base64 32
-# 운영은 JWT_SECRET 환경변수로 반드시 override 한다. 아래 기본값은 로컬/개발 전용(비밀 아님).
-jwt.secret=${JWT_SECRET:roc9Ns8gE2EDKDkYXuy/tHxrKZXoeaWHTMb+eN8YeZM=}
+# 로컬과 운영 모두 JWT_SECRET 환경변수로 반드시 주입한다.
+jwt.secret=${JWT_SECRET}
 jwt.access-expiration=${JWT_ACCESS_EXPIRATION_MS:1800000}
 jwt.refresh-expiration=${JWT_REFRESH_EXPIRATION_MS:1209600000}
 ```
 
-> **결정 지점(친-팀 마찰 완화)**: 개발 기본값을 두어 `JWT_SECRET` 없이도 앱이 기동한다. 엄격 모드를 원하면 `${JWT_SECRET}`(기본값 제거)로 바꾸면 되지만, 그 경우 모든 팀원이 환경변수를 설정해야 앱이 뜬다.
+> **최종 결정**: 공개된 개발 기본키를 두지 않는다. 로컬과 운영 모두 `JWT_SECRET`을 명시적으로 주입하며, 누락 시 기동을 실패시킨다.
 
 - [ ] **Step 5: 테스트 통과 확인**
 
@@ -794,7 +794,7 @@ git commit -m "feat(auth): SecurityConfig에 JWT 필터·핸들러·PasswordEnco
 - ~~**`authenticated` 전환**~~ → **완료**(#11). 공개경로 화이트리스트 + `anyRequest().authenticated()` 적용.
 - ~~**`@EnableMethodSecurity`**~~ → **완료**(#11). **`ServletConfig`(자식 컨텍스트)** 에 있다(컨트롤러/서비스가 자식 컨텍스트에 있어 루트에 두면 `@PreAuthorize`가 안 걸린다).
 - **`CookieUtil`·`RefreshTokenStore`·`cookie.secure`**: 하위3/하위4에서 생성.
-- **`JWT_SECRET` 필수화**: 아직 적용하지 않았다. 현재는 개발 기본값으로 기동한다. 미설정 시 기동 실패 처리는 별도 작업으로 남아 있다(README "개발 예정 범위").
+- ~~**`JWT_SECRET` 필수화**~~ → **완료**. 로컬과 운영 모두 환경변수 누락 시 기동에 실패한다.
 
 ## 완료 기준 (하위2 이슈 AC 매핑)
 
@@ -804,5 +804,5 @@ git commit -m "feat(auth): SecurityConfig에 JWT 필터·핸들러·PasswordEnco
 - [ ] 인증 실패 401 JSON, 인가 실패 403 JSON (`ApiResponse` 형식) — Task 3
 - [ ] 보안 빈이 루트 컨텍스트에 등록되고 필터체인이 구성됨 — Task 4
 - [ ] JWT 발급/검증·`tokenType` 계약 — Task 1
-- [ ] 앱이 환경변수 없이도 기동(개발 기본값) — Task 1
+- [x] `JWT_SECRET` 환경변수 누락 시 기동 실패 — 후속 보안 설정 작업
 - [ ] 전체 빌드/테스트 그린 — Task 4

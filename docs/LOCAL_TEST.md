@@ -26,16 +26,32 @@ $env:DB_DRIVER = 'com.mysql.cj.jdbc.Driver'
 $env:DB_URL = 'jdbc:mysql://localhost:3306/teenymoney?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=Asia/Seoul'
 ```
 
-Redis 기본값은 `localhost:6379`입니다. 다른 Redis를 사용하면 `REDIS_HOST`,
-`REDIS_PORT`도 설정합니다.
-
-JWT는 `application.properties`에 로컬 개발용 기본값이 있어 **환경변수를 설정하지
-않아도 앱이 기동합니다.** 로컬에서는 그대로 두면 되고, 배포 환경에서만 `JWT_SECRET`을
-반드시 주입합니다(자세한 내용은 [README 환경변수](../README.md#환경변수) 참고).
+Redis 기본값은 `localhost:6379`이고 비밀번호는 비어 있습니다. 다른 Redis를
+사용하면 `REDIS_HOST`, `REDIS_PORT`를 설정하고, `requirepass`가 걸린 서버라면
+`REDIS_PASSWORD`도 넣습니다.
 
 ```powershell
-# 로컬에서 운영과 같은 조건으로 확인하려면 (선택)
+# SSH 터널로 EC2 Redis를 쓰는 경우 예시
+$env:REDIS_PORT = '16379'
+$env:REDIS_PASSWORD = '<requirepass 값>'
+```
+
+`REDIS_PASSWORD`가 틀려도 앱은 정상 기동합니다. Lettuce가 연결을 지연 생성하므로
+실패는 첫 Redis 명령에서 `NOAUTH`로 나타납니다.
+
+`COOKIE_SECURE`는 필수 환경변수입니다. 로컬 HTTP에서는 `false`로 설정합니다.
+`true`로 켜면 브라우저가 Refresh 쿠키를 저장하지 않아 로그인은 되는데 재발급만
+실패합니다.
+
+환경변수 전체 목록과 EC2 설정은 [배포 문서](DEPLOY.md)를 참고합니다.
+
+`JWT_SECRET`도 로컬과 운영 모두 필수입니다. 로컬에서는 운영과 다른 Base64 키를
+생성하여 실행 환경에 주입합니다(자세한 내용은 [README 환경변수](../README.md#환경변수) 참고).
+
+```powershell
+# 로컬용 키를 한 번 생성한 뒤 IntelliJ/Tomcat 실행 환경에 저장한다.
 $env:JWT_SECRET = '<openssl rand -base64 32 결과>'
+$env:COOKIE_SECURE = 'false'
 ```
 
 ## 2. 테스트와 WAR 빌드

@@ -20,9 +20,17 @@ public class RedisConfig {
     @Bean
     public RedisConnectionFactory redisConnectionFactory(
             @Value("${redis.host}") String host,
-            @Value("${redis.port}") int port) {
+            @Value("${redis.port}") int port,
+            @Value("${redis.password:}") String password) {
         RedisStandaloneConfiguration configuration =
                 new RedisStandaloneConfiguration(host, port);
+
+        // requirepass가 걸린 서버(EC2)는 이게 없으면 모든 명령이 NOAUTH로 실패한다.
+        // Lettuce는 지연 연결이라 앱은 정상 기동하고, 첫 Redis 명령(로그인 시
+        // Refresh Token 저장)에서야 터진다. 로컬 Redis처럼 비밀번호가 없으면
+        // 빈 문자열이 들어오고, RedisPassword.of가 그것을 '비밀번호 없음'으로 처리한다.
+        configuration.setPassword(password);
+
         return new LettuceConnectionFactory(configuration);
     }
 
