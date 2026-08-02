@@ -29,6 +29,15 @@ public enum AuthErrorCode implements ErrorCode {
 
     // --- 회원가입 ---
     // 어느 필드가 중복인지 알려줘야 하므로 이메일과 휴대폰을 나눈다.
+    AUTH_VERIFICATION_CODE_INVALID(HttpStatus.BAD_REQUEST, "인증번호가 올바르지 않습니다."),
+    AUTH_VERIFICATION_CODE_EXPIRED(HttpStatus.BAD_REQUEST, "인증번호가 만료되었습니다."),
+    AUTH_VERIFICATION_TOO_MANY_ATTEMPTS(HttpStatus.TOO_MANY_REQUESTS,
+            "인증번호 입력 횟수를 초과했습니다."),
+    AUTH_SMS_TOO_MANY_REQUESTS(HttpStatus.TOO_MANY_REQUESTS,
+            "인증번호를 다시 요청하기 전에 잠시 기다려 주세요."),
+    AUTH_SMS_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE,
+            "현재 문자 인증 서비스를 사용할 수 없습니다."),
+
     AUTH_DUPLICATE_EMAIL(HttpStatus.CONFLICT, "이미 가입된 이메일입니다."),
     AUTH_DUPLICATE_PHONE_NUMBER(HttpStatus.CONFLICT, "이미 가입된 휴대폰 번호입니다.");
 

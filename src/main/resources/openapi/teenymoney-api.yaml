@@ -2,9 +2,8 @@ openapi: 3.0.3
 
 info:
   title: TeenyMoney API
-  description: |
-    부모와 자녀가 함께 사용하는 가족 금융 서비스 티니머니의 REST API 문서입니다.
-  version: 0.1.0
+  description: 부모와 자녀가 함께 사용하는 가족 금융 서비스 API
+  version: 0.2.0
 
 servers:
   - url: /
@@ -12,44 +11,162 @@ servers:
   - url: http://localhost:8080
     description: 로컬 개발 서버
   - url: https://www.teenymoney.kro.kr
-    description: 개발 통합 서버
+    description: 운영 서버
 
 tags:
+  - name: Auth
+    description: 회원가입과 인증
   - name: Health
     description: 애플리케이션과 데이터베이스 상태 확인
 
 paths:
+  /api/v1/auth/phone-verification/send:
+    post:
+      tags: [Auth]
+      summary: 휴대폰 인증번호 발송
+      description: |
+        휴대폰 번호를 숫자만 남도록 정규화한 뒤 6자리 인증번호를 발송합니다.
+        같은 번호의 재요청은 기본 60초 동안 제한됩니다.
+        SMS 업체가 연결되기 전 운영 모드에서는 성공으로 위장하지 않고 503을 반환합니다.
+      operationId: sendPhoneVerificationCode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PhoneVerificationSendRequest"
+            example:
+              phoneNumber: 010-1234-5678
+      responses:
+        "200":
+          description: 인증번호 발송 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoidApiResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "429":
+          description: 인증번호 재요청 대기시간 미경과
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorApiResponse"
+              example:
+                success: false
+                code: AUTH_SMS_TOO_MANY_REQUESTS
+                message: 인증번호를 다시 요청하기 전에 잠시 기다려 주세요.
+                data: null
+        "503":
+          description: SMS 발송 업체 미설정 또는 발송 불가
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorApiResponse"
+              example:
+                success: false
+                code: AUTH_SMS_UNAVAILABLE
+                message: 현재 문자 인증 서비스를 사용할 수 없습니다.
+                data: null
+
+  /api/v1/auth/check-email:
+    get:
+      tags: [Auth]
+      summary: 이메일 사용 가능 여부 확인
+      operationId: checkEmailAvailability
+      parameters:
+        - in: query
+          name: email
+          required: true
+          schema:
+            type: string
+            format: email
+          example: user@example.com
+      responses:
+        "200":
+          description: 확인 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailAvailabilityApiResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+
+  /api/v1/auth/signup:
+    post:
+      tags: [Auth]
+      summary: 회원가입
+      description: |
+        클라이언트는 role을 보내지 않습니다.
+        서버가 생년월일을 기준으로 만 7세부터 만 18세까지는 CHILD,
+        그 밖의 유효한 과거 생년월일은 PARENT로 결정합니다.
+        CHILD는 teeny_score 컬럼을 생략하여 DB 기본값을 사용하고,
+        PARENT는 teeny_score에 NULL을 저장합니다.
+        휴대폰 인증정보는 회원 DB insert가 성공한 뒤에만 삭제됩니다.
+      operationId: signup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignupRequest"
+            example:
+              name: 홍길동
+              birthDate: "2012-03-04"
+              phoneNumber: 010-1234-5678
+              verificationCode: "123456"
+              email: user@example.com
+              password: password123
+      responses:
+        "201":
+          description: 회원가입 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignupApiResponse"
+        "400":
+          description: 입력값 또는 인증번호 오류
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/ValidationErrorApiResponse"
+                  - $ref: "#/components/schemas/ErrorApiResponse"
+        "409":
+          description: 이메일 또는 휴대폰 번호 중복
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorApiResponse"
+        "429":
+          description: 인증번호 입력 횟수 초과
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorApiResponse"
+              example:
+                success: false
+                code: AUTH_VERIFICATION_TOO_MANY_ATTEMPTS
+                message: 인증번호 입력 횟수를 초과했습니다.
+                data: null
+
   /api/v1/health:
     get:
-      tags:
-        - Health
+      tags: [Health]
       summary: 애플리케이션 상태 확인
-      description: |
-        Nginx, Tomcat, Spring MVC 애플리케이션이 정상적으로 응답하는지 확인합니다.
-        데이터베이스에는 접근하지 않습니다.
       operationId: getApplicationHealth
       responses:
         "200":
-          description: 애플리케이션이 정상적으로 실행 중
+          description: 애플리케이션 정상
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthApiResponse"
-              example:
-                success: true
-                code: OK
-                message: 성공
-                data:
-                  status: UP
-                  time: "2026-07-28 10:20:00"
 
   /api/v1/health/db:
     get:
-      tags:
-        - Health
+      tags: [Health]
       summary: 데이터베이스 상태 확인
-      description: |
-        MyBatis Mapper를 통해 MySQL에 SELECT 1과 DATABASE()를 실행합니다.
       operationId: getDatabaseHealth
       responses:
         "200":
@@ -58,56 +175,162 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DatabaseHealthApiResponse"
-              example:
-                success: true
-                code: OK
-                message: 성공
-                data:
-                  database: teenymoney
-
         "503":
           description: 데이터베이스 연결 또는 SQL 실행 실패
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorApiResponse"
-              example:
-                success: false
-                code: COMMON_SERVICE_UNAVAILABLE
-                message: 서비스를 일시적으로 사용할 수 없습니다.
-                data: null
 
 components:
+  responses:
+    InvalidInput:
+      description: 요청값 검증 실패
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ValidationErrorApiResponse"
+
   schemas:
+    PhoneVerificationSendRequest:
+      type: object
+      additionalProperties: false
+      required: [phoneNumber]
+      properties:
+        phoneNumber:
+          type: string
+          pattern: '^01[016789]-?\d{3,4}-?\d{4}$'
+          example: 010-1234-5678
+
+    SignupRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - birthDate
+        - phoneNumber
+        - verificationCode
+        - email
+        - password
+      properties:
+        name:
+          type: string
+          maxLength: 50
+          example: 홍길동
+        birthDate:
+          type: string
+          format: date
+          description: 과거 날짜, ISO YYYY-MM-DD
+          example: "2012-03-04"
+        phoneNumber:
+          type: string
+          pattern: '^01[016789]-?\d{3,4}-?\d{4}$'
+          example: 010-1234-5678
+        verificationCode:
+          type: string
+          pattern: '^\d{6}$'
+          example: "123456"
+        email:
+          type: string
+          format: email
+          maxLength: 100
+          example: user@example.com
+        password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 64
+          pattern: '^(?=.*[A-Za-z])(?=.*\d).+$'
+          example: password123
+
+    SignupResponse:
+      type: object
+      required: [memberId]
+      properties:
+        memberId:
+          type: integer
+          format: int64
+          example: 17
+
+    EmailAvailabilityResponse:
+      type: object
+      required: [available]
+      properties:
+        available:
+          type: boolean
+          example: true
+
     HealthResponse:
       type: object
-      required:
-        - status
-        - time
+      required: [status, time]
       properties:
         status:
           type: string
           example: UP
         time:
           type: string
-          example: "2026-07-28 10:20:00"
+          example: "2026-08-03 12:00:00"
 
     DatabaseHealthResponse:
       type: object
-      required:
-        - database
+      required: [database]
       properties:
         database:
           type: string
           example: teenymoney
 
+    VoidApiResponse:
+      type: object
+      required: [success, code, message]
+      properties:
+        success:
+          type: boolean
+          example: true
+        code:
+          type: string
+          example: OK
+        message:
+          type: string
+          example: 성공
+        data:
+          nullable: true
+          example: null
+
+    SignupApiResponse:
+      type: object
+      required: [success, code, message, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        code:
+          type: string
+          example: OK
+        message:
+          type: string
+          example: 성공
+        data:
+          $ref: "#/components/schemas/SignupResponse"
+
+    EmailAvailabilityApiResponse:
+      type: object
+      required: [success, code, message, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        code:
+          type: string
+          example: OK
+        message:
+          type: string
+          example: 성공
+        data:
+          $ref: "#/components/schemas/EmailAvailabilityResponse"
+
     HealthApiResponse:
       type: object
-      required:
-        - success
-        - code
-        - message
-        - data
+      required: [success, code, message, data]
       properties:
         success:
           type: boolean
@@ -123,11 +346,7 @@ components:
 
     DatabaseHealthApiResponse:
       type: object
-      required:
-        - success
-        - code
-        - message
-        - data
+      required: [success, code, message, data]
       properties:
         success:
           type: boolean
@@ -143,22 +362,37 @@ components:
 
     ErrorApiResponse:
       type: object
-      required:
-        - success
-        - code
-        - message
-        - data
+      required: [success, code, message]
       properties:
         success:
           type: boolean
           example: false
         code:
           type: string
-          example: COMMON_SERVICE_UNAVAILABLE
+          example: AUTH_VERIFICATION_CODE_INVALID
         message:
           type: string
-          example: 서비스를 일시적으로 사용할 수 없습니다.
+          example: 인증번호가 올바르지 않습니다.
         data:
-          type: object
           nullable: true
           example: null
+
+    ValidationErrorApiResponse:
+      type: object
+      required: [success, code, message, data]
+      properties:
+        success:
+          type: boolean
+          example: false
+        code:
+          type: string
+          example: COMMON_INVALID_INPUT
+        message:
+          type: string
+          example: 요청 값이 올바르지 않습니다.
+        data:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            email: 이메일 형식이 올바르지 않습니다.

@@ -72,5 +72,12 @@ class AuthErrorCodeTest {
         assertEquals(HttpStatus.FORBIDDEN, AuthErrorCode.AUTH_INACTIVE_MEMBER.getStatus());
         assertEquals(HttpStatus.CONFLICT, AuthErrorCode.AUTH_DUPLICATE_EMAIL.getStatus());
         assertEquals(HttpStatus.CONFLICT, AuthErrorCode.AUTH_DUPLICATE_PHONE_NUMBER.getStatus());
+        assertEquals(HttpStatus.BAD_REQUEST, AuthErrorCode.AUTH_VERIFICATION_CODE_INVALID.getStatus());
+        assertEquals(HttpStatus.BAD_REQUEST, AuthErrorCode.AUTH_VERIFICATION_CODE_EXPIRED.getStatus());
+        assertEquals(HttpStatus.TOO_MANY_REQUESTS,
+                AuthErrorCode.AUTH_VERIFICATION_TOO_MANY_ATTEMPTS.getStatus());
+        assertEquals(HttpStatus.TOO_MANY_REQUESTS,
+                AuthErrorCode.AUTH_SMS_TOO_MANY_REQUESTS.getStatus());
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, AuthErrorCode.AUTH_SMS_UNAVAILABLE.getStatus());
     }
 }

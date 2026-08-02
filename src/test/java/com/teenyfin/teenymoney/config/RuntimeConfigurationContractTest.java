@@ -10,6 +10,7 @@ import org.springframework.core.io.support.PropertiesLoaderUtils;
 import java.io.IOException;
 import java.util.Properties;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class RuntimeConfigurationContractTest {
@@ -28,6 +29,17 @@ class RuntimeConfigurationContractTest {
 
         assertThrows(IllegalArgumentException.class,
                 () -> resolver.getRequiredProperty("cookie.secure"));
+    }
+
+    @Test
+    void smsVerificationDefaultsAreSafeForProduction() throws IOException {
+        PropertySourcesPropertyResolver resolver = applicationPropertyResolver();
+
+        assertEquals("false", resolver.getRequiredProperty("sms.test-mode"));
+        assertEquals("", resolver.getRequiredProperty("sms.test-code"));
+        assertEquals("180", resolver.getRequiredProperty("sms.verification-ttl-seconds"));
+        assertEquals("60", resolver.getRequiredProperty("sms.resend-cooldown-seconds"));
+        assertEquals("5", resolver.getRequiredProperty("sms.max-attempts"));
     }
 
     private PropertySourcesPropertyResolver applicationPropertyResolver() throws IOException {

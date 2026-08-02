@@ -17,6 +17,8 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 import javax.sql.DataSource;
+import java.time.Clock;
+import java.time.ZoneId;
 
 /**
  * 루트(부모) 컨텍스트. WebConfig가 직접 등록하므로 컴포넌트 스캔 대상이 아니다.
@@ -41,6 +43,11 @@ public class RootConfig {
     private String username;
     @Value("${jdbc.password}")
     private String password;
+
+    @Bean
+    public Clock clock() {
+        return Clock.system(ZoneId.of("Asia/Seoul"));
+    }
 
     @Bean
     public DataSource dataSource() {

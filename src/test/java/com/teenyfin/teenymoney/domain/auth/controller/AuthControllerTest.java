@@ -1,0 +1,166 @@
+package com.teenyfin.teenymoney.domain.auth.controller;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.teenyfin.teenymoney.domain.auth.dto.request.SignupRequestDTO;
+import com.teenyfin.teenymoney.domain.auth.dto.response.SignupResponseDTO;
+import com.teenyfin.teenymoney.domain.auth.exception.AuthErrorCode;
+import com.teenyfin.teenymoney.domain.auth.service.AuthService;
+import com.teenyfin.teenymoney.domain.auth.service.PhoneVerificationService;
+import com.teenyfin.teenymoney.global.exception.BusinessException;
+import com.teenyfin.teenymoney.global.exception.GlobalExceptionAdvice;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.http.MediaType;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+
+import java.time.LocalDate;
+import java.nio.charset.StandardCharsets;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+
+class AuthControllerTest {
+
+    private AuthService authService;
+    private PhoneVerificationService phoneVerificationService;
+    private MockMvc mockMvc;
+
+    @BeforeEach
+    void setUp() {
+        authService = mock(AuthService.class);
+        phoneVerificationService = mock(PhoneVerificationService.class);
+        ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                        new AuthController(authService, phoneVerificationService))
+                .setControllerAdvice(new GlobalExceptionAdvice())
+                .setMessageConverters(new MappingJackson2HttpMessageConverter(objectMapper))
+                .build();
+    }
+
+    @Test
+    void sendPhoneVerificationReturnsSuccessEnvelope() throws Exception {
+        var response = mockMvc.perform(post("/auth/phone-verification/send")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"phoneNumber\":\"010-1234-5678\"}"))
+                .andReturn().getResponse();
+
+        assertEquals(200, response.getStatus());
+        assertBodyContains(response, "\"success\":true", "\"code\":\"OK\"");
+
+        verify(phoneVerificationService).sendCode("010-1234-5678");
+    }
+
+    @Test
+    void checkEmailReturnsAvailability() throws Exception {
+        when(authService.isEmailAvailable("user@example.com")).thenReturn(true);
+
+        var response = mockMvc.perform(get("/auth/check-email")
+                        .param("email", "user@example.com"))
+                .andReturn().getResponse();
+
+        assertEquals(200, response.getStatus());
+        assertBodyContains(response, "\"available\":true");
+    }
+
+    @Test
+    void signupAcceptsIsoBirthDateAndReturnsCreatedMember() throws Exception {
+        when(authService.signup(any(SignupRequestDTO.class)))
+                .thenReturn(SignupResponseDTO.of(17L));
+
+        var response = mockMvc.perform(post("/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validSignupJson()))
+                .andReturn().getResponse();
+
+        assertEquals(201, response.getStatus());
+        assertBodyContains(response, "\"memberId\":17");
+        assertFalse(response.getContentAsString(StandardCharsets.UTF_8).contains("\"role\""));
+
+        ArgumentCaptor<SignupRequestDTO> captor = ArgumentCaptor.forClass(SignupRequestDTO.class);
+        verify(authService).signup(captor.capture());
+        assertEquals(LocalDate.of(2012, 3, 4), captor.getValue().getBirthDate());
+    }
+
+    @Test
+    void signupMissingFieldsReturnsFieldValidationErrors() throws Exception {
+        var response = mockMvc.perform(post("/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andReturn().getResponse();
+
+        assertEquals(400, response.getStatus());
+        assertBodyContains(response,
+                "\"code\":\"COMMON_INVALID_INPUT\"",
+                "\"name\"", "\"birthDate\"", "\"phoneNumber\"",
+                "\"verificationCode\"", "\"email\"", "\"password\"");
+    }
+
+    @Test
+    void malformedBirthDateReturnsMalformedJsonError() throws Exception {
+        var response = mockMvc.perform(post("/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validSignupJson().replace("2012-03-04", "03/04/2012")))
+                .andReturn().getResponse();
+
+        assertEquals(400, response.getStatus());
+        assertBodyContains(response, "\"code\":\"COMMON_MALFORMED_JSON\"");
+    }
+
+    @Test
+    void businessErrorKeepsItsStatusAndCode() throws Exception {
+        doThrow(new BusinessException(AuthErrorCode.AUTH_SMS_TOO_MANY_REQUESTS))
+                .when(phoneVerificationService).sendCode(any());
+
+        var response = mockMvc.perform(post("/auth/phone-verification/send")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"phoneNumber\":\"01012345678\"}"))
+                .andReturn().getResponse();
+
+        assertEquals(429, response.getStatus());
+        assertBodyContains(response, "\"code\":\"AUTH_SMS_TOO_MANY_REQUESTS\"");
+    }
+
+    @Test
+    void passwordMustContainBothLetterAndDigit() throws Exception {
+        var response = mockMvc.perform(post("/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validSignupJson().replace("password123", "abcdefgh")))
+                .andReturn().getResponse();
+
+        assertEquals(400, response.getStatus());
+        assertBodyContains(response, "\"password\"");
+    }
+
+    private String validSignupJson() {
+        return "{"
+                + "\"name\":\"홍길동\","
+                + "\"birthDate\":\"2012-03-04\","
+                + "\"phoneNumber\":\"010-1234-5678\","
+                + "\"verificationCode\":\"123456\","
+                + "\"email\":\"user@example.com\","
+                + "\"password\":\"password123\""
+                + "}";
+    }
+
+    private void assertBodyContains(
+            org.springframework.mock.web.MockHttpServletResponse response,
+            String... fragments) throws Exception {
+        String body = response.getContentAsString(StandardCharsets.UTF_8);
+        for (String fragment : fragments) {
+            assertTrue(body.contains(fragment), body);
+        }
+    }
+}
