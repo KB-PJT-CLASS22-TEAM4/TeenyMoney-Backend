@@ -18,6 +18,8 @@ tags:
     description: 회원가입과 인증
   - name: Members
     description: 회원 정보
+  - name: Wallet
+    description: 지갑 잔액과 거래내역
   - name: Health
     description: 애플리케이션과 데이터베이스 상태 확인
 
@@ -231,6 +233,43 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorApiResponse"
 
+  /api/v1/wallet/me:
+    get:
+      tags: [Wallet]
+      summary: 내 지갑 잔액과 최근 거래내역 조회
+      description: Access Token으로 인증된 회원의 MEMBER 타입 지갑 잔액과,
+        해당 지갑의 최근 거래내역 3건을 함께 반환합니다.
+      operationId: getMyWalletDetail
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WalletDetailApiResponse"
+
+        "401":
+          description: 토큰이 없거나 유효하지 않음
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorApiResponse"
+
+
+        "404":
+          description: 지갑을 찾을 수 없음
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorApiResponse"
+              example:
+                success: false
+                code: WALLET_NOT_FOUND
+                message: 지갑을 찾을 수 없습니다.
+                data: null
+
   /api/v1/health:
     get:
       tags: [Health]
@@ -413,6 +452,72 @@ components:
         available:
           type: boolean
           example: true
+
+    WalletTransaction:
+      type: object
+      required: [id, direction, amount, balanceAfter, description, createdAt]
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        direction:
+          type: string
+          enum: [CREDIT, DEBIT]
+          example: DEBIT
+        amount:
+          type: integer
+          format: int64
+          example: 3500
+        balanceAfter:
+          type: integer
+          format: int64
+          example: 146500
+        description:
+          type: string
+          nullable: true
+          example: 편의점 결제
+        createdAt:
+          type: string
+          example: "2026-07-31 16:15:43"
+
+
+    WalletDetailResponse:
+      type: object
+      required: [ walletId, balance, updatedAt, recentTransactions ]
+      properties:
+        walletId:
+          type: integer
+          format: int64
+          example: 5
+        balance:
+          type: integer
+          format: int64
+          example: 150000
+        updatedAt:
+          type: string
+          nullable: true
+          example: "2026-07-31 16:15:43"
+        recentTransactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/WalletTransaction"
+
+    WalletDetailApiResponse:
+      type: object
+      required: [ success, code, message, data ]
+      properties:
+        success:
+          type: boolean
+          example: true
+        code:
+          type: string
+          example: OK
+        message:
+          type: string
+          example: 성공
+        data:
+          $ref: "#/components/schemas/WalletDetailResponse"
 
     HealthResponse:
       type: object
