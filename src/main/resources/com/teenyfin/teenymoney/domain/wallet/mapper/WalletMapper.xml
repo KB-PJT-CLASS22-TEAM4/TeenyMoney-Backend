@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper">
+
+
+    <!-- DB 컬럼명(스네이크케이스)을 WalletVO 필드명(카멜케이스)에 매핑 -->
+    <resultMap id="walletResultMap" type="com.teenyfin.teenymoney.domain.wallet.vo.WalletVO">
+        <id property="id" column="id"/>
+        <result property="memberId" column="member_id"/>
+        <result property="balance" column="balance"/>
+        <result property="type" column="type"/>
+        <result property="updatedAt" column="update_at"/>
+    </resultMap>
+
+    <resultMap id="walletTransactionResultMap" type="com.teenyfin.teenymoney.domain.wallet.vo.WalletTransactionVO">
+        <id property="id" column="id"/>
+        <result property="direction" column="direction"/>
+        <result property="amount" column="amount"/>
+        <result property="balanceAfter" column="balance_after"/>
+        <result property="description" column="description"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+
+    <!-- memberId로 MEMBER 타입 지갑만 골라서 찾는다 (예금/적금 지갑은 제외) -->
+    <select id="selectMemberWalletByMemberId" resultMap="walletResultMap">
+        SELECT id, member_id, balance, type, updated_at
+        FROM T_WLT_BASE_M
+        WHERE member_id = #{memberId} AND type = 'MEMBER'
+    </select>
+
+    <!-- 특정 지갑의 최신 거래내역을 limit개만 가져온다.
+           created_at이 같은 값끼리 있을 수 있어서(같은 초에 여러 건), id DESC를 보조 정렬로 추가해
+           "가장 최근에 쓰인 행"이 확실히 앞에 오게 한다 -->
+    <select id="selectRecentTransactions"  resultMap="walletTransactionResultMap">
+        SELECT id, direction, amount, balance_after, description, created_at
+        FROM T_WLT_HIST_H
+        WHERE wallet_id= #{walletId}
+        ORDER BY created_at DESC, id DESC
+        LIMIT #{limit}
+    </select>
+</mapper>
