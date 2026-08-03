@@ -7,6 +7,7 @@ import io.jsonwebtoken.security.Keys;
 import javax.crypto.SecretKey;
 import java.util.Base64;
 import java.util.Date;
+import java.util.UUID;
 
 /**
  * JWT 발급·검증. HS256.
@@ -52,12 +53,8 @@ public class JwtProvider {
 
     /**
      * Access Token 발급. 매 요청 Authorization 헤더로 실려 다니므로 수명이 짧다(기본 30분).
-     * 클레임: sub=memberId, role, tokenType=ACCESS, iat, exp
+     * 클레임: sub=memberId, role, tokenType=ACCESS, authGeneration, iat, exp
      */
-    public String createAccessToken(Long memberId, String role) {
-        return createAccessToken(memberId, role, "legacy");
-    }
-
     public String createAccessToken(Long memberId, String role, String authGeneration) {
         Date now = new Date();
         return Jwts.builder()
@@ -72,20 +69,17 @@ public class JwtProvider {
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + accessExpirationMs))
                 .signWith(key, Jwts.SIG.HS256)
+                .id(UUID.randomUUID().toString())
                 .compact();
     }
 
     /**
      * Refresh Token 발급. Access가 만료됐을 때 새 Access를 받는 용도만이다(기본 14일).
-     * 클레임: sub=memberId, tokenType=REFRESH, iat, exp
+     * 클레임: sub=memberId, tokenType=REFRESH, authGeneration, iat, exp
      *
      * role을 담지 않는다. 14일짜리 토큰에 권한을 박아두면 역할이 바뀌어도
      * 2주간 옛 권한이 살아 있게 된다. 권한은 짧은 Access에만 담아 재발급마다 갱신한다.
      */
-    public String createRefreshToken(Long memberId) {
-        return createRefreshToken(memberId, "legacy");
-    }
-
     public String createRefreshToken(Long memberId, String authGeneration) {
         Date now = new Date();
         return Jwts.builder()

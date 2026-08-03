@@ -10,6 +10,9 @@ import com.teenyfin.teenymoney.global.auth.RefreshTokenStore;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import com.teenyfin.teenymoney.global.exception.CommonErrorCode;
 import com.teenyfin.teenymoney.global.security.jwt.JwtProvider;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -103,20 +106,121 @@ public class AuthService {
             throw new BusinessException(AuthErrorCode.AUTH_INACTIVE_MEMBER);
         }
 
-        String accessToken = jwtProvider.createAccessToken(member.getId(), member.getRole());
-        String refreshToken = jwtProvider.createRefreshToken(member.getId());
         try {
+            String generation = refreshTokenStore.getOrCreateGeneration(member.getId());
+            if (generation == null) {
+                throw new BusinessException(CommonErrorCode.COMMON_SERVICE_UNAVAILABLE);
+            }
+            String accessToken = jwtProvider.createAccessToken(
+                    member.getId(), member.getRole(), generation);
+            String refreshToken = jwtProvider.createRefreshToken(member.getId(), generation);
             refreshTokenStore.save(member.getId(), refreshToken);
+
+            return new LoginResult(
+                    accessToken,
+                    refreshToken,
+                    member.getId(),
+                    member.getRole(),
+                    member.getName());
         } catch (DataAccessException exception) {
             throw new BusinessException(CommonErrorCode.COMMON_SERVICE_UNAVAILABLE);
         }
+    }
 
-        return new LoginResult(
-                accessToken,
-                refreshToken,
-                member.getId(),
-                member.getRole(),
-                member.getName());
+    @Transactional(readOnly = true)
+    public TokenReissueResult reissue(String refreshToken) {
+        if (refreshToken == null || refreshToken.isBlank()) {
+            throw new BusinessException(AuthErrorCode.AUTH_TOKEN_INVALID);
+        }
+
+        Claims claims;
+        try {
+            claims = jwtProvider.parse(refreshToken);
+        } catch (ExpiredJwtException exception) {
+            throw new BusinessException(AuthErrorCode.AUTH_TOKEN_EXPIRED);
+        } catch (JwtException | IllegalArgumentException exception) {
+            throw new BusinessException(AuthErrorCode.AUTH_TOKEN_INVALID);
+        }
+
+        if (!JwtProvider.TOKEN_TYPE_REFRESH.equals(
+                claims.get(JwtProvider.CLAIM_TOKEN_TYPE, String.class))) {
+            throw new BusinessException(AuthErrorCode.AUTH_TOKEN_INVALID);
+        }
+
+        Long memberId;
+        try {
+            memberId = Long.valueOf(claims.getSubject());
+        } catch (NumberFormatException exception) {
+            throw new BusinessException(AuthErrorCode.AUTH_TOKEN_INVALID);
+        }
+        String generation = claims.get(JwtProvider.CLAIM_AUTH_GENERATION, String.class);
+        if (generation == null || generation.isBlank()) {
+            throw new BusinessException(AuthErrorCode.AUTH_TOKEN_INVALID);
+        }
+
+        try {
+            if (!generation.equals(refreshTokenStore.findGeneration(memberId))) {
+                throw new BusinessException(AuthErrorCode.AUTH_TOKEN_INVALID);
+            }
+
+            MemberVO member = memberMapper.selectById(memberId);
+            if (member == null) {
+                throw new BusinessException(AuthErrorCode.AUTH_TOKEN_INVALID);
+            }
+            if (!"ACTIVE".equals(member.getStatus())) {
+                throw new BusinessException(AuthErrorCode.AUTH_INACTIVE_MEMBER);
+            }
+
+            String accessToken = jwtProvider.createAccessToken(
+                    memberId, member.getRole(), generation);
+            String newRefreshToken = jwtProvider.createRefreshToken(memberId, generation);
+            if (!refreshTokenStore.rotate(
+                    memberId, refreshToken, newRefreshToken, generation)) {
+                throw new BusinessException(AuthErrorCode.AUTH_TOKEN_INVALID);
+            }
+            return new TokenReissueResult(accessToken, newRefreshToken);
+        } catch (DataAccessException exception) {
+            throw new BusinessException(CommonErrorCode.COMMON_SERVICE_UNAVAILABLE);
+        }
+    }
+
+    public void logout(String accessToken, String refreshToken) {
+        Claims claims = parseLogoutToken(accessToken, JwtProvider.TOKEN_TYPE_ACCESS);
+        if (claims == null) {
+            claims = parseLogoutToken(refreshToken, JwtProvider.TOKEN_TYPE_REFRESH);
+        }
+        if (claims == null) {
+            return;
+        }
+
+        try {
+            Long memberId = Long.valueOf(claims.getSubject());
+            String generation = claims.get(
+                    JwtProvider.CLAIM_AUTH_GENERATION, String.class);
+            if (generation != null && generation.equals(
+                    refreshTokenStore.findGeneration(memberId))) {
+                refreshTokenStore.revokeAll(memberId);
+            }
+        } catch (NumberFormatException ignored) {
+            // Invalid tokens make logout a no-op.
+        } catch (DataAccessException exception) {
+            throw new BusinessException(CommonErrorCode.COMMON_SERVICE_UNAVAILABLE);
+        }
+    }
+
+    private Claims parseLogoutToken(String token, String expectedType) {
+        if (token == null || token.isBlank()) {
+            return null;
+        }
+        try {
+            Claims claims = jwtProvider.parse(token);
+            return expectedType.equals(
+                    claims.get(JwtProvider.CLAIM_TOKEN_TYPE, String.class))
+                    ? claims
+                    : null;
+        } catch (JwtException | IllegalArgumentException exception) {
+            return null;
+        }
     }
 
     private RuntimeException translateDuplicate(
@@ -140,7 +244,10 @@ public class AuthService {
 
     private String deriveRole(LocalDate birthDate) {
         int age = Period.between(birthDate, LocalDate.now(clock)).getYears();
-        return age >= 7 && age <= 18 ? "CHILD" : "PARENT";
+        if (age < 7) {
+            throw new BusinessException(AuthErrorCode.AUTH_INCORRECT_AGE);
+        }
+        return age <= 18 ? "CHILD" : "PARENT";
     }
 
     private String normalizeEmail(String email) {

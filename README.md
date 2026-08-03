@@ -23,15 +23,16 @@
 - 공통 API 응답과 전역 예외 처리
 - MyBatis 및 MySQL 연결 설정
 - Redis 및 Spring Security 기본 설정
-- JWT 인증 파이프라인 (토큰 발급·검증, 인증 필터, 401/403 응답)
+- JWT 로그인·재발급 Rotation·계정 단위 로그아웃
+- Access Token 인증 세대 검증과 Refresh Token Redis 저장
+- Cookie 기반 CSRF 보호와 401/403/503 JSON 응답
 - 공개 경로를 제외한 전 요청 인증 강제 (`anyRequest().authenticated()`)
 - 애플리케이션 상태 확인 API
 - 데이터베이스 연결 확인 API
 - OpenAPI 3.0 명세와 Swagger UI
 - GitHub Actions 테스트 및 WAR 빌드 CI
 
-회원, 인증, 가족 연결, 지갑, 결제, 금융상품, 퀘스트, 알림 도메인은 구현
-예정입니다.
+가족 연결, 지갑, 결제, 금융상품, 퀘스트, 알림 도메인은 구현 예정입니다.
 
 ## 인가 규칙
 
@@ -45,33 +46,21 @@
 | `/api/v1/auth/signup` | 회원가입 — 토큰이 있을 수 없다 |
 | `/api/v1/auth/login` | 로그인 — 토큰을 받으러 오는 곳 |
 | `/api/v1/auth/reissue` | 재발급 — Access가 만료된 상태로 온다 |
+| `/api/v1/auth/logout` | 로그아웃 — Access가 없거나 만료돼도 Cookie로 처리 |
+| `/api/v1/auth/csrf` | Cookie 인증 API용 CSRF 토큰 발급 |
 | `/api/v1/auth/check-email` | 이메일 중복 확인 — 가입 전이라 토큰이 없다 |
+| `/api/v1/auth/phone-verification/send` | 회원가입 전 휴대폰 인증번호 발송 |
 | `/api/v1/health`, `/api/v1/health/**` | 모니터링이 토큰 없이 호출 |
 | `/swagger-ui/**`, `/api-docs/**` | API 문서 |
 
-유효한 Access Token을 보내면 인증 정보가 채워지고 컨트롤러가
-`@AuthenticationPrincipal MemberPrincipal`로 받습니다.
+유효한 Access Token을 보내면 Redis의 현재 인증 세대와 일치할 때만 인증 정보가
+채워지고 컨트롤러가 `@AuthenticationPrincipal MemberPrincipal`로 받습니다.
+로그아웃은 해당 계정의 인증 세대를 제거하므로 그 계정의 기존 Access Token도 즉시
+무효화되며 다른 계정에는 영향을 주지 않습니다.
 
-**단, 토큰을 발급하는 로그인 API는 아직 없습니다**(인증 API는 구현 중). 그래서
-현재 실제로 호출할 수 있는 것은 위 표의 `health` 2개와 문서 경로뿐이고, 그 밖의
-경로는 **존재하지 않는 경로여도 404가 아니라 401**이 돌아옵니다. 인가 판단이
-DispatcherServlet보다 먼저 끝나기 때문입니다.
-
-`auth` 경로 4개는 화이트리스트에만 등록되어 있고 처리할 컨트롤러가 없어 호출하면
-401이 아니라 404입니다. 프론트엔드 연동은 인증 API 구현 이후에 시작합니다.
-
-수동 확인용 토큰이 필요하면 `TokenPrinterTest`로 발급합니다. 출력된 토큰을
-`Authorization: Bearer <토큰>` 헤더에 넣어 사용합니다.
-
-```bash
-./gradlew test --tests "*TokenPrinterTest" --rerun-tasks -i
-```
-
-토큰을 발급하는 개발용 엔드포인트는 배포물에 백도어가 되므로 만들지 않습니다.
-`src/test`에 두면 WAR에 포함되지 않습니다.
-
-`JWT_SECRET`은 필수입니다. `TokenPrinterTest`를 실행할 때도 확인하려는 애플리케이션과
-같은 값을 환경변수로 먼저 주입해야 합니다(아래 [환경변수](#환경변수) 참고).
+브라우저는 먼저 `GET /api/v1/auth/csrf`를 호출하고 응답의 `data.token`을 로그인,
+재발급, 로그아웃 요청의 `X-XSRF-TOKEN` 헤더로 보냅니다. Refresh Token은
+`HttpOnly; SameSite=Strict` Cookie로만 전달됩니다.
 
 인증 파이프라인의 설계 근거는 [JWT·Spring Security 구현 플랜](docs/jwt-security-pipeline.md)을 참고합니다.
 
@@ -420,8 +409,8 @@ CI는 실제 MySQL, Redis 또는 EC2에 연결하지 않으며 배포도 수행�
 
 ## 개발 예정 범위
 
-- 회원가입과 로그인 (JWT 토큰 발급) — **진행 중**
-- Redis Refresh Token 관리와 토큰 재발급 — **진행 중**
+- ~~회원가입과 로그인 (JWT 토큰 발급)~~ — **완료**
+- ~~Redis Refresh Token Rotation과 계정 단위 로그아웃~~ — **완료**
 - ~~`JWT_SECRET` 미설정 시 기동 실패 처리~~ — **완료**
 - 가족 연결
 - 지갑, 거래 원장, 용돈

@@ -1,6 +1,7 @@
 package com.teenyfin.teenymoney.global.security;
 
 import com.teenyfin.teenymoney.config.SecurityConfig;
+import com.teenyfin.teenymoney.global.auth.RefreshTokenStore;
 import com.teenyfin.teenymoney.global.security.jwt.JwtProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -25,6 +26,11 @@ import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -58,6 +64,10 @@ class JwtSecurityIntegrationTest {
     private static final String PUBLIC = "/api/v1/auth/login";
     private static final String PHONE_VERIFICATION = "/api/v1/auth/phone-verification/send";
     private static final String MEMBER_ME = "/api/v1/members/me";
+    private static final String GENERATION = "generation-17";
+    private static final String REISSUE = "/api/v1/auth/reissue";
+    private static final String LOGOUT = "/api/v1/auth/logout";
+    private static final String CSRF = "/api/v1/auth/csrf";
 
     @Configuration
     @EnableWebMvc
@@ -67,6 +77,11 @@ class JwtSecurityIntegrationTest {
         TestProtectedController testProtectedController() {
             return new TestProtectedController();
         }
+
+        @Bean
+        RefreshTokenStore refreshTokenStore() {
+            return mock(RefreshTokenStore.class);
+        }
     }
 
     @Autowired
@@ -75,10 +90,15 @@ class JwtSecurityIntegrationTest {
     @Autowired
     private JwtProvider jwtProvider;
 
+    @Autowired
+    private RefreshTokenStore refreshTokenStore;
+
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
+        reset(refreshTokenStore);
+        when(refreshTokenStore.findGeneration(anyLong())).thenReturn(GENERATION);
         // springSecurity()를 적용해야 필터체인이 MockMvc 요청에 붙는다.
         // 빼먹으면 인가 규칙이 동작하지 않아 모든 테스트가 200을 받는다.
         mockMvc = webAppContextSetup(applicationContext)
@@ -89,7 +109,8 @@ class JwtSecurityIntegrationTest {
     @Test
     @DisplayName("정상 Access Token으로 보호 API에 접근하고 MemberPrincipal이 주입된다")
     void validAccessTokenReachesControllerWithPrincipal() throws Exception {
-        HttpServletResponse response = call(PROTECTED, jwtProvider.createAccessToken(17L, "PARENT"));
+        HttpServletResponse response = call(PROTECTED,
+                jwtProvider.createAccessToken(17L, "PARENT", GENERATION));
         String body = bodyOf(response);
 
         show("status", response.getStatus(), 200);
@@ -112,7 +133,7 @@ class JwtSecurityIntegrationTest {
     void tamperedTokenReturnsUnauthorized() throws Exception {
         // 다른 키로 서명한 토큰. 형식은 완벽하지만 우리 키로는 검증되지 않는다.
         String forged = new JwtProvider("nDlRA4wqNsD9UWmGExA1MCPvrWiVob6ewIO9ss319jY=", 1_800_000L, 1_209_600_000L)
-                .createAccessToken(17L, "PARENT");
+                .createAccessToken(17L, "PARENT", GENERATION);
 
         assertErrorResponse(PROTECTED, forged, 401, "AUTH_TOKEN_INVALID");
     }
@@ -121,7 +142,7 @@ class JwtSecurityIntegrationTest {
     @DisplayName("만료된 Access Token은 401 AUTH_TOKEN_EXPIRED를 받는다")
     void expiredTokenReturnsUnauthorized() throws Exception {
         String expired = new JwtProvider("b5ZbpsxM9qd3XTR09Hm/tTbpmTybNbUp/Qc51yyPmk4=", -60_000L, -60_000L)
-                .createAccessToken(17L, "CHILD");
+                .createAccessToken(17L, "CHILD", GENERATION);
 
         assertErrorResponse(PROTECTED, expired, 401, "AUTH_TOKEN_EXPIRED");
     }
@@ -130,19 +151,24 @@ class JwtSecurityIntegrationTest {
     @DisplayName("tokenType=REFRESH 토큰으로 보호 API를 호출하면 401 AUTH_TOKEN_INVALID를 받는다")
     void refreshTokenIsRejected() throws Exception {
         // 서명도 유효하고 만료도 안 됐다. tokenType 검사만이 이걸 막는다.
-        assertErrorResponse(PROTECTED, jwtProvider.createRefreshToken(17L), 401, "AUTH_TOKEN_INVALID");
+        assertErrorResponse(PROTECTED,
+                jwtProvider.createRefreshToken(17L, GENERATION),
+                401, "AUTH_TOKEN_INVALID");
     }
 
     @Test
     @DisplayName("CHILD 토큰으로 부모 전용 API를 호출하면 403 AUTH_FORBIDDEN을 받는다")
     void childCannotAccessParentOnlyEndpoint() throws Exception {
-        assertErrorResponse(PARENT_ONLY, jwtProvider.createAccessToken(17L, "CHILD"), 403, "AUTH_FORBIDDEN");
+        assertErrorResponse(PARENT_ONLY,
+                jwtProvider.createAccessToken(17L, "CHILD", GENERATION),
+                403, "AUTH_FORBIDDEN");
     }
 
     @Test
     @DisplayName("PARENT 토큰으로 부모 전용 API를 호출하면 성공한다")
     void parentCanAccessParentOnlyEndpoint() throws Exception {
-        HttpServletResponse response = call(PARENT_ONLY, jwtProvider.createAccessToken(17L, "PARENT"));
+        HttpServletResponse response = call(PARENT_ONLY,
+                jwtProvider.createAccessToken(17L, "PARENT", GENERATION));
         String body = bodyOf(response);
 
         show("status", response.getStatus(), 200);
@@ -167,7 +193,7 @@ class JwtSecurityIntegrationTest {
         // 앱이 저장된 옛 토큰을 모든 요청에 자동으로 붙이는 상황.
         // 필터가 만료를 보고 즉시 401을 냈다면 로그인 자체가 불가능해진다.
         String expired = new JwtProvider("b5ZbpsxM9qd3XTR09Hm/tTbpmTybNbUp/Qc51yyPmk4=", -60_000L, -60_000L)
-                .createAccessToken(17L, "PARENT");
+                .createAccessToken(17L, "PARENT", GENERATION);
 
         HttpServletResponse response = call(PUBLIC, expired);
 
@@ -192,9 +218,34 @@ class JwtSecurityIntegrationTest {
     @Test
     void memberMeEndpointAcceptsAccessToken() throws Exception {
         HttpServletResponse response = call(
-                MEMBER_ME, jwtProvider.createAccessToken(17L, "PARENT"));
+                MEMBER_ME, jwtProvider.createAccessToken(17L, "PARENT", GENERATION));
 
         assertEquals(200, response.getStatus(), bodyOf(response));
+    }
+
+    @Test
+    void cookieAuthPostsRequireCsrfToken() throws Exception {
+        for (String path : new String[]{PUBLIC, REISSUE, LOGOUT}) {
+            HttpServletResponse rejected = mockMvc.perform(post(path))
+                    .andReturn().getResponse();
+            assertEquals(403, rejected.getStatus(), bodyOf(rejected));
+            assertTrue(bodyOf(rejected).contains("\"code\":\"AUTH_FORBIDDEN\""),
+                    bodyOf(rejected));
+
+            HttpServletResponse accepted = mockMvc.perform(post(path).with(csrf()))
+                    .andReturn().getResponse();
+            assertEquals(200, accepted.getStatus(), bodyOf(accepted));
+        }
+    }
+
+    @Test
+    void csrfEndpointIsPublicAndIssuesCookie() throws Exception {
+        HttpServletResponse response = mockMvc.perform(get(CSRF))
+                .andReturn().getResponse();
+
+        assertEquals(200, response.getStatus(), bodyOf(response));
+        assertTrue(bodyOf(response).contains("\"success\":true"), bodyOf(response));
+        assertTrue(response.getHeader(HttpHeaders.SET_COOKIE).contains("XSRF-TOKEN="));
     }
 
     // --- 도우미 -------------------------------------------------------------

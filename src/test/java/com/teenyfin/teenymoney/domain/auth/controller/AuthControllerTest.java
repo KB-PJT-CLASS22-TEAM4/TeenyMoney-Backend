@@ -9,14 +9,18 @@ import com.teenyfin.teenymoney.domain.auth.exception.AuthErrorCode;
 import com.teenyfin.teenymoney.domain.auth.service.AuthService;
 import com.teenyfin.teenymoney.domain.auth.service.LoginResult;
 import com.teenyfin.teenymoney.domain.auth.service.PhoneVerificationService;
+import com.teenyfin.teenymoney.domain.auth.service.TokenReissueResult;
 import com.teenyfin.teenymoney.global.auth.CookieUtil;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
+import com.teenyfin.teenymoney.global.exception.CommonErrorCode;
 import com.teenyfin.teenymoney.global.exception.GlobalExceptionAdvice;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.security.web.csrf.CsrfToken;
+import org.springframework.security.web.csrf.DefaultCsrfToken;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -218,6 +222,61 @@ class AuthControllerTest {
 
         assertEquals(401, response.getStatus());
         assertBodyContains(response, "\"code\":\"AUTH_INVALID_CREDENTIALS\"");
+    }
+
+    @Test
+    void csrfReturnsTokenForFrontendHeader() throws Exception {
+        var response = mockMvc.perform(get("/auth/csrf")
+                        .requestAttr(CsrfToken.class.getName(),
+                                new DefaultCsrfToken(
+                                        "X-XSRF-TOKEN", "_csrf", "csrf-token")))
+                .andReturn().getResponse();
+
+        assertEquals(200, response.getStatus());
+        assertBodyContains(response, "\"token\":\"csrf-token\"");
+    }
+
+    @Test
+    void reissueReturnsAccessTokenAndRotatesRefreshCookie() throws Exception {
+        when(cookieUtil.readRefreshToken(any())).thenReturn("old-refresh");
+        when(authService.reissue("old-refresh"))
+                .thenReturn(new TokenReissueResult("new-access", "new-refresh"));
+
+        var response = mockMvc.perform(post("/auth/reissue"))
+                .andReturn().getResponse();
+
+        assertEquals(200, response.getStatus());
+        assertBodyContains(response, "\"accessToken\":\"new-access\"");
+        assertFalse(response.getContentAsString(StandardCharsets.UTF_8)
+                .contains("new-refresh"));
+        verify(cookieUtil).addRefreshCookie(
+                any(HttpServletResponse.class), eq("new-refresh"));
+    }
+
+    @Test
+    void logoutPassesBearerAndRefreshThenClearsCookie() throws Exception {
+        when(cookieUtil.readRefreshToken(any())).thenReturn("refresh-token");
+
+        var response = mockMvc.perform(post("/auth/logout")
+                        .header("Authorization", "Bearer access-token"))
+                .andReturn().getResponse();
+
+        assertEquals(200, response.getStatus());
+        verify(authService).logout("access-token", "refresh-token");
+        verify(cookieUtil).clearRefreshCookie(any(HttpServletResponse.class));
+    }
+
+    @Test
+    void logoutClearsCookieEvenWhenRedisFails() throws Exception {
+        when(cookieUtil.readRefreshToken(any())).thenReturn("refresh-token");
+        doThrow(new BusinessException(CommonErrorCode.COMMON_SERVICE_UNAVAILABLE))
+                .when(authService).logout(null, "refresh-token");
+
+        var response = mockMvc.perform(post("/auth/logout"))
+                .andReturn().getResponse();
+
+        assertEquals(503, response.getStatus());
+        verify(cookieUtil).clearRefreshCookie(any(HttpServletResponse.class));
     }
 
     private String validSignupJson() {

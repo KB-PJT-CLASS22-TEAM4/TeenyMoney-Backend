@@ -10,9 +10,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 /**
  * 로컬 개발용 도구. 검증이 아니라 값을 출력하는 것이 목적이다.
  *
- * 로그인 API(하위3)가 아직 없어 토큰을 정상적으로 받을 방법이 없다. 그렇다고
- * 토큰을 발급해주는 개발용 엔드포인트를 만들면, 아무나 원하는 role로 토큰을 받는
- * 백도어가 배포물에 들어간다. 그래서 테스트로 뽑아 쓴다 — src/test라 WAR에 없다.
+ * 실제 API 호출용 토큰은 로그인으로 발급한다. 여기서 출력한 토큰은 Redis의 현재
+ * 인증 세대와 일치하지 않으므로 JWT 파싱과 오류 응답을 수동 확인할 때만 사용한다.
  *
  * 사용법:
  *   ./gradlew test --tests "*TokenPrinterTest" --rerun-tasks -i
@@ -25,6 +24,7 @@ class TokenPrinterTest {
 
     private static final long ACCESS_MS = 1_800_000L;      // 30분
     private static final long REFRESH_MS = 1_209_600_000L; // 14일
+    private static final String GENERATION = "manual-generation";
 
     /** sql/seed/01_seed_valid_data.sql 의 비밀번호. 해시를 바꾸려면 이 값을 고치고 다시 실행한다. */
     private static final String SEED_PASSWORD = "Local1234!";
@@ -53,15 +53,15 @@ class TokenPrinterTest {
 
         // memberId는 sql/seed/01_seed_valid_data.sql 의 회원과 맞춘다.
         //   id=1 김부모(PARENT) / id=2 김첫째(CHILD) / id=3 김둘째(CHILD)
-        print("PARENT Access (id=1, 정상)", provider.createAccessToken(1L, "PARENT"),
-                "보호 API 200, 부모전용 200");
-        print("CHILD Access (id=2, 정상)", provider.createAccessToken(2L, "CHILD"),
-                "보호 API 200, 부모전용 403");
-        print("만료된 Access", expiredProvider.createAccessToken(1L, "PARENT"),
+        print("PARENT Access", provider.createAccessToken(1L, "PARENT", GENERATION),
+                "Redis generation 불일치 시 401");
+        print("CHILD Access", provider.createAccessToken(2L, "CHILD", GENERATION),
+                "Redis generation 불일치 시 401");
+        print("만료된 Access", expiredProvider.createAccessToken(1L, "PARENT", GENERATION),
                 "401 AUTH_TOKEN_EXPIRED");
-        print("위조 (다른 키 서명)", otherKeyProvider.createAccessToken(1L, "PARENT"),
+        print("위조 (다른 키 서명)", otherKeyProvider.createAccessToken(1L, "PARENT", GENERATION),
                 "401 AUTH_TOKEN_INVALID");
-        print("Refresh (오용)", provider.createRefreshToken(1L),
+        print("Refresh (오용)", provider.createRefreshToken(1L, GENERATION),
                 "401 AUTH_TOKEN_INVALID");
 
         System.out.println();

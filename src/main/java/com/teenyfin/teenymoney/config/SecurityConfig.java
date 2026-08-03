@@ -1,5 +1,6 @@
 package com.teenyfin.teenymoney.config;
 
+import com.teenyfin.teenymoney.global.auth.RefreshTokenStore;
 import com.teenyfin.teenymoney.global.security.RestAccessDeniedHandler;
 import com.teenyfin.teenymoney.global.security.RestAuthenticationEntryPoint;
 import com.teenyfin.teenymoney.global.security.jwt.JwtAuthenticationFilter;
@@ -14,7 +15,9 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.util.matcher.OrRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 
 import java.util.Arrays;
@@ -51,7 +54,9 @@ public class SecurityConfig {
             "/api/v1/auth/signup",    // 회원가입 — 토큰이 있을 수 없다 (하위3)
             "/api/v1/auth/login",     // 로그인 — 토큰을 받으러 오는 곳 (하위3)
             "/api/v1/auth/reissue",   // 재발급 — Access가 만료된 상태로 온다 (하위4)
-            "/api/v1/auth/check-email", // 이메일 중복 확인 — 가입 전이라 토큰이 없다 (하위3)
+            "/api/v1/auth/logout",
+            "/api/v1/auth/csrf",
+            "/api/v1/auth/check-email", // 이메일 중복 확인 - 가입 전이라 토큰이 없다 (하위3)
             "/api/v1/auth/phone-verification/send",
             "/api/v1/health",         // 헬스체크 — 모니터링이 토큰 없이 호출
             "/api/v1/health/**",
@@ -75,6 +80,13 @@ public class SecurityConfig {
                 .toArray(RequestMatcher[]::new);
     }
 
+    private static RequestMatcher csrfMatcher() {
+        return new OrRequestMatcher(
+                new AntPathRequestMatcher("/api/v1/auth/login", "POST"),
+                new AntPathRequestMatcher("/api/v1/auth/reissue", "POST"),
+                new AntPathRequestMatcher("/api/v1/auth/logout", "POST"));
+    }
+
     // application.properties의 jwt.* 값. 기본값이 있어 JWT_SECRET 없이도 앱이 기동한다.
     // 배포에서는 환경변수로 반드시 override 해야 한다(저장소에 공개된 기본값이므로).
     @Value("${jwt.secret}")
@@ -90,10 +102,11 @@ public class SecurityConfig {
     }
 
     @Bean
-    public JwtAuthenticationFilter jwtAuthenticationFilter() {
+    public JwtAuthenticationFilter jwtAuthenticationFilter(
+            RefreshTokenStore refreshTokenStore) {
         // @Configuration 클래스는 CGLIB 프록시라 jwtProvider()를 직접 호출해도
         // 새 인스턴스가 아니라 위에서 만든 싱글턴 빈이 반환된다.
-        return new JwtAuthenticationFilter(jwtProvider());
+        return new JwtAuthenticationFilter(jwtProvider(), refreshTokenStore);
     }
 
     @Bean
@@ -116,10 +129,15 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
         http
                 // REST API는 브라우저 폼 기반이 아니라 토큰으로 인증하므로 CSRF 토큰이 불필요하다.
-                .csrf(csrf -> csrf.disable())
+                .csrf(csrf -> csrf
+                        .csrfTokenRepository(
+                                CookieCsrfTokenRepository.withHttpOnlyFalse())
+                        .requireCsrfProtectionMatcher(csrfMatcher()))
                 // 세션을 만들지 않는다. 인증 상태를 서버가 들고 있지 않고 매 요청 토큰으로 판단한다.
                 // 이게 JwtProvider가 필요했던 근본 이유다.
                 .sessionManagement(session ->
@@ -127,7 +145,7 @@ public class SecurityConfig {
                 // 인가 판단보다 먼저 실행되어야 SecurityContext가 채워진 상태로 인가가 돌아간다.
                 // UsernamePasswordAuthenticationFilter는 폼 로그인용 필터로, 인가 판단 앞에 있어
                 // 그 앞에 끼우면 순서가 맞는다(우리는 폼 로그인을 쓰지 않는다).
-                .addFilterBefore(jwtAuthenticationFilter(),
+                .addFilterBefore(jwtAuthenticationFilter,
                         UsernamePasswordAuthenticationFilter.class)
                 // 인가가 요청을 거부했을 때 응답을 만드는 두 담당자.
                 // 여기 등록하지 않으면 Spring Security 기본 동작(HTML 오류 페이지 등)이 나가

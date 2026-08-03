@@ -1,9 +1,7 @@
 package com.teenyfin.teenymoney.global.auth;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
-import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.util.List;
@@ -14,7 +12,6 @@ import java.util.UUID;
 *
 */
 
-@Component
 public class RefreshTokenStore {
 
     // redis에 refresh:값 구조로 저장하기 때문에 접두사로 지정
@@ -50,7 +47,7 @@ public class RefreshTokenStore {
 
     public RefreshTokenStore(
             StringRedisTemplate redisTemplate,
-            @Value("${jwt.refresh-expiration}") long refreshExpirationMs) {
+            long refreshExpirationMs) {
         this.redisTemplate = redisTemplate;
         this.refreshExpirationMs = refreshExpirationMs;
     }

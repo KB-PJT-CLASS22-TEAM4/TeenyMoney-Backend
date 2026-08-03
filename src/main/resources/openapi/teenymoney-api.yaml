@@ -3,7 +3,7 @@ openapi: 3.0.3
 info:
   title: TeenyMoney API
   description: 부모와 자녀가 함께 사용하는 가족 금융 서비스 API
-  version: 0.3.0
+  version: 0.4.0
 
 servers:
   - url: /
@@ -30,6 +30,8 @@ paths:
         이메일과 비밀번호를 검증하고 Access Token을 응답 본문으로 반환합니다.
         Refresh Token은 HttpOnly 쿠키로만 전달하고 Redis에 회원별로 저장합니다.
       operationId: login
+      parameters:
+        - $ref: "#/components/parameters/CsrfHeader"
       requestBody:
         required: true
         content:
@@ -47,7 +49,7 @@ paths:
               description: HttpOnly Refresh Token 쿠키
               schema:
                 type: string
-                example: refreshToken=token; Path=/api/v1/auth; HttpOnly; SameSite=Lax
+                example: refreshToken=token; Path=/api/v1/auth; Secure; HttpOnly; SameSite=Strict
           content:
             application/json:
               schema:
@@ -68,6 +70,104 @@ paths:
                 $ref: "#/components/schemas/ErrorApiResponse"
         "503":
           description: Refresh Token 저장소 사용 불가
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorApiResponse"
+
+  /api/v1/auth/csrf:
+    get:
+      tags: [Auth]
+      summary: CSRF 토큰 발급
+      description: 로그인, 재발급, 로그아웃 전에 호출해 응답 토큰을 X-XSRF-TOKEN 헤더로 보냅니다.
+      operationId: getCsrfToken
+      responses:
+        "200":
+          description: CSRF 토큰 발급 성공
+          headers:
+            Set-Cookie:
+              description: XSRF-TOKEN 쿠키
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CsrfTokenApiResponse"
+
+  /api/v1/auth/reissue:
+    post:
+      tags: [Auth]
+      summary: Access Token 재발급
+      description: Refresh Token Cookie를 검증하고 Rotation한 뒤 새 Access Token을 반환합니다.
+      operationId: reissueToken
+      parameters:
+        - $ref: "#/components/parameters/CsrfHeader"
+      responses:
+        "200":
+          description: 재발급 성공
+          headers:
+            Set-Cookie:
+              description: Rotation된 HttpOnly Refresh Token 쿠키
+              schema:
+                type: string
+                example: refreshToken=token; Path=/api/v1/auth; Secure; HttpOnly; SameSite=Strict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenReissueApiResponse"
+        "401":
+          description: Refresh Token 누락, 만료, 위조 또는 재사용
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorApiResponse"
+        "403":
+          description: CSRF 검증 실패 또는 비활성 회원
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorApiResponse"
+        "503":
+          description: Refresh Token 저장소 사용 불가
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorApiResponse"
+
+  /api/v1/auth/logout:
+    post:
+      tags: [Auth]
+      summary: 로그아웃
+      description: 해당 계정의 Refresh Token과 인증 세대를 제거하고 Refresh Cookie를 만료합니다.
+      operationId: logout
+      parameters:
+        - $ref: "#/components/parameters/CsrfHeader"
+        - name: Authorization
+          in: header
+          required: false
+          schema:
+            type: string
+          example: Bearer eyJ...
+      responses:
+        "200":
+          description: 로그아웃 성공. 토큰이나 Redis 키가 이미 없어도 성공합니다.
+          headers:
+            Set-Cookie:
+              description: 만료된 Refresh Token 쿠키
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoidApiResponse"
+        "403":
+          description: CSRF 검증 실패
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorApiResponse"
+        "503":
+          description: Redis 장애로 계정 토큰 삭제를 보장할 수 없음
           content:
             application/json:
               schema:
@@ -270,6 +370,15 @@ components:
       scheme: bearer
       bearerFormat: JWT
 
+  parameters:
+    CsrfHeader:
+      name: X-XSRF-TOKEN
+      in: header
+      required: true
+      description: GET /api/v1/auth/csrf 응답의 token 값
+      schema:
+        type: string
+
   responses:
     InvalidInput:
       description: 요청값 검증 실패
@@ -313,6 +422,21 @@ components:
         name:
           type: string
           example: 테스트 사용자
+
+    CsrfTokenResponse:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+
+    TokenReissueResponse:
+      type: object
+      required: [accessToken]
+      properties:
+        accessToken:
+          type: string
+          description: Authorization Bearer 헤더에 사용할 새 Access Token
 
     MemberMeResponse:
       type: object
@@ -481,6 +605,38 @@ components:
           example: 성공
         data:
           $ref: "#/components/schemas/LoginResponse"
+
+    CsrfTokenApiResponse:
+      type: object
+      required: [success, code, message, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        code:
+          type: string
+          example: OK
+        message:
+          type: string
+          example: 성공
+        data:
+          $ref: "#/components/schemas/CsrfTokenResponse"
+
+    TokenReissueApiResponse:
+      type: object
+      required: [success, code, message, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        code:
+          type: string
+          example: OK
+        message:
+          type: string
+          example: 성공
+        data:
+          $ref: "#/components/schemas/TokenReissueResponse"
 
     MemberMeApiResponse:
       type: object

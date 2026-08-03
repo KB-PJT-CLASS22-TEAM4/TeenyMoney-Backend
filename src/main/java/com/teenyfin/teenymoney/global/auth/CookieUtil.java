@@ -18,7 +18,7 @@ public class CookieUtil {
     private static final String AUTH_PATH = "/api/v1/auth";
     // 쿠키의 CSRF 방어 관련 정책
     // 외부사이트 요청에는 쿠키 전송 제한, 같은 사이트 요청은 사용 가능
-    private static final String SAME_SITE = "Lax";
+    private static final String SAME_SITE = "Strict";
 
     private final long refreshExpirationMs;
     // 로컬HTTP은 false, 배포HTTPS는 true

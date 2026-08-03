@@ -121,14 +121,28 @@ API 계약이 코드와 다르면 구두 설명만으로 맞추지 말고 OpenAP
 
 ## 6. 아직 구현되지 않은 API
 
-**현재 백엔드는 공개 경로를 제외한 모든 요청에 인증을 요구합니다.** 토큰을 발급하는
-로그인 API가 아직 없으므로, 지금 실제로 호출할 수 있는 것은 `health` 2개와 문서
-경로뿐입니다. 그 밖의 경로는 **존재하지 않는 경로여도 404가 아니라 401**이 돌아오므로,
-401을 "API가 아직 없다"는 신호로 읽으면 안 됩니다. 공개 경로 전체 목록과 이유는
+**현재 백엔드는 공개 경로를 제외한 모든 요청에 인증을 요구합니다.** 그 밖의 경로는
+**존재하지 않는 경로여도 404가 아니라 401**이 돌아오므로, 401을 "API가 아직 없다"는
+신호로 읽으면 안 됩니다. 공개 경로 전체 목록과 이유는
 [README의 "인가 규칙"](../README.md#인가-규칙)에 있습니다.
 
-인증 API(회원가입·로그인·재발급·로그아웃)는 구현 중이며, 완료되면 OpenAPI YAML에
-반영한 뒤 공유합니다. 그 전까지 연동 코드를 작성해야 한다면 아래 Mock을 사용합니다.
+지금 호출할 수 있는 API:
+
+```text
+POST /api/v1/auth/phone-verification/send
+GET  /api/v1/auth/check-email?email=
+POST /api/v1/auth/signup
+POST /api/v1/auth/login
+GET  /api/v1/members/me                      (Bearer 필요)
+GET  /api/v1/health, /api/v1/health/db
+```
+
+아직 없는 것: **재발급·로그아웃**(구현 중), 가족 연동, 지갑, 거래내역, 소셜 로그인.
+
+소셜 로그인은 이번 범위에 없습니다. 로그인 화면의 구글 버튼은 비활성 처리하거나
+숨겨 주세요.
+
+구현 전 화면 개발이 필요하면 아래 Mock을 사용합니다.
 
 구현 전 화면 개발이 필요하면 OpenAPI에 확정된 요청·응답 예시를 먼저 정의하고 Postman
 Mock Server 또는 MSW를 사용할 수 있습니다. Mock 응답 역시 OpenAPI 계약과 일치해야
@@ -151,3 +165,91 @@ https://www.teenymoney.kro.kr/api/v1/health
 https://www.teenymoney.kro.kr/swagger-ui/index.html
 https://www.teenymoney.kro.kr/api-docs/teenymoney-api.yaml
 ```
+
+## 8. 명명 규칙
+
+계약이 어긋나는 대부분은 이름 때문입니다. 아래 규칙은 예외 없이 적용됩니다.
+
+| 대상 | 규칙 | 예 |
+|---|---|---|
+| URL 경로 | 소문자 + 하이픈 | `/auth/check-email`, `/auth/phone-verification/send` |
+| 경로 접두사 | 전부 `/api/v1` | `/api/v1/members/me` |
+| JSON 필드 | camelCase | `birthDate`, `phoneNumber`, `accessToken` |
+| 날짜 | `yyyy-MM-dd` 문자열 | `"2013-05-20"` |
+| enum 값 | 대문자 + 밑줄 | `PARENT`, `CHILD`, `ACTIVE` |
+| boolean 필드 | `is`/`has` 접두사 없음 | `available` |
+| ErrorCode | `도메인_사유` 대문자 | `AUTH_DUPLICATE_EMAIL` |
+
+### 8.1 요청 필드 이름은 화면 상태 이름과 다릅니다
+
+프론트엔드의 폼 변수명은 자유지만, **전송 직전에 계약 이름으로 매핑**해야 합니다.
+객체를 그대로 펼쳐 보내면 400이 납니다.
+
+```javascript
+await api.post('/api/v1/auth/signup', { ...form })   // 실패
+```
+
+`Signup.vue` 기준 현재 어긋나 있는 것:
+
+| 화면 상태 | 요청 필드 |
+|---|---|
+| `form.birthdate` | `birthDate` |
+| `form.phone` | `phoneNumber` |
+| `form.passwordConfirm` | **보내지 않습니다** (화면에서만 검증) |
+
+### 8.2 서버가 정하는 값은 보내지 않습니다
+
+| 값 | 이유 |
+|---|---|
+| `role` | `birthDate`로 서버가 판정합니다. 만 **7~18세만 `CHILD`**, 그 밖은 전부 `PARENT` |
+| `teenyScore` | 서버가 초기값을 넣습니다 |
+| `memberId` | 토큰에서 꺼냅니다. 요청 본문이나 쿼리로 받지 않습니다 |
+
+`phoneNumber`는 하이픈이 있어도 없어도 됩니다. 서버가 숫자만 남겨 저장하고,
+응답도 숫자만 내려갑니다. 화면 표시 형식은 프론트엔드가 정합니다.
+
+### 8.3 응답 껍데기는 항상 같습니다
+
+```json
+{"success": true,  "code": "OK", "message": "성공", "data": { }}
+{"success": false, "code": "AUTH_INVALID_CREDENTIALS", "message": "이메일 또는 비밀번호가 올바르지 않습니다.", "data": null}
+```
+
+- 분기는 **`code`로** 합니다. `message`는 문구가 바뀔 수 있습니다
+- `message`는 사용자에게 그대로 노출해도 되도록 작성합니다. 프론트엔드가 문구를
+  다시 만들 필요가 없습니다
+- 검증 실패(`COMMON_INVALID_INPUT`)일 때만 `data`가 **필드별 사유 맵**입니다.
+  키 이름은 요청 필드 이름과 같으므로 입력란에 그대로 연결할 수 있습니다
+
+### 8.4 상태 코드별 처리
+
+| 상태 | code | 처리 |
+|---|---|---|
+| 400 | `COMMON_INVALID_INPUT` | `data`의 필드별 사유를 입력란에 표시 |
+| 401 | `AUTH_TOKEN_EXPIRED` | 재발급 시도 → 실패하면 로그인 화면 |
+| 401 | 그 외 | 로그인 화면 |
+| **403** | `AUTH_INACTIVE_MEMBER` | **로그인 화면으로 보내지 않습니다.** 비밀번호는 맞았으므로 다시 로그인시키면 무한 반복됩니다 |
+| 409 | `AUTH_DUPLICATE_EMAIL` / `AUTH_DUPLICATE_PHONE_NUMBER` | 해당 입력란에 표시 |
+| 429 | `AUTH_SMS_TOO_MANY_REQUESTS` / `AUTH_VERIFICATION_TOO_MANY_ATTEMPTS` | 재시도 안내 |
+
+### 8.5 Refresh Token 쿠키
+
+로그인 응답의 `Set-Cookie`는 다음 속성으로 내려갑니다.
+
+```text
+refreshToken=...; HttpOnly; SameSite=Lax; Path=/api/v1/auth
+```
+
+- **JS로 읽을 수 없습니다.** 쿠키 존재 여부로 로그인 상태를 판단하지 마세요
+- `Path`가 `/api/v1/auth`이므로 브라우저는 **`/api/v1/auth/*` 요청에만** 이 쿠키를
+  보냅니다. 재발급은 반드시 `POST /api/v1/auth/reissue`로 호출해야 합니다
+- Access Token을 메모리(Pinia)에 두면 새로고침 시 사라집니다. 앱 시작 시 재발급을
+  한 번 호출해 복구하는 흐름이 필요합니다
+
+### 8.6 휴대폰 인증 (개발 중 한정)
+
+실제 SMS 발송은 아직 연결되지 않았습니다. 개발 환경에서는 인증번호가
+**`123456`으로 고정**되어 있습니다. 발송 API는 호출해도 되고, 건너뛰고 바로
+`123456`을 넣어도 가입이 진행됩니다.
+
+운영에서는 이 고정값이 동작하지 않습니다.
