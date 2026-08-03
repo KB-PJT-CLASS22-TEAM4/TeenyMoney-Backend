@@ -25,8 +25,16 @@ migration/V002__alter_member_payment_lock.sql
 seed/01_seed_valid_data.sql
 ```
 
-seed는 실행 순서가 있으므로 `01_`, `02_` 접두사를 붙입니다. FK 참조 때문에
-회원 → 연동 → 지갑 순서로 들어가야 합니다.
+seed는 아래 실행 순서를 지킵니다. FK 참조 때문에 회원 → 연동 → 지갑 순서로
+들어가야 합니다.
+
+현재 시드 실행 순서는 다음과 같습니다.
+
+1. `schema/teenymoney_schema_renamed.sql`
+2. `seed/01_seed_valid_data.sql`
+
+`01_seed_valid_data.sql`에는 MCC 기준 데이터와 기능 테스트 데이터가 함께 있으며,
+기능 데이터는 앞에서 삽입한 업종 카테고리를 이름으로 조회해 참조합니다.
 
 migration 번호는 중복되지 않게 순서대로 증가시킵니다. Flyway를 도입하면 기존
 파일의 호환성과 적용 이력을 검토한 뒤 자동 migration으로 전환합니다.
