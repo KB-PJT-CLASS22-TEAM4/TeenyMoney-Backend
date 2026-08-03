@@ -4,6 +4,7 @@ import com.teenyfin.teenymoney.global.response.ApiResponse;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.LinkedHashMap;
@@ -45,5 +46,15 @@ public class TestProtectedController {
     @GetMapping("/api/v1/auth/login")
     public ApiResponse<String> publicEndpoint() {
         return ApiResponse.ok("public");
+    }
+
+    @PostMapping("/api/v1/auth/phone-verification/send")
+    public ApiResponse<String> phoneVerificationEndpoint() {
+        return ApiResponse.ok("public");
+    }
+
+    @GetMapping("/api/v1/members/me")
+    public ApiResponse<String> memberMeEndpoint() {
+        return ApiResponse.ok("me");
     }
 }

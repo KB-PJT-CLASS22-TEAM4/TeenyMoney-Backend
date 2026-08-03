@@ -197,13 +197,13 @@ In `src/main/resources/application.properties`, 파일 끝에 추가:
 
 # JWT
 # secret은 Base64로 인코딩된 무작위 키다. 생성: openssl rand -base64 32
-# 운영은 JWT_SECRET 환경변수로 반드시 override 한다. 아래 기본값은 로컬/개발 전용(비밀 아님).
-jwt.secret=${JWT_SECRET:roc9Ns8gE2EDKDkYXuy/tHxrKZXoeaWHTMb+eN8YeZM=}
+# 로컬과 운영 모두 JWT_SECRET 환경변수로 반드시 주입한다.
+jwt.secret=${JWT_SECRET}
 jwt.access-expiration=${JWT_ACCESS_EXPIRATION_MS:1800000}
 jwt.refresh-expiration=${JWT_REFRESH_EXPIRATION_MS:1209600000}
 ```
 
-> **결정 지점(친-팀 마찰 완화)**: 개발 기본값을 두어 `JWT_SECRET` 없이도 앱이 기동한다. 엄격 모드를 원하면 `${JWT_SECRET}`(기본값 제거)로 바꾸면 되지만, 그 경우 모든 팀원이 환경변수를 설정해야 앱이 뜬다.
+> **최종 결정**: 공개된 개발 기본키를 두지 않는다. 로컬과 운영 모두 `JWT_SECRET`을 명시적으로 주입하며, 누락 시 기동을 실패시킨다.
 
 - [ ] **Step 5: 테스트 통과 확인**
 
@@ -785,10 +785,16 @@ git commit -m "feat(auth): SecurityConfig에 JWT 필터·핸들러·PasswordEnco
 
 ## 향후 (이 이슈 범위 밖, 조율 필요)
 
-- **`authenticated` 전환**: 로그인(하위3)이 토큰을 발급할 수 있게 된 뒤, `permitAll` → 공개경로 화이트리스트 + `anyRequest().authenticated()`로 전환. 팀 공지 후 별도 작은 PR.
-- **`@EnableMethodSecurity`**: 처음 role 게이팅이 필요한 이슈에서 **`ServletConfig`(자식 컨텍스트)** 에 추가한다(컨트롤러/서비스가 자식 컨텍스트에 있어 루트에 두면 `@PreAuthorize`가 안 걸린다).
+> **[2026-08-02 정정]** 아래 첫 두 항목은 **이 이슈(#11)에서 이미 완료됐다.**
+> 11행의 정정 블록대로 범위가 바뀌었기 때문이다. 따라서 Task 4 본문(638행 이하)의
+> "permitAll 유지" 서술과 `anyRequest().permitAll()` 코드는 **실제 구현과 다르다** —
+> 실제 코드는 공개 경로 화이트리스트 + `anyRequest().authenticated()`다.
+> 현재 인가 규칙의 기준은 `SecurityConfig.PUBLIC_ENDPOINTS`와 README의 "인가 규칙" 절이다.
+
+- ~~**`authenticated` 전환**~~ → **완료**(#11). 공개경로 화이트리스트 + `anyRequest().authenticated()` 적용.
+- ~~**`@EnableMethodSecurity`**~~ → **완료**(#11). **`ServletConfig`(자식 컨텍스트)** 에 있다(컨트롤러/서비스가 자식 컨텍스트에 있어 루트에 두면 `@PreAuthorize`가 안 걸린다).
 - **`CookieUtil`·`RefreshTokenStore`·`cookie.secure`**: 하위3/하위4에서 생성.
-- **README/`setenv.sh`**: `authenticated` 전환 시 환경변수 필수화(`JWT_SECRET`)와 함께 갱신.
+- ~~**`JWT_SECRET` 필수화**~~ → **완료**. 로컬과 운영 모두 환경변수 누락 시 기동에 실패한다.
 
 ## 완료 기준 (하위2 이슈 AC 매핑)
 
@@ -798,5 +804,5 @@ git commit -m "feat(auth): SecurityConfig에 JWT 필터·핸들러·PasswordEnco
 - [ ] 인증 실패 401 JSON, 인가 실패 403 JSON (`ApiResponse` 형식) — Task 3
 - [ ] 보안 빈이 루트 컨텍스트에 등록되고 필터체인이 구성됨 — Task 4
 - [ ] JWT 발급/검증·`tokenType` 계약 — Task 1
-- [ ] 앱이 환경변수 없이도 기동(개발 기본값) — Task 1
+- [x] `JWT_SECRET` 환경변수 누락 시 기동 실패 — 후속 보안 설정 작업
 - [ ] 전체 빌드/테스트 그린 — Task 4

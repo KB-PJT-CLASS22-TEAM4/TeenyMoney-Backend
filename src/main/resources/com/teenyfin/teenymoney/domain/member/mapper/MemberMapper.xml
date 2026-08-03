@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.teenyfin.teenymoney.domain.member.mapper.MemberMapper">
+
+    <resultMap id="memberResultMap" type="com.teenyfin.teenymoney.domain.member.vo.MemberVO">
+        <id property="id" column="id"/>
+        <result property="role" column="role"/>
+        <result property="name" column="name"/>
+        <result property="birthDate" column="birth_date"/>
+        <result property="phoneNumber" column="phone_number"/>
+        <result property="email" column="email"/>
+        <result property="password" column="password"/>
+        <result property="profileImageUrl" column="profile_image_url"/>
+        <result property="status" column="status"/>
+    </resultMap>
+
+    <sql id="memberColumns">
+        id,
+        role,
+        name,
+        birth_date,
+        phone_number,
+        email,
+        password,
+        profile_image_url,
+        status
+    </sql>
+
+    <select id="selectByEmail" resultMap="memberResultMap">
+        SELECT
+        <include refid="memberColumns"/>
+        FROM T_MBR_INFO_M
+        WHERE email = #{email}
+    </select>
+
+    <select id="selectById" resultMap="memberResultMap">
+        SELECT
+        <include refid="memberColumns"/>
+        FROM T_MBR_INFO_M
+        WHERE id = #{id}
+    </select>
+
+    <select id="existsByEmail" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1
+            FROM T_MBR_INFO_M
+            WHERE email = #{email}
+        )
+    </select>
+
+    <select id="existsByPhoneNumber" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1
+            FROM T_MBR_INFO_M
+            WHERE phone_number = #{phoneNumber}
+        )
+    </select>
+
+    <insert id="insert"
+            parameterType="com.teenyfin.teenymoney.domain.member.vo.MemberVO"
+            useGeneratedKeys="true"
+            keyProperty="id">
+        INSERT INTO T_MBR_INFO_M (
+            role,
+            name,
+            birth_date,
+            phone_number,
+            email,
+            password,
+            profile_image_url
+            <if test="role == 'PARENT'">
+                , teeny_score
+            </if>
+        ) VALUES (
+            #{role},
+            #{name},
+            #{birthDate},
+            #{phoneNumber},
+            #{email},
+            #{password},
+            #{profileImageUrl}
+            <if test="role == 'PARENT'">
+                , NULL
+            </if>
+        )
+    </insert>
+
+</mapper>

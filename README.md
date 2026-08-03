@@ -24,6 +24,7 @@
 - MyBatis 및 MySQL 연결 설정
 - Redis 및 Spring Security 기본 설정
 - JWT 인증 파이프라인 (토큰 발급·검증, 인증 필터, 401/403 응답)
+- 공개 경로를 제외한 전 요청 인증 강제 (`anyRequest().authenticated()`)
 - 애플리케이션 상태 확인 API
 - 데이터베이스 연결 확인 API
 - OpenAPI 3.0 명세와 Swagger UI
@@ -32,14 +33,46 @@
 회원, 인증, 가족 연결, 지갑, 결제, 금융상품, 퀘스트, 알림 도메인은 구현
 예정입니다.
 
-JWT 인증은 **메커니즘만** 구현된 상태입니다. 유효한 Access Token을 보내면 인증
-정보가 채워지고 컨트롤러가 `@AuthenticationPrincipal MemberPrincipal`로 받을 수
-있지만, **전역 인가 규칙은 여전히 모든 요청을 허용합니다**(`permitAll`). 토큰을
-발급하는 로그인 API가 아직 없어, 지금 인증을 강제하면 모든 API를 호출할 수 없기
-때문입니다.
+## 인가 규칙
 
-로그인 구현 이후 공개 경로 화이트리스트와 `anyRequest().authenticated()`로
-전환합니다. 그 시점에 `JWT_SECRET` 환경변수도 필수화합니다.
+**공개 경로를 제외한 모든 요청은 인증이 필요합니다.** 이 규칙은 이미 적용되어
+있습니다(`SecurityConfig`의 `anyRequest().authenticated()`).
+
+공개 경로의 유일한 기준은 `SecurityConfig.PUBLIC_ENDPOINTS`입니다.
+
+| 경로 | 공개 이유 |
+| --- | --- |
+| `/api/v1/auth/signup` | 회원가입 — 토큰이 있을 수 없다 |
+| `/api/v1/auth/login` | 로그인 — 토큰을 받으러 오는 곳 |
+| `/api/v1/auth/reissue` | 재발급 — Access가 만료된 상태로 온다 |
+| `/api/v1/auth/check-email` | 이메일 중복 확인 — 가입 전이라 토큰이 없다 |
+| `/api/v1/health`, `/api/v1/health/**` | 모니터링이 토큰 없이 호출 |
+| `/swagger-ui/**`, `/api-docs/**` | API 문서 |
+
+유효한 Access Token을 보내면 인증 정보가 채워지고 컨트롤러가
+`@AuthenticationPrincipal MemberPrincipal`로 받습니다.
+
+**단, 토큰을 발급하는 로그인 API는 아직 없습니다**(인증 API는 구현 중). 그래서
+현재 실제로 호출할 수 있는 것은 위 표의 `health` 2개와 문서 경로뿐이고, 그 밖의
+경로는 **존재하지 않는 경로여도 404가 아니라 401**이 돌아옵니다. 인가 판단이
+DispatcherServlet보다 먼저 끝나기 때문입니다.
+
+`auth` 경로 4개는 화이트리스트에만 등록되어 있고 처리할 컨트롤러가 없어 호출하면
+401이 아니라 404입니다. 프론트엔드 연동은 인증 API 구현 이후에 시작합니다.
+
+수동 확인용 토큰이 필요하면 `TokenPrinterTest`로 발급합니다. 출력된 토큰을
+`Authorization: Bearer <토큰>` 헤더에 넣어 사용합니다.
+
+```bash
+./gradlew test --tests "*TokenPrinterTest" --rerun-tasks -i
+```
+
+토큰을 발급하는 개발용 엔드포인트는 배포물에 백도어가 되므로 만들지 않습니다.
+`src/test`에 두면 WAR에 포함되지 않습니다.
+
+`JWT_SECRET`은 필수입니다. `TokenPrinterTest`를 실행할 때도 확인하려는 애플리케이션과
+같은 값을 환경변수로 먼저 주입해야 합니다(아래 [환경변수](#환경변수) 참고).
+
 인증 파이프라인의 설계 근거는 [JWT·Spring Security 구현 플랜](docs/jwt-security-pipeline.md)을 참고합니다.
 
 ## 기술 스택
@@ -241,19 +274,24 @@ DB_USERNAME=<LOCAL_MYSQL_USERNAME>
 DB_PASSWORD=<LOCAL_MYSQL_PASSWORD>
 REDIS_HOST=localhost
 REDIS_PORT=6379
+REDIS_PASSWORD=
 JWT_SECRET=<openssl rand -base64 32 으로 생성한 값>
 JWT_ACCESS_EXPIRATION_MS=1800000
 JWT_REFRESH_EXPIRATION_MS=1209600000
+COOKIE_SECURE=false
 ```
 
-`DB_URL`, `DB_USERNAME`, `DB_PASSWORD`는 필수입니다. 실제 값은 IntelliJ 실행
-구성, 운영체제 환경변수 또는 Tomcat 실행 환경에 주입하며 저장소에 작성하지 않습니다.
+`DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET`, `COOKIE_SECURE`는 필수입니다.
+실제 값은 IntelliJ 실행 구성, 운영체제 환경변수 또는 Tomcat 실행 환경에 주입하며
+저장소에 작성하지 않습니다.
 
-`JWT_SECRET`은 로컬 개발용 기본값이 `application.properties`에 있어 **설정하지
-않아도 앱이 정상 기동합니다.** 그래서 누락을 알아차릴 수 없습니다. 이 기본값은
-저장소에 공개되어 있으므로 **배포 환경에서는 반드시 override해야 합니다.** 설정하지
-않으면 경고 없이 공개된 키로 토큰이 서명되고, 저장소를 볼 수 있는 누구나 유효한
-토큰을 위조할 수 있습니다.
+`REDIS_PASSWORD`는 `requirepass`가 걸린 서버에 붙을 때만 필요합니다. 비밀번호가
+없는 로컬 Redis는 비워 둡니다. 값이 틀리면 앱은 정상 기동하고 **첫 Redis 명령에서**
+`NOAUTH`로 실패합니다. Lettuce가 연결을 지연 생성하기 때문입니다.
+
+`JWT_SECRET`에는 Base64로 인코딩된 키를 반드시 주입합니다. 로컬과 운영은 서로 다른
+키를 사용하고, 운영 키는 재배포 후에도 같은 값을 유지합니다. 값이 없으면 애플리케이션이
+기동하지 않으므로 설정 누락을 즉시 확인할 수 있습니다.
 
 ```bash
 openssl rand -base64 32      # Base64로 인코딩된 32바이트 키를 생성한다
@@ -261,6 +299,10 @@ openssl rand -base64 32      # Base64로 인코딩된 32바이트 키를 생성�
 
 `JWT_ACCESS_EXPIRATION_MS`(기본 30분)와 `JWT_REFRESH_EXPIRATION_MS`(기본 14일)는
 선택 항목입니다. 기본값을 그대로 사용하면 됩니다.
+
+`COOKIE_SECURE`는 Refresh Token 쿠키에 `Secure` 속성을 붙일지 결정하는 필수값입니다.
+로컬 HTTP에서는 `false`, HTTPS 배포 환경에서는 `true`로 설정합니다. 로컬에서
+`true`로 설정하면 브라우저가 HTTP 응답의 쿠키를 저장하지 않아 재발급이 실패합니다.
 
 인스턴스를 여러 대로 늘릴 경우 **모든 인스턴스가 같은 `JWT_SECRET`을 가져야
 합니다.** A 서버가 발급한 토큰을 B 서버가 검증하기 때문입니다. 또 `exp` 검증에
@@ -378,9 +420,9 @@ CI는 실제 MySQL, Redis 또는 EC2에 연결하지 않으며 배포도 수행�
 
 ## 개발 예정 범위
 
-- 회원가입과 로그인 (JWT 토큰 발급)
-- Redis Refresh Token 관리와 토큰 재발급
-- 경로별 인가 규칙 전환 (`permitAll` → `authenticated`)
+- 회원가입과 로그인 (JWT 토큰 발급) — **진행 중**
+- Redis Refresh Token 관리와 토큰 재발급 — **진행 중**
+- ~~`JWT_SECRET` 미설정 시 기동 실패 처리~~ — **완료**
 - 가족 연결
 - 지갑, 거래 원장, 용돈
 - 결제와 업종별 결제 정책
@@ -437,9 +479,7 @@ Pull Request 제목은 `type(scope): 변경 내용` 형식을 사용합니다. �
 ## 보안 주의사항
 
 - 비밀번호, JWT Secret, DB 자격증명, SSH 키를 저장소와 로그에 남기지 않습니다.
-  단 `application.properties`의 `jwt.secret` 기본값은 **로컬 개발 전용이며 비밀이
-  아닙니다**(환경변수 없이도 앱이 기동하도록 둔 값). 배포 환경에서는 `JWT_SECRET`으로
-  반드시 override합니다.
+  로컬과 운영 모두 `JWT_SECRET`을 실행 환경에서 주입합니다.
 - 토큰 값과 서명 키를 로그에 출력하지 않습니다. 인증 필터에 로거를 두지 않은 이유입니다.
 - 실제 개인정보를 테스트 데이터로 사용하지 않습니다.
 - 클라이언트가 전달한 회원 ID와 권한을 그대로 신뢰하지 않습니다.
@@ -452,6 +492,7 @@ Pull Request 제목은 `type(scope): 변경 내용` 형식을 사용합니다. �
 
 - [프로젝트 구조와 구현 규칙](docs/PROJECT_STRUCTURE.md)
 - [로컬 테스트 및 Tomcat 실행](docs/LOCAL_TEST.md)
+- [EC2 배포와 환경 설정](docs/DEPLOY.md)
 - [프론트엔드 연동 및 Swagger](docs/FRONTEND_DEV.md)
 - [GitHub Actions 운영](.github/workflows/README.md)
 

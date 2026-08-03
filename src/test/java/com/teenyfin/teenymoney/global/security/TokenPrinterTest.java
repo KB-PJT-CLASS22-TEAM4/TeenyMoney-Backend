@@ -1,6 +1,7 @@
 package com.teenyfin.teenymoney.global.security;
 
 import com.teenyfin.teenymoney.global.security.jwt.JwtProvider;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -18,14 +19,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
  *   출력된 토큰을 복사해 Authorization: Bearer <토큰> 헤더에 넣는다.
  *
  * 주의: 토큰이 통하려면 '앱이 실제로 쓰는 시크릿'과 같은 키로 서명돼야 한다.
- * 그래서 JWT_SECRET 환경변수가 있으면 그걸 먼저 쓴다. 환경변수를 설정해 앱을 띄웠는데
- * 여기서 기본값으로 서명하면 서명 불일치로 401이 난다.
+ * JWT_SECRET 환경변수가 없으면 토큰 출력 테스트는 건너뛴다.
  */
 class TokenPrinterTest {
-
-    /** application.properties의 jwt.secret 기본값과 동일. 환경변수가 있으면 그것을 쓴다. */
-    private static final String DEV_DEFAULT_SECRET = "roc9Ns8gE2EDKDkYXuy/tHxrKZXoeaWHTMb+eN8YeZM=";
-    private static final String SECRET = resolveSecret();
 
     private static final long ACCESS_MS = 1_800_000L;      // 30분
     private static final long REFRESH_MS = 1_209_600_000L; // 14일
@@ -33,26 +29,26 @@ class TokenPrinterTest {
     /** sql/seed/01_seed_valid_data.sql 의 비밀번호. 해시를 바꾸려면 이 값을 고치고 다시 실행한다. */
     private static final String SEED_PASSWORD = "Local1234!";
 
-    private final JwtProvider provider = new JwtProvider(SECRET, ACCESS_MS, REFRESH_MS);
-
-    private static String resolveSecret() {
-        String fromEnv = System.getenv("JWT_SECRET");
-        return (fromEnv == null || fromEnv.isBlank()) ? DEV_DEFAULT_SECRET : fromEnv;
-    }
+    /** sql/seed/01_seed_valid_data.sql 의 T_MBR_INFO_M.password 에 실제로 들어가 있는 해시. */
+    private static final String SEED_PASSWORD_HASH =
+            "$2a$10$Ii6qH9kVC2z.mkEdiVas9.dN9yr/wZXPoSUgExNjp7N9Dra8avcSy";
 
     @Test
     @DisplayName("수동 테스트용 토큰을 출력한다")
     void printTokens() {
-        JwtProvider expiredProvider = new JwtProvider(SECRET, -60_000L, -60_000L);
+        String secret = System.getenv("JWT_SECRET");
+        Assumptions.assumeTrue(secret != null && !secret.isBlank(),
+                "수동 토큰 출력에는 JWT_SECRET 환경변수가 필요합니다.");
+
+        JwtProvider provider = new JwtProvider(secret, ACCESS_MS, REFRESH_MS);
+        JwtProvider expiredProvider = new JwtProvider(secret, -60_000L, -60_000L);
         JwtProvider otherKeyProvider =
                 new JwtProvider("nDlRA4wqNsD9UWmGExA1MCPvrWiVob6ewIO9ss319jY=", ACCESS_MS, REFRESH_MS);
-
-        boolean usingEnv = !SECRET.equals(DEV_DEFAULT_SECRET);
 
         System.out.println();
         System.out.println("=".repeat(74));
         System.out.println(" 수동 테스트용 토큰 (Access 30분)");
-        System.out.println(" 시크릿 출처: " + (usingEnv ? "JWT_SECRET 환경변수" : "개발 기본값(application.properties)"));
+        System.out.println(" 시크릿 출처: JWT_SECRET 환경변수");
         System.out.println("=".repeat(74));
 
         // memberId는 sql/seed/01_seed_valid_data.sql 의 회원과 맞춘다.
@@ -99,9 +95,13 @@ class TokenPrinterTest {
         System.out.println("=".repeat(74));
         System.out.println();
 
-        // 생성한 해시가 실제로 그 비밀번호와 맞는지는 확인해 둔다.
-        // 여기가 깨지면 seed의 해시로 로그인이 안 된다는 뜻이다.
-        org.junit.jupiter.api.Assertions.assertTrue(encoder.matches(SEED_PASSWORD, hash));
+        // seed 파일에 '실제로 커밋된' 해시가 그 비밀번호와 맞는지 확인한다.
+        // 방금 만든 hash 로 검사하면 어떤 비밀번호를 넣어도 항상 통과해서, seed에 잘린 해시나
+        // 다른 비밀번호의 해시를 붙여넣어도 못 잡는다. 여기가 깨지면 seed의 해시로 로그인이 안 된다는 뜻이다.
+        org.junit.jupiter.api.Assertions.assertTrue(
+                encoder.matches(SEED_PASSWORD, SEED_PASSWORD_HASH),
+                "seed의 해시가 " + SEED_PASSWORD + " 와 맞지 않는다. "
+                        + "위에 출력된 해시를 sql/seed/01_seed_valid_data.sql 과 SEED_PASSWORD_HASH 양쪽에 반영할 것.");
     }
 
     private void print(String label, String token, String expected) {

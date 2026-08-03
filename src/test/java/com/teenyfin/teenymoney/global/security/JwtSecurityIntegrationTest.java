@@ -27,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.setup.MockMvcBuilders.webAppContextSetup;
 
 /**
@@ -55,6 +56,8 @@ class JwtSecurityIntegrationTest {
     private static final String PROTECTED = "/api/v1/test/security/protected";
     private static final String PARENT_ONLY = "/api/v1/test/security/parent";
     private static final String PUBLIC = "/api/v1/auth/login";
+    private static final String PHONE_VERIFICATION = "/api/v1/auth/phone-verification/send";
+    private static final String MEMBER_ME = "/api/v1/members/me";
 
     @Configuration
     @EnableWebMvc
@@ -169,6 +172,27 @@ class JwtSecurityIntegrationTest {
         HttpServletResponse response = call(PUBLIC, expired);
 
         show("status", response.getStatus(), 200);
+
+        assertEquals(200, response.getStatus(), bodyOf(response));
+    }
+
+    @Test
+    void phoneVerificationEndpointNeedsNoToken() throws Exception {
+        HttpServletResponse response = mockMvc.perform(post(PHONE_VERIFICATION))
+                .andReturn().getResponse();
+
+        assertEquals(200, response.getStatus(), bodyOf(response));
+    }
+
+    @Test
+    void memberMeEndpointNeedsAccessToken() throws Exception {
+        assertErrorResponse(MEMBER_ME, null, 401, "AUTH_UNAUTHORIZED");
+    }
+
+    @Test
+    void memberMeEndpointAcceptsAccessToken() throws Exception {
+        HttpServletResponse response = call(
+                MEMBER_ME, jwtProvider.createAccessToken(17L, "PARENT"));
 
         assertEquals(200, response.getStatus(), bodyOf(response));
     }

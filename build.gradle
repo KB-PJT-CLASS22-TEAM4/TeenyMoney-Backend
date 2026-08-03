@@ -47,6 +47,9 @@ dependencies {
 
     // Jackson - JSON 직렬화
     implementation "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
+    // LocalDate를 "1985-03-01" 문자열로 주고받기 위해 필요하다.
+    // 없으면 Jackson이 [1985,3,1] 배열로 직렬화하고, 요청 쪽은 역직렬화에 실패한다.
+    implementation "com.fasterxml.jackson.datatype:jackson-datatype-jsr310:${jacksonVersion}"
 
     // 데이터베이스
     implementation 'com.mysql:mysql-connector-j:8.1.0'
@@ -114,6 +117,8 @@ dependencies {
     testAnnotationProcessor "org.projectlombok:lombok:${lombokVersion}"
     testImplementation("org.junit.jupiter:junit-jupiter-api:${junitVersion}")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:${junitVersion}")
+    // Mockito.mock()을 직접 호출한다. @ExtendWith용 mockito-junit-jupiter는 넣지 않는다.
+    testImplementation 'org.mockito:mockito-core:5.12.0'
 }
 
 test {
