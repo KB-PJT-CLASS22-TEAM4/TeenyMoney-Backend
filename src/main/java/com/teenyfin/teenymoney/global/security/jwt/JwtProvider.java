@@ -29,6 +29,7 @@ public class JwtProvider {
     // 오타가 나도 컴파일되고 claims.get이 null을 반환해 인증이 조용히 전부 실패한다.
     public static final String CLAIM_ROLE = "role";
     public static final String CLAIM_TOKEN_TYPE = "tokenType";
+    public static final String CLAIM_AUTH_GENERATION = "authGeneration";
     public static final String TOKEN_TYPE_ACCESS = "ACCESS";
     public static final String TOKEN_TYPE_REFRESH = "REFRESH";
 
@@ -54,6 +55,10 @@ public class JwtProvider {
      * 클레임: sub=memberId, role, tokenType=ACCESS, iat, exp
      */
     public String createAccessToken(Long memberId, String role) {
+        return createAccessToken(memberId, role, "legacy");
+    }
+
+    public String createAccessToken(Long memberId, String role, String authGeneration) {
         Date now = new Date();
         return Jwts.builder()
                 // JWT 표준에서 sub는 문자열이다. 꺼낼 때 Long.valueOf로 되돌린다.
@@ -63,6 +68,7 @@ public class JwtProvider {
                 // Access/Refresh는 같은 키로 서명되므로 서명만으로는 구별할 수 없다.
                 // 이 클레임이 둘을 나누는 유일한 근거다(필터가 검사한다).
                 .claim(CLAIM_TOKEN_TYPE, TOKEN_TYPE_ACCESS)
+                .claim(CLAIM_AUTH_GENERATION, authGeneration)
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + accessExpirationMs))
                 .signWith(key, Jwts.SIG.HS256)
@@ -77,10 +83,15 @@ public class JwtProvider {
      * 2주간 옛 권한이 살아 있게 된다. 권한은 짧은 Access에만 담아 재발급마다 갱신한다.
      */
     public String createRefreshToken(Long memberId) {
+        return createRefreshToken(memberId, "legacy");
+    }
+
+    public String createRefreshToken(Long memberId, String authGeneration) {
         Date now = new Date();
         return Jwts.builder()
                 .subject(String.valueOf(memberId))
                 .claim(CLAIM_TOKEN_TYPE, TOKEN_TYPE_REFRESH)
+                .claim(CLAIM_AUTH_GENERATION, authGeneration)
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + refreshExpirationMs))
                 .signWith(key, Jwts.SIG.HS256)
