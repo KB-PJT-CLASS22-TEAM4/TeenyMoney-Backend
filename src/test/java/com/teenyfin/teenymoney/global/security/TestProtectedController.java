@@ -3,9 +3,12 @@ package com.teenyfin.teenymoney.global.security;
 import com.teenyfin.teenymoney.global.response.ApiResponse;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import javax.servlet.http.HttpServletRequest;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -51,6 +54,21 @@ public class TestProtectedController {
     @PostMapping("/api/v1/auth/phone-verification/send")
     public ApiResponse<String> phoneVerificationEndpoint() {
         return ApiResponse.ok("public");
+    }
+
+    @PostMapping({
+            "/api/v1/auth/login",
+            "/api/v1/auth/reissue",
+            "/api/v1/auth/logout"
+    })
+    public ApiResponse<String> cookieAuthEndpoint() {
+        return ApiResponse.ok("public");
+    }
+
+    @GetMapping("/api/v1/auth/csrf")
+    public ApiResponse<String> csrf(HttpServletRequest request) {
+        CsrfToken token = (CsrfToken) request.getAttribute(CsrfToken.class.getName());
+        return ApiResponse.ok(token.getToken());
     }
 
     @GetMapping("/api/v1/members/me")

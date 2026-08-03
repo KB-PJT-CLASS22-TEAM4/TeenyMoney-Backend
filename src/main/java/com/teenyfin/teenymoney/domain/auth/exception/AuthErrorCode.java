@@ -39,7 +39,9 @@ public enum AuthErrorCode implements ErrorCode {
             "현재 문자 인증 서비스를 사용할 수 없습니다."),
 
     AUTH_DUPLICATE_EMAIL(HttpStatus.CONFLICT, "이미 가입된 이메일입니다."),
-    AUTH_DUPLICATE_PHONE_NUMBER(HttpStatus.CONFLICT, "이미 가입된 휴대폰 번호입니다.");
+    AUTH_DUPLICATE_PHONE_NUMBER(HttpStatus.CONFLICT, "이미 가입된 휴대폰 번호입니다."),
+
+    AUTH_INCORRECT_AGE(HttpStatus.BAD_REQUEST, "올바르지 않은 연령대 입니다.");
 
     private final HttpStatus status;
     private final String message;

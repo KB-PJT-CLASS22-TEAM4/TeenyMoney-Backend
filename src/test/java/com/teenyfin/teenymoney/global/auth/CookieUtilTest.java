@@ -31,7 +31,7 @@ class CookieUtilTest {
         assertTrue(header.contains("Max-Age=1209600"), header);
         assertTrue(header.contains("Secure"), header);
         assertTrue(header.contains("HttpOnly"), header);
-        assertTrue(header.contains("SameSite=Lax"), header);
+        assertTrue(header.contains("SameSite=Strict"), header);
     }
 
     @Test
@@ -60,7 +60,7 @@ class CookieUtilTest {
         assertTrue(header.contains("Max-Age=0"), header);
         assertTrue(header.contains("Secure"), header);
         assertTrue(header.contains("HttpOnly"), header);
-        assertTrue(header.contains("SameSite=Lax"), header);
+        assertTrue(header.contains("SameSite=Strict"), header);
     }
 
     @Test

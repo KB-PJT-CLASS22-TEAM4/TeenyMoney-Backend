@@ -1,6 +1,8 @@
 package com.teenyfin.teenymoney.global.security.jwt;
 
 import com.teenyfin.teenymoney.domain.auth.exception.AuthErrorCode;
+import com.teenyfin.teenymoney.global.auth.RefreshTokenStore;
+import com.teenyfin.teenymoney.global.exception.CommonErrorCode;
 import com.teenyfin.teenymoney.global.security.MemberPrincipal;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
@@ -8,6 +10,7 @@ import io.jsonwebtoken.JwtException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.dao.DataAccessException;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import javax.servlet.FilterChain;
@@ -49,9 +52,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtProvider jwtProvider;
+    private final RefreshTokenStore refreshTokenStore;
 
-    public JwtAuthenticationFilter(JwtProvider jwtProvider) {
+    public JwtAuthenticationFilter(
+            JwtProvider jwtProvider,
+            RefreshTokenStore refreshTokenStore) {
         this.jwtProvider = jwtProvider;
+        this.refreshTokenStore = refreshTokenStore;
     }
 
     // OncePerRequestFilter를 상속해 doFilterInternal을 구현하면 요청당 정확히 한 번만 실행된다.
@@ -85,6 +92,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 // sub는 JWT 표준상 문자열이므로 Long으로 되돌린다.
                 Long memberId = Long.valueOf(claims.getSubject());
                 String role = claims.get(JwtProvider.CLAIM_ROLE, String.class);
+                String generation = claims.get(
+                        JwtProvider.CLAIM_AUTH_GENERATION, String.class);
+
+                if (generation == null || !generation.equals(
+                        refreshTokenStore.findGeneration(memberId))) {
+                    request.setAttribute(
+                            AUTH_ERROR_ATTRIBUTE, AuthErrorCode.AUTH_TOKEN_INVALID);
+                    filterChain.doFilter(request, response);
+                    return;
+                }
 
                 // DB 조회 없이 토큰 클레임만으로 인증 주체를 만든다.
                 // 컨트롤러가 @AuthenticationPrincipal MemberPrincipal 로 받는다.
@@ -101,6 +118,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                 List.of(new SimpleGrantedAuthority("ROLE_" + role)));
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             }
+        } catch (DataAccessException e) {
+            request.setAttribute(
+                    AUTH_ERROR_ATTRIBUTE, CommonErrorCode.COMMON_SERVICE_UNAVAILABLE);
         } catch (ExpiredJwtException e) {
             // [분기 3] 만료. INVALID와 구별해야 FE가 '재발급 시도'와 '재로그인'을 나눌 수 있다.
             // ExpiredJwtException은 JwtException의 하위 타입이므로 반드시 먼저 잡는다.

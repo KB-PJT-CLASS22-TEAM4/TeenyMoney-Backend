@@ -7,6 +7,7 @@ import io.jsonwebtoken.security.Keys;
 import javax.crypto.SecretKey;
 import java.util.Base64;
 import java.util.Date;
+import java.util.UUID;
 
 /**
  * JWT 발급·검증. HS256.
@@ -29,6 +30,7 @@ public class JwtProvider {
     // 오타가 나도 컴파일되고 claims.get이 null을 반환해 인증이 조용히 전부 실패한다.
     public static final String CLAIM_ROLE = "role";
     public static final String CLAIM_TOKEN_TYPE = "tokenType";
+    public static final String CLAIM_AUTH_GENERATION = "authGeneration";
     public static final String TOKEN_TYPE_ACCESS = "ACCESS";
     public static final String TOKEN_TYPE_REFRESH = "REFRESH";
 
@@ -51,9 +53,9 @@ public class JwtProvider {
 
     /**
      * Access Token 발급. 매 요청 Authorization 헤더로 실려 다니므로 수명이 짧다(기본 30분).
-     * 클레임: sub=memberId, role, tokenType=ACCESS, iat, exp
+     * 클레임: sub=memberId, role, tokenType=ACCESS, authGeneration, iat, exp
      */
-    public String createAccessToken(Long memberId, String role) {
+    public String createAccessToken(Long memberId, String role, String authGeneration) {
         Date now = new Date();
         return Jwts.builder()
                 // JWT 표준에서 sub는 문자열이다. 꺼낼 때 Long.valueOf로 되돌린다.
@@ -63,6 +65,7 @@ public class JwtProvider {
                 // Access/Refresh는 같은 키로 서명되므로 서명만으로는 구별할 수 없다.
                 // 이 클레임이 둘을 나누는 유일한 근거다(필터가 검사한다).
                 .claim(CLAIM_TOKEN_TYPE, TOKEN_TYPE_ACCESS)
+                .claim(CLAIM_AUTH_GENERATION, authGeneration)
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + accessExpirationMs))
                 .signWith(key, Jwts.SIG.HS256)
@@ -71,16 +74,18 @@ public class JwtProvider {
 
     /**
      * Refresh Token 발급. Access가 만료됐을 때 새 Access를 받는 용도만이다(기본 14일).
-     * 클레임: sub=memberId, tokenType=REFRESH, iat, exp
+     * 클레임: sub=memberId, tokenType=REFRESH, authGeneration, iat, exp
      *
      * role을 담지 않는다. 14일짜리 토큰에 권한을 박아두면 역할이 바뀌어도
      * 2주간 옛 권한이 살아 있게 된다. 권한은 짧은 Access에만 담아 재발급마다 갱신한다.
      */
-    public String createRefreshToken(Long memberId) {
+    public String createRefreshToken(Long memberId, String authGeneration) {
         Date now = new Date();
         return Jwts.builder()
                 .subject(String.valueOf(memberId))
+                .id(UUID.randomUUID().toString())
                 .claim(CLAIM_TOKEN_TYPE, TOKEN_TYPE_REFRESH)
+                .claim(CLAIM_AUTH_GENERATION, authGeneration)
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + refreshExpirationMs))
                 .signWith(key, Jwts.SIG.HS256)

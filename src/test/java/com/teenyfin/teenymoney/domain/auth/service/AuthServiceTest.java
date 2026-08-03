@@ -10,6 +10,9 @@ import com.teenyfin.teenymoney.global.auth.RefreshTokenStore;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import com.teenyfin.teenymoney.global.exception.CommonErrorCode;
 import com.teenyfin.teenymoney.global.security.jwt.JwtProvider;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.MalformedJwtException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -103,8 +106,12 @@ class AuthServiceTest {
     }
 
     @Test
-    void ageSixIsParent() {
-        assertEquals("PARENT", signupAndCaptureRole(LocalDate.of(2019, 8, 4)));
+    void ageSixIsRejected() {
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> authService.signup(request(LocalDate.of(2019, 8, 4))));
+
+        assertEquals(AuthErrorCode.AUTH_INCORRECT_AGE, exception.getErrorCode());
+        verify(memberMapper, never()).insert(any(MemberVO.class));
     }
 
     @Test
@@ -192,8 +199,11 @@ class AuthServiceTest {
         MemberVO member = activeMember();
         when(memberMapper.selectByEmail("user@example.com")).thenReturn(member);
         when(passwordEncoder.matches("password123", "encoded-password")).thenReturn(true);
-        when(jwtProvider.createAccessToken(17L, "PARENT")).thenReturn("access-token");
-        when(jwtProvider.createRefreshToken(17L)).thenReturn("refresh-token");
+        when(refreshTokenStore.getOrCreateGeneration(17L)).thenReturn("generation-17");
+        when(jwtProvider.createAccessToken(17L, "PARENT", "generation-17"))
+                .thenReturn("access-token");
+        when(jwtProvider.createRefreshToken(17L, "generation-17"))
+                .thenReturn("refresh-token");
 
         LoginResult result = authService.login(loginRequest(" USER@Example.COM ", "password123"));
 
@@ -215,7 +225,7 @@ class AuthServiceTest {
 
         assertEquals(AuthErrorCode.AUTH_INVALID_CREDENTIALS, exception.getErrorCode());
         verify(passwordEncoder).matches(anyString(), anyString());
-        verify(jwtProvider, never()).createAccessToken(any(), any());
+        verify(jwtProvider, never()).createAccessToken(any(), any(), any());
         verify(refreshTokenStore, never()).save(any(), any());
     }
 
@@ -228,7 +238,7 @@ class AuthServiceTest {
                 () -> authService.login(loginRequest("user@example.com", "wrong-password")));
 
         assertEquals(AuthErrorCode.AUTH_INVALID_CREDENTIALS, exception.getErrorCode());
-        verify(jwtProvider, never()).createAccessToken(any(), any());
+        verify(jwtProvider, never()).createAccessToken(any(), any(), any());
         verify(refreshTokenStore, never()).save(any(), any());
     }
 
@@ -243,7 +253,7 @@ class AuthServiceTest {
                 () -> authService.login(loginRequest("user@example.com", "password123")));
 
         assertEquals(AuthErrorCode.AUTH_INACTIVE_MEMBER, exception.getErrorCode());
-        verify(jwtProvider, never()).createAccessToken(any(), any());
+        verify(jwtProvider, never()).createAccessToken(any(), any(), any());
         verify(refreshTokenStore, never()).save(any(), any());
     }
 
@@ -264,13 +274,161 @@ class AuthServiceTest {
     void loginTranslatesRedisFailureToServiceUnavailable() {
         when(memberMapper.selectByEmail("user@example.com")).thenReturn(activeMember());
         when(passwordEncoder.matches("password123", "encoded-password")).thenReturn(true);
-        when(jwtProvider.createAccessToken(17L, "PARENT")).thenReturn("access-token");
-        when(jwtProvider.createRefreshToken(17L)).thenReturn("refresh-token");
+        when(refreshTokenStore.getOrCreateGeneration(17L)).thenReturn("generation-17");
+        when(jwtProvider.createAccessToken(17L, "PARENT", "generation-17"))
+                .thenReturn("access-token");
+        when(jwtProvider.createRefreshToken(17L, "generation-17"))
+                .thenReturn("refresh-token");
         doThrow(new RedisConnectionFailureException("redis unavailable"))
                 .when(refreshTokenStore).save(17L, "refresh-token");
 
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> authService.login(loginRequest("user@example.com", "password123")));
+
+        assertEquals(CommonErrorCode.COMMON_SERVICE_UNAVAILABLE, exception.getErrorCode());
+    }
+
+    @Test
+    void reissueRotatesRefreshAndReturnsNewAccessToken() {
+        stubClaims("old-refresh", "17", JwtProvider.TOKEN_TYPE_REFRESH, "generation-17");
+        when(refreshTokenStore.findGeneration(17L)).thenReturn("generation-17");
+        when(memberMapper.selectById(17L)).thenReturn(activeMember());
+        when(jwtProvider.createAccessToken(17L, "PARENT", "generation-17"))
+                .thenReturn("new-access");
+        when(jwtProvider.createRefreshToken(17L, "generation-17"))
+                .thenReturn("new-refresh");
+        when(refreshTokenStore.rotate(
+                17L, "old-refresh", "new-refresh", "generation-17"))
+                .thenReturn(true);
+
+        TokenReissueResult result = authService.reissue("old-refresh");
+
+        assertEquals("new-access", result.accessToken());
+        assertEquals("new-refresh", result.refreshToken());
+    }
+
+    @Test
+    void reissueRejectsMissingRefreshToken() {
+        BusinessException exception = assertThrows(
+                BusinessException.class, () -> authService.reissue(null));
+
+        assertEquals(AuthErrorCode.AUTH_TOKEN_INVALID, exception.getErrorCode());
+    }
+
+    @Test
+    void reissueKeepsExpiredTokenDistinctFromInvalidToken() {
+        when(jwtProvider.parse("expired-refresh"))
+                .thenThrow(mock(ExpiredJwtException.class));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class, () -> authService.reissue("expired-refresh"));
+
+        assertEquals(AuthErrorCode.AUTH_TOKEN_EXPIRED, exception.getErrorCode());
+    }
+
+    @Test
+    void reissueRejectsAccessTokenAndMalformedToken() {
+        stubClaims("access-token", "17", JwtProvider.TOKEN_TYPE_ACCESS, "generation-17");
+        when(jwtProvider.parse("malformed-token"))
+                .thenThrow(new MalformedJwtException("malformed"));
+
+        BusinessException accessException = assertThrows(
+                BusinessException.class, () -> authService.reissue("access-token"));
+        BusinessException malformedException = assertThrows(
+                BusinessException.class, () -> authService.reissue("malformed-token"));
+
+        assertEquals(AuthErrorCode.AUTH_TOKEN_INVALID, accessException.getErrorCode());
+        assertEquals(AuthErrorCode.AUTH_TOKEN_INVALID, malformedException.getErrorCode());
+    }
+
+    @Test
+    void reissueRejectsGenerationOrRefreshTokenMismatch() {
+        stubClaims("old-refresh", "17", JwtProvider.TOKEN_TYPE_REFRESH, "generation-17");
+        when(refreshTokenStore.findGeneration(17L)).thenReturn("generation-17");
+        when(memberMapper.selectById(17L)).thenReturn(activeMember());
+        when(jwtProvider.createAccessToken(17L, "PARENT", "generation-17"))
+                .thenReturn("new-access");
+        when(jwtProvider.createRefreshToken(17L, "generation-17"))
+                .thenReturn("new-refresh");
+        when(refreshTokenStore.rotate(
+                17L, "old-refresh", "new-refresh", "generation-17"))
+                .thenReturn(false);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class, () -> authService.reissue("old-refresh"));
+
+        assertEquals(AuthErrorCode.AUTH_TOKEN_INVALID, exception.getErrorCode());
+    }
+
+    @Test
+    void reissueRejectsInactiveMember() {
+        MemberVO member = activeMember();
+        member.setStatus("INACTIVE");
+        stubClaims("old-refresh", "17", JwtProvider.TOKEN_TYPE_REFRESH, "generation-17");
+        when(refreshTokenStore.findGeneration(17L)).thenReturn("generation-17");
+        when(memberMapper.selectById(17L)).thenReturn(member);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class, () -> authService.reissue("old-refresh"));
+
+        assertEquals(AuthErrorCode.AUTH_INACTIVE_MEMBER, exception.getErrorCode());
+        verify(refreshTokenStore, never()).rotate(any(), any(), any(), any());
+    }
+
+    @Test
+    void reissueTranslatesRedisFailureToServiceUnavailable() {
+        stubClaims("old-refresh", "17", JwtProvider.TOKEN_TYPE_REFRESH, "generation-17");
+        when(refreshTokenStore.findGeneration(17L))
+                .thenThrow(new RedisConnectionFailureException("redis unavailable"));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class, () -> authService.reissue("old-refresh"));
+
+        assertEquals(CommonErrorCode.COMMON_SERVICE_UNAVAILABLE, exception.getErrorCode());
+    }
+
+    @Test
+    void logoutRevokesOnlyAccessTokenAccount() {
+        stubClaims("access-token", "17", JwtProvider.TOKEN_TYPE_ACCESS, "generation-17");
+        when(refreshTokenStore.findGeneration(17L)).thenReturn("generation-17");
+
+        authService.logout("access-token", null);
+
+        verify(refreshTokenStore).revokeAll(17L);
+        verify(refreshTokenStore, never()).revokeAll(18L);
+    }
+
+    @Test
+    void logoutFallsBackToRefreshToken() {
+        when(jwtProvider.parse("invalid-access"))
+                .thenThrow(new MalformedJwtException("malformed"));
+        stubClaims("refresh-token", "17", JwtProvider.TOKEN_TYPE_REFRESH, "generation-17");
+        when(refreshTokenStore.findGeneration(17L)).thenReturn("generation-17");
+
+        authService.logout("invalid-access", "refresh-token");
+
+        verify(refreshTokenStore).revokeAll(17L);
+    }
+
+    @Test
+    void logoutIsIdempotentWhenTokensOrGenerationAreMissing() {
+        authService.logout(null, null);
+
+        stubClaims("old-access", "17", JwtProvider.TOKEN_TYPE_ACCESS, "generation-17");
+        when(refreshTokenStore.findGeneration(17L)).thenReturn(null);
+        authService.logout("old-access", null);
+
+        verify(refreshTokenStore, never()).revokeAll(any());
+    }
+
+    @Test
+    void logoutTranslatesRedisFailureToServiceUnavailable() {
+        stubClaims("access-token", "17", JwtProvider.TOKEN_TYPE_ACCESS, "generation-17");
+        when(refreshTokenStore.findGeneration(17L))
+                .thenThrow(new RedisConnectionFailureException("redis unavailable"));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> authService.logout("access-token", null));
 
         assertEquals(CommonErrorCode.COMMON_SERVICE_UNAVAILABLE, exception.getErrorCode());
     }
@@ -318,5 +476,20 @@ class AuthServiceTest {
         member.setProfileImageUrl("https://example.com/profile.png");
         member.setStatus("ACTIVE");
         return member;
+    }
+
+    private Claims claims(String subject, String tokenType, String generation) {
+        Claims claims = mock(Claims.class);
+        when(claims.getSubject()).thenReturn(subject);
+        when(claims.get(JwtProvider.CLAIM_TOKEN_TYPE, String.class)).thenReturn(tokenType);
+        when(claims.get(JwtProvider.CLAIM_AUTH_GENERATION, String.class))
+                .thenReturn(generation);
+        return claims;
+    }
+
+    private void stubClaims(
+            String token, String subject, String tokenType, String generation) {
+        Claims claims = claims(subject, tokenType, generation);
+        when(jwtProvider.parse(token)).thenReturn(claims);
     }
 }

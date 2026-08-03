@@ -1,5 +1,6 @@
 package com.teenyfin.teenymoney.config;
 
+import com.teenyfin.teenymoney.global.auth.RefreshTokenStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -38,5 +39,12 @@ public class RedisConfig {
     public StringRedisTemplate stringRedisTemplate(
             RedisConnectionFactory redisConnectionFactory) {
         return new StringRedisTemplate(redisConnectionFactory);
+    }
+
+    @Bean
+    public RefreshTokenStore refreshTokenStore(
+            StringRedisTemplate stringRedisTemplate,
+            @Value("${jwt.refresh-expiration}") long refreshExpirationMs) {
+        return new RefreshTokenStore(stringRedisTemplate, refreshExpirationMs);
     }
 }
