@@ -69,7 +69,6 @@ public class JwtProvider {
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + accessExpirationMs))
                 .signWith(key, Jwts.SIG.HS256)
-                .id(UUID.randomUUID().toString())
                 .compact();
     }
 
@@ -84,6 +83,7 @@ public class JwtProvider {
         Date now = new Date();
         return Jwts.builder()
                 .subject(String.valueOf(memberId))
+                .id(UUID.randomUUID().toString())
                 .claim(CLAIM_TOKEN_TYPE, TOKEN_TYPE_REFRESH)
                 .claim(CLAIM_AUTH_GENERATION, authGeneration)
                 .issuedAt(now)
