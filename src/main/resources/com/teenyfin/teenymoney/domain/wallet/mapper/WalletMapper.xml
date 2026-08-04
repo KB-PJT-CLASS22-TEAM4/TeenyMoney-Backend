@@ -10,7 +10,7 @@
         <result property="memberId" column="member_id"/>
         <result property="balance" column="balance"/>
         <result property="type" column="type"/>
-        <result property="updatedAt" column="update_at"/>
+        <result property="updatedAt" column="updated_at"/>
     </resultMap>
 
     <resultMap id="walletTransactionResultMap" type="com.teenyfin.teenymoney.domain.wallet.vo.WalletTransactionVO">
