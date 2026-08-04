@@ -44,7 +44,7 @@
         updated_at = NOW()
         WHERE parent_id = #{parentId}
         AND id IN
-        <foreach collection="policies" item="p" open="(" separator="," close=")">
+        <foreach collection="categoryPolicyList" item="p" open="(" separator="," close=")">
             #{p.id}
         </foreach>
     </update>
