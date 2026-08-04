@@ -257,4 +257,22 @@ public class AuthService {
     private String normalizePhoneNumber(String phoneNumber) {
         return phoneNumber.replaceAll("\\D", "");
     }
+
+    private void validatePassword(
+            String password,
+            String passwordConfirm,
+            String email,
+            String phoneNumber) {
+
+        if (!password.equals(passwordConfirm)) {
+            throw new BusinessException(AuthErrorCode.AUTH_PASSWORD_MISMATCH);
+        }
+
+        String lowerPassword = password.toLowerCase(Locale.ROOT);
+
+        if (lowerPassword.contains(email)
+                || password.replace("-", "").contains(phoneNumber)) {
+            throw new BusinessException(AuthErrorCode.AUTH_PASSWORD_CONTAINS_PERSONAL_INFO);
+        }
+    }
 }

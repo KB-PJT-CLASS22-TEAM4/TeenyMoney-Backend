@@ -4,12 +4,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import javax.validation.constraints.Email;
-import javax.validation.constraints.NotBlank;
-import javax.validation.constraints.NotNull;
-import javax.validation.constraints.Past;
-import javax.validation.constraints.Pattern;
-import javax.validation.constraints.Size;
+import javax.validation.constraints.*;
 import java.time.LocalDate;
 
 @Getter
@@ -18,11 +13,12 @@ import java.time.LocalDate;
 public class SignupRequestDTO {
 
     @NotBlank(message = "이름은 필수입니다.")
-    @Size(max = 50, message = "이름은 50자 이하여야 합니다.")
+    @Size(min =2, max = 7)
+    @Pattern(regexp = "^[가-힣]+$", message = "이름은 한글 본명 2~7자여야 합니다.")
     private String name;
 
     @NotNull(message = "생년월일은 필수입니다.")
-    @Past(message = "생년월일은 과거 날짜여야 합니다.")
+    @PastOrPresent(message = "생년월일은 미래일 수 없습니다.")
     private LocalDate birthDate;
 
     @NotBlank(message = "휴대폰 번호는 필수입니다.")
@@ -40,10 +36,29 @@ public class SignupRequestDTO {
     @Size(max = 100, message = "이메일은 100자 이하여야 합니다.")
     private String email;
 
-    @NotBlank(message = "비밀번호는 필수입니다.")
-    @Size(min = 8, max = 64, message = "비밀번호는 8자 이상 64자 이하여야 합니다.")
+    @NotBlank
+    @Size(min = 8, max = 32)
     @Pattern(
-            regexp = "^(?=.*[A-Za-z])(?=.*\\d).+$",
-            message = "비밀번호는 영문과 숫자를 각각 하나 이상 포함해야 합니다.")
+            regexp = "^(?=.*[A-Za-z])(?=.*\\d)(?=.*[!@#$%^&*(),.?\":{}|<>])\\S+$",
+            message = "비밀번호는 영문, 숫자, 특수문자를 각각 포함해야 합니다."
+    )
     private String password;
+
+    @NotBlank
+    private String passwordConfirm;
+
+    @NotNull(message = "서비스 이용약관 동의 여부는 필수입니다.")
+    @AssertTrue(message = "서비스 이용약관에 동의해야 합니다.")
+    private Boolean serviceTermsAgreed;
+
+    @NotNull(message = "개인정보 수집·이용 동의 여부는 필수입니다.")
+    @AssertTrue(message = "개인정보 수집·이용에 동의해야 합니다.")
+    private Boolean privacyAgreed;
+
+    @NotBlank
+    private String serviceTermsVersion;
+
+    @NotBlank
+    private String privacyTermsVersion;
+
 }
