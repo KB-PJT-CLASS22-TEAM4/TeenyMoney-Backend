@@ -1,6 +1,6 @@
 package com.teenyfin.teenymoney.domain.categoryPolicy.controller;
 
-import com.teenyfin.teenymoney.domain.categoryPolicy.dto.request.CategoryPolicyUpdateRequestDTO;
+import com.teenyfin.teenymoney.domain.categoryPolicy.dto.request.CategoryPolicyUpdateRequestListDTO;
 import com.teenyfin.teenymoney.domain.categoryPolicy.dto.response.CategoryPolicyResponseDTO;
 import com.teenyfin.teenymoney.domain.categoryPolicy.service.CategoryPolicyService;
 import com.teenyfin.teenymoney.global.response.ApiResponse;
@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import javax.validation.Valid;
 import java.util.List;
 
 @RestController
@@ -27,7 +28,7 @@ public class CategoryPolicyController {
     @PatchMapping
     public ApiResponse<List<CategoryPolicyResponseDTO>> modifyCategoryPolicy(
             @AuthenticationPrincipal MemberPrincipal memberPrincipal,
-            @RequestBody List<CategoryPolicyUpdateRequestDTO> categoryPolicyUpdateRequestDTOList) {
-        return ApiResponse.ok(categoryPolicyService.updateCategoryPolicy(memberPrincipal.memberId(), memberPrincipal.role(), categoryPolicyUpdateRequestDTOList));
+            @RequestBody @Valid CategoryPolicyUpdateRequestListDTO categoryPolicyUpdateRequestDTOList) {
+        return ApiResponse.ok(categoryPolicyService.updateCategoryPolicy(memberPrincipal.memberId(), memberPrincipal.role(), categoryPolicyUpdateRequestDTOList.getCategoryPolicyList()));
     }
 }
