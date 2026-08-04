@@ -16,16 +16,20 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
 
 class WalletServiceTest {
 
     private WalletMapper walletMapper;
     private WalletService walletService;
+    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-08-04T00:00:00Z"), ZoneId.of("Asia/Seoul"));
 
     @BeforeEach
     void setUp() {
         walletMapper = mock(WalletMapper.class);
-        walletService = new WalletService(walletMapper);
+        walletService = new WalletService(walletMapper, CLOCK);
     }
 
     @Test
