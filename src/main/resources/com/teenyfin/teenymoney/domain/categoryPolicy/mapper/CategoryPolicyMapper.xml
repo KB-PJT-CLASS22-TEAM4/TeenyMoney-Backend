@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.teenyfin.teenymoney.domain.categoryPolicy.mapper.CategoryPolicyMapper">
+
+    <resultMap id="categoryPolicyResultMap" type="com.teenyfin.teenymoney.domain.categoryPolicy.vo.CategoryPolicyVO">
+        <id property="id" column="id"/>
+        <result property="merchantCategoryName" column="name"/>
+        <result property="policy" column="policy"/>
+    </resultMap>
+
+    <select id="selectByParentId" resultMap="categoryPolicyResultMap">
+        SELECT a.id, b.name, a.policy
+        FROM T_MCC_POLICY_M a
+        JOIN T_MCC_CTGR_C b
+        ON a.merchant_category_id = b.id
+        WHERE a.parent_id = #{parentId}
+    </select>
+
+    <select id="selectByChildId" resultMap="categoryPolicyResultMap">
+        SELECT a.id, b.name, a.policy
+        FROM T_MCC_POLICY_M a
+        JOIN T_MCC_CTGR_C b
+        ON a.merchant_category_id = b.id
+        WHERE a.child_id = #{childId}
+    </select>
+
+</mapper>
