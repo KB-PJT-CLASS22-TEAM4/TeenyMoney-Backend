@@ -16,15 +16,20 @@ public class WebConfig extends AbstractAnnotationConfigDispatcherServletInitiali
         };
     }
 
-
     @Override
     protected Class<?>[] getServletConfigClasses() {
-        return new Class[] {ServletConfig.class};
+        return new Class[] {ServletConfig.class, SwaggerConfig.class};
     }
 
     @Override
     protected String[] getServletMappings() {
-        return new String[] {"/"};
+        return new String[] {
+                "/",
+                "/swagger-ui.html",
+                "/swagger-resources/**",
+                "/v2/api-docs",
+                "/webjars/**"
+        };
     }
 
     // POSTbody문자인코딩필터설정-UTF-8설정

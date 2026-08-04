@@ -60,8 +60,13 @@ public class SecurityConfig {
             "/api/v1/auth/phone-verification/send",
             "/api/v1/health",         // 헬스체크 — 모니터링이 토큰 없이 호출
             "/api/v1/health/**",
-            "/swagger-ui/**",         // API 문서
-            "/api-docs/**"
+
+            // Swagger (springfox 2.9.2) — UI 자체 + UI가 로드하는 정적 리소스 + 스펙 JSON
+            "/swagger-ui.html",
+            "/webjars/**",
+            "/swagger-resources",
+            "/swagger-resources/**",
+            "/v2/api-docs"
     };
 
     /**
