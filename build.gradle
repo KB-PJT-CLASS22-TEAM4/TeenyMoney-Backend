@@ -20,6 +20,7 @@ ext {
     jacksonVersion = '2.15.4'
     log4jVersion = '2.18.0'
     swaggerUiVersion = '5.31.0'
+    awsSdkVersion = '2.46.7'           // v1(aws-java-sdk-s3)은 유지보수 종료라 쓰지 않는다
 }
 
 // JAVA_HOME과 무관하게 JDK 17로 컴파일한다.
@@ -41,6 +42,17 @@ war {
 }
 
 dependencies {
+
+    // AWS S3 - 프로필/인증사진 이미지 저장 (비공개 버킷)
+    // BOM을 쓰면 s3와 그 안에 들어 있는 presigner의 버전이 어긋나지 않는다.
+    //
+    // netty-nio-client는 S3AsyncClient용 비동기 HTTP 클라이언트다. 우리는 동기 S3Client와
+    // 서명만 하는 S3Presigner만 쓰므로 제외한다(WAR 4MB 감소).
+    // 나중에 S3AsyncClient가 필요해지면 이 exclude를 지운다.
+    // Lettuce가 쓰는 netty는 별도 의존성이라 영향받지 않는다.
+    implementation platform("software.amazon.awssdk:bom:${awsSdkVersion}")
+    implementation("software.amazon.awssdk:s3")
+            { exclude group: 'software.amazon.awssdk', module: 'netty-nio-client' }
 
     // Swagger
     implementation 'io.springfox:springfox-swagger2:2.9.2'

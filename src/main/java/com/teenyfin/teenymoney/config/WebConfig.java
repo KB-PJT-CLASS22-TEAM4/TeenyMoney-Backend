@@ -12,7 +12,8 @@ public class WebConfig extends AbstractAnnotationConfigDispatcherServletInitiali
         return new Class[] {
                 RootConfig.class,
                 RedisConfig.class,
-                SecurityConfig.class
+                SecurityConfig.class,
+                S3Config.class
         };
     }
 
