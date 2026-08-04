@@ -4,6 +4,7 @@ import com.teenyfin.teenymoney.domain.categoryPolicy.dto.response.CategoryPolicy
 import com.teenyfin.teenymoney.domain.categoryPolicy.dto.response.CategoryPolicyResponseDTO;
 import com.teenyfin.teenymoney.domain.categoryPolicy.mapper.CategoryPolicyMapper;
 import com.teenyfin.teenymoney.domain.categoryPolicy.vo.CategoryPolicyVO;
+import com.teenyfin.teenymoney.global.exception.BusinessException;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -91,7 +92,7 @@ class CategoryPolicyServiceTest {
 
         // when & then
         assertThatThrownBy(() -> categoryPolicyService.getCategoryPolicy(memberId, role))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(BusinessException.class);
 
         verify(categoryPolicyMapper, never()).selectByParentId(any());
         verify(categoryPolicyMapper, never()).selectByChildId(any());
