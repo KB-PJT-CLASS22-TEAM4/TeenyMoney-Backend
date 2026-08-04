@@ -7,6 +7,7 @@ import com.teenyfin.teenymoney.domain.auth.exception.AuthErrorCode;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
 import com.teenyfin.teenymoney.global.auth.RefreshTokenStore;
+import com.teenyfin.teenymoney.global.auth.LegalGuardianConsentStore;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import com.teenyfin.teenymoney.global.exception.CommonErrorCode;
 import com.teenyfin.teenymoney.global.security.jwt.JwtProvider;
@@ -21,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.Period;
 import java.util.Locale;
 
@@ -29,12 +31,15 @@ public class AuthService {
 
     private static final String DUMMY_PASSWORD_HASH =
             "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
+    private static final String SERVICE_TERMS = "SERVICE_TERMS";
+    private static final String PRIVACY_TERMS = "PRIVACY";
 
     private final MemberMapper memberMapper;
     private final PasswordEncoder passwordEncoder;
     private final PhoneVerificationService phoneVerificationService;
     private final JwtProvider jwtProvider;
     private final RefreshTokenStore refreshTokenStore;
+    private final LegalGuardianConsentStore legalGuardianConsentStore;
     private final Clock clock;
 
     public AuthService(
@@ -43,22 +48,36 @@ public class AuthService {
             PhoneVerificationService phoneVerificationService,
             JwtProvider jwtProvider,
             RefreshTokenStore refreshTokenStore,
+            LegalGuardianConsentStore legalGuardianConsentStore,
             Clock clock) {
         this.memberMapper = memberMapper;
         this.passwordEncoder = passwordEncoder;
         this.phoneVerificationService = phoneVerificationService;
         this.jwtProvider = jwtProvider;
         this.refreshTokenStore = refreshTokenStore;
+        this.legalGuardianConsentStore = legalGuardianConsentStore;
         this.clock = clock;
     }
 
     @Transactional
     public SignupResponseDTO signup(SignupRequestDTO request) {
+        // [보호자 가입 흐름 9] 가입 입력값을 정규화하고 나이·비밀번호·현재 약관 버전을 먼저 검증한다.
         String email = normalizeEmail(request.getEmail());
         String phoneNumber = normalizePhoneNumber(request.getPhoneNumber());
         LocalDate birthDate = request.getBirthDate();
-        validateBirthDate(birthDate);
 
+        validateBirthDate(birthDate);
+        String role = deriveRole(birthDate);
+
+        validatePassword(request.getPassword(), request.getPasswordConfirm(), email, phoneNumber);
+
+        Long serviceAgreementId = requireEffectiveAgreement(SERVICE_TERMS, request.getServiceTermsVersion());
+        Long privacyAgreementId = requireEffectiveAgreement(PRIVACY_TERMS, request.getPrivacyTermsVersion());
+
+        // [보호자 가입 흐름 10] 만 14세 미만이면 Redis의 보호자 동의 토큰과 약관 버전을 검증한다.
+        LegalGuardianConsent legalGuardianConsent = requireLegalGuardianConsent(request, birthDate);
+
+        // [보호자 가입 흐름 11] 가입자 본인의 SMS 인증번호와 이메일·휴대폰 중복을 확인한다.
         phoneVerificationService.verify(phoneNumber, request.getVerificationCode());
 
         if (memberMapper.existsByEmail(email)) {
@@ -69,7 +88,7 @@ public class AuthService {
         }
 
         MemberVO member = new MemberVO();
-        member.setRole(deriveRole(birthDate));
+        member.setRole(role);
         member.setName(request.getName().trim());
         member.setBirthDate(birthDate);
         member.setPhoneNumber(phoneNumber);
@@ -77,12 +96,41 @@ public class AuthService {
         member.setPassword(passwordEncoder.encode(request.getPassword()));
 
         try {
+            // [보호자 가입 흐름 12] 회원을 먼저 저장해 보호자·약관 이력에서 사용할 회원 ID를 생성한다.
             memberMapper.insert(member);
+            if (legalGuardianConsent != null) {
+                // [보호자 가입 흐름 13] 만 14세 미만 가입자의 비회원 법정대리인 인증 정보를 저장한다.
+                memberMapper.insertLegalGuardian(
+                        member.getId(),
+                        legalGuardianConsent.name(),
+                        legalGuardianConsent.phoneNumber(),
+                        legalGuardianConsent.relationship(),
+                        legalGuardianConsent.verificationMethod(),
+                        legalGuardianConsent.verificationReference(),
+                        legalGuardianConsent.verifiedAt());
+            }
+            String actorType = legalGuardianConsent == null ? "SELF" : "LEGAL_GUARDIAN";
+            Long actorMemberId = legalGuardianConsent == null ? member.getId() : null;
+            String verificationMethod = legalGuardianConsent == null
+                    ? null : legalGuardianConsent.verificationMethod();
+            String verificationReference = legalGuardianConsent == null
+                    ? null : legalGuardianConsent.verificationReference();
+            // [보호자 가입 흐름 14] 서비스·개인정보 동의 이력을 SELF 또는 LEGAL_GUARDIAN 수행자로 저장한다.
+            memberMapper.insertAgreementHistory(
+                    member.getId(), serviceAgreementId, "AGREED", actorType,
+                    actorMemberId, verificationMethod, verificationReference);
+            memberMapper.insertAgreementHistory(
+                    member.getId(), privacyAgreementId, "AGREED", actorType,
+                    actorMemberId, verificationMethod, verificationReference);
         } catch (DuplicateKeyException exception) {
             throw translateDuplicate(email, phoneNumber, exception);
         }
 
+        // [보호자 가입 흐름 15] 가입이 모두 성공한 경우에만 가입자 인증번호와 보호자 토큰을 소비한다.
         phoneVerificationService.consume(phoneNumber);
+        if (legalGuardianConsent != null) {
+            legalGuardianConsentStore.delete(request.getLegalGuardianConsentToken());
+        }
         return SignupResponseDTO.of(member.getId());
     }
 
@@ -237,7 +285,7 @@ public class AuthService {
     }
 
     private void validateBirthDate(LocalDate birthDate) {
-        if (birthDate == null || !birthDate.isBefore(LocalDate.now(clock))) {
+        if (birthDate == null || birthDate.isAfter(LocalDate.now(clock))) {
             throw new BusinessException(CommonErrorCode.COMMON_INVALID_INPUT);
         }
     }
@@ -274,5 +322,41 @@ public class AuthService {
                 || password.replace("-", "").contains(phoneNumber)) {
             throw new BusinessException(AuthErrorCode.AUTH_PASSWORD_CONTAINS_PERSONAL_INFO);
         }
+    }
+
+    private Long requireEffectiveAgreement(String code, String version) {
+        // 요청 버전이 현재 적용 중인 약관인지 DB 기준으로 확인한다.
+        Long agreementId = memberMapper.selectEffectiveAgreementId(
+                code,
+                version,
+                LocalDateTime.now(clock)
+        );
+
+        if (agreementId == null) {
+            throw new BusinessException(AuthErrorCode.AUTH_INVALID_AGREEMENT_VERSION);
+        }
+
+        return agreementId;
+    }
+
+    private LegalGuardianConsent requireLegalGuardianConsent(
+            SignupRequestDTO request, LocalDate birthDate) {
+        // 만 14세가 되는 생일이 지났거나 오늘이면 보호자 동의 대상이 아니다.
+        if (!birthDate.plusYears(14).isAfter(LocalDate.now(clock))) {
+            return null;
+        }
+        if (request.getLegalGuardianConsentToken() == null
+                || request.getLegalGuardianConsentToken().isBlank()) {
+            throw new BusinessException(AuthErrorCode.AUTH_LEGAL_GUARDIAN_CONSENT_REQUIRED);
+        }
+        LegalGuardianConsent consent = legalGuardianConsentStore.find(
+                request.getLegalGuardianConsentToken());
+        // 발급 이후 약관 버전이 달라졌다면 이전 동의를 현재 가입에 사용할 수 없다.
+        if (consent == null
+                || !request.getServiceTermsVersion().equals(consent.serviceTermsVersion())
+                || !request.getPrivacyTermsVersion().equals(consent.privacyTermsVersion())) {
+            throw new BusinessException(AuthErrorCode.AUTH_LEGAL_GUARDIAN_CONSENT_INVALID);
+        }
+        return consent;
     }
 }

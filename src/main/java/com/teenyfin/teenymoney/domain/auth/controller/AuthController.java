@@ -1,14 +1,17 @@
 package com.teenyfin.teenymoney.domain.auth.controller;
 
 import com.teenyfin.teenymoney.domain.auth.dto.request.LoginRequestDTO;
+import com.teenyfin.teenymoney.domain.auth.dto.request.LegalGuardianVerificationConfirmRequestDTO;
 import com.teenyfin.teenymoney.domain.auth.dto.request.PhoneVerificationSendRequestDTO;
 import com.teenyfin.teenymoney.domain.auth.dto.request.SignupRequestDTO;
 import com.teenyfin.teenymoney.domain.auth.dto.response.EmailAvailabilityResponseDTO;
+import com.teenyfin.teenymoney.domain.auth.dto.response.LegalGuardianConsentTokenResponseDTO;
 import com.teenyfin.teenymoney.domain.auth.dto.response.CsrfTokenResponseDTO;
 import com.teenyfin.teenymoney.domain.auth.dto.response.LoginResponseDTO;
 import com.teenyfin.teenymoney.domain.auth.dto.response.SignupResponseDTO;
 import com.teenyfin.teenymoney.domain.auth.dto.response.TokenReissueResponseDTO;
 import com.teenyfin.teenymoney.domain.auth.service.AuthService;
+import com.teenyfin.teenymoney.domain.auth.service.LegalGuardianVerificationService;
 import com.teenyfin.teenymoney.domain.auth.service.LoginResult;
 import com.teenyfin.teenymoney.domain.auth.service.PhoneVerificationService;
 import com.teenyfin.teenymoney.domain.auth.service.TokenReissueResult;
@@ -37,14 +40,17 @@ public class AuthController {
 
     private final AuthService authService;
     private final PhoneVerificationService phoneVerificationService;
+    private final LegalGuardianVerificationService legalGuardianVerificationService;
     private final CookieUtil cookieUtil;
 
     public AuthController(
             AuthService authService,
             PhoneVerificationService phoneVerificationService,
+            LegalGuardianVerificationService legalGuardianVerificationService,
             CookieUtil cookieUtil) {
         this.authService = authService;
         this.phoneVerificationService = phoneVerificationService;
+        this.legalGuardianVerificationService = legalGuardianVerificationService;
         this.cookieUtil = cookieUtil;
     }
 
@@ -53,6 +59,30 @@ public class AuthController {
             @Valid @RequestBody PhoneVerificationSendRequestDTO request) {
         phoneVerificationService.sendCode(request.getPhoneNumber());
         return ApiResponse.ok();
+    }
+
+    // 보호자 인증번호 발송 API
+    @PostMapping("/legal-guardian-verification/send")
+    public ApiResponse<Void> sendLegalGuardianVerification(
+            @Valid @RequestBody PhoneVerificationSendRequestDTO request) {
+        // [보호자 가입 흐름 1] 보호자 휴대폰 번호를 받아 SMS 인증번호 발송을 요청한다.
+        legalGuardianVerificationService.sendCode(request.getPhoneNumber());
+        return ApiResponse.ok();
+    }
+
+    // 보호자 인증 확인 및 토큰 발급 API
+    @PostMapping("/legal-guardian-verification/confirm")
+    public ApiResponse<LegalGuardianConsentTokenResponseDTO> confirmLegalGuardianVerification(
+            @Valid @RequestBody LegalGuardianVerificationConfirmRequestDTO request) {
+        // [보호자 가입 흐름 3] 인증번호와 보호자 정보·동의 약관 버전을 검증 서비스로 전달한다.
+        String token = legalGuardianVerificationService.confirm(
+                request.getLegalGuardianName(),
+                request.getRelationship(),
+                request.getPhoneNumber(),
+                request.getVerificationCode(),
+                request.getServiceTermsVersion(),
+                request.getPrivacyTermsVersion());
+        return ApiResponse.ok(new LegalGuardianConsentTokenResponseDTO(token));
     }
 
     @GetMapping("/check-email")
@@ -65,6 +95,7 @@ public class AuthController {
     @PostMapping("/signup")
     public ResponseEntity<ApiResponse<SignupResponseDTO>> signup(
             @Valid @RequestBody SignupRequestDTO request) {
+        // [보호자 가입 흐름 8] 만 14세 미만이면 앞 단계에서 발급받은 legalGuardianConsentToken을 함께 받는다.
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.ok(authService.signup(request)));
     }

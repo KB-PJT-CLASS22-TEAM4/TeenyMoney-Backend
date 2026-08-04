@@ -224,6 +224,64 @@ paths:
                 message: 현재 문자 인증 서비스를 사용할 수 없습니다.
                 data: null
 
+  /api/v1/auth/legal-guardian-verification/send:
+    post:
+      tags: [Auth]
+      summary: 법정대리인 인증번호 발송
+      operationId: sendLegalGuardianVerificationCode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PhoneVerificationSendRequest"
+      responses:
+        "200":
+          description: 인증번호 발송 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoidApiResponse"
+        "400":
+          $ref: "#/components/responses/InvalidInput"
+        "429":
+          description: 재요청 대기시간 미경과
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorApiResponse"
+
+  /api/v1/auth/legal-guardian-verification/confirm:
+    post:
+      tags: [Auth]
+      summary: 법정대리인 인증 확인 및 일회용 동의 토큰 발급
+      operationId: confirmLegalGuardianVerification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LegalGuardianVerificationConfirmRequest"
+      responses:
+        "200":
+          description: 보호자 인증 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LegalGuardianConsentTokenApiResponse"
+        "400":
+          description: 입력값 또는 인증번호 오류
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorApiResponse"
+        "429":
+          description: 인증번호 입력 횟수 초과
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorApiResponse"
+
   /api/v1/auth/check-email:
     get:
       tags: [Auth]
@@ -529,10 +587,17 @@ components:
         - verificationCode
         - email
         - password
+        - passwordConfirm
+        - serviceTermsAgreed
+        - privacyAgreed
+        - serviceTermsVersion
+        - privacyTermsVersion
       properties:
         name:
           type: string
-          maxLength: 50
+          minLength: 2
+          maxLength: 7
+          pattern: '^[가-힣]+$'
           example: 홍길동
         birthDate:
           type: string
@@ -556,9 +621,66 @@ components:
           type: string
           format: password
           minLength: 8
-          maxLength: 64
-          pattern: '^(?=.*[A-Za-z])(?=.*\d).+$'
-          example: password123
+          maxLength: 32
+          pattern: '^(?=.*[A-Za-z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>])\S+$'
+          example: Password1!
+        passwordConfirm:
+          type: string
+          format: password
+          example: Password1!
+        serviceTermsAgreed:
+          type: boolean
+          enum: [true]
+        privacyAgreed:
+          type: boolean
+          enum: [true]
+        serviceTermsVersion:
+          type: string
+          example: "1.0"
+        privacyTermsVersion:
+          type: string
+          example: "1.0"
+        legalGuardianConsentToken:
+          type: string
+          nullable: true
+          description: 만 14세 미만 가입자에게 필수인 일회용 보호자 동의 토큰
+
+    LegalGuardianVerificationConfirmRequest:
+      type: object
+      additionalProperties: false
+      required: [legalGuardianName, relationship, phoneNumber, verificationCode, legalGuardianTermsAgreed, serviceTermsVersion, privacyTermsVersion]
+      properties:
+        legalGuardianName:
+          type: string
+          minLength: 2
+          maxLength: 7
+          pattern: '^[가-힣]+$'
+        relationship:
+          type: string
+          enum: [FATHER, MOTHER, OTHER_LEGAL_GUARDIAN]
+        phoneNumber:
+          type: string
+          pattern: '^01[016789]-?\d{3,4}-?\d{4}$'
+        verificationCode:
+          type: string
+          pattern: '^\d{6}$'
+        legalGuardianTermsAgreed:
+          type: boolean
+          enum: [true]
+        serviceTermsVersion:
+          type: string
+          example: "1.0"
+        privacyTermsVersion:
+          type: string
+          example: "1.0"
+
+    LegalGuardianConsentTokenResponse:
+      type: object
+      required: [legalGuardianConsentToken]
+      properties:
+        legalGuardianConsentToken:
+          type: string
+          description: 가입 요청에서 한 번만 사용할 수 있는 보호자 동의 토큰
 
     SignupResponse:
       type: object
@@ -694,6 +816,22 @@ components:
           example: 성공
         data:
           $ref: "#/components/schemas/SignupResponse"
+
+    LegalGuardianConsentTokenApiResponse:
+      type: object
+      required: [success, code, message, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        code:
+          type: string
+          example: OK
+        message:
+          type: string
+          example: 성공
+        data:
+          $ref: "#/components/schemas/LegalGuardianConsentTokenResponse"
 
     LoginApiResponse:
       type: object

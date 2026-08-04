@@ -7,6 +7,7 @@ import com.teenyfin.teenymoney.domain.auth.dto.request.SignupRequestDTO;
 import com.teenyfin.teenymoney.domain.auth.dto.response.SignupResponseDTO;
 import com.teenyfin.teenymoney.domain.auth.exception.AuthErrorCode;
 import com.teenyfin.teenymoney.domain.auth.service.AuthService;
+import com.teenyfin.teenymoney.domain.auth.service.LegalGuardianVerificationService;
 import com.teenyfin.teenymoney.domain.auth.service.LoginResult;
 import com.teenyfin.teenymoney.domain.auth.service.PhoneVerificationService;
 import com.teenyfin.teenymoney.domain.auth.service.TokenReissueResult;
@@ -45,6 +46,7 @@ class AuthControllerTest {
 
     private AuthService authService;
     private PhoneVerificationService phoneVerificationService;
+    private LegalGuardianVerificationService legalGuardianVerificationService;
     private CookieUtil cookieUtil;
     private MockMvc mockMvc;
 
@@ -52,11 +54,16 @@ class AuthControllerTest {
     void setUp() {
         authService = mock(AuthService.class);
         phoneVerificationService = mock(PhoneVerificationService.class);
+        legalGuardianVerificationService = mock(LegalGuardianVerificationService.class);
         cookieUtil = mock(CookieUtil.class);
         ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
         mockMvc = MockMvcBuilders.standaloneSetup(
-                        new AuthController(authService, phoneVerificationService, cookieUtil))
+                        new AuthController(
+                                authService,
+                                phoneVerificationService,
+                                legalGuardianVerificationService,
+                                cookieUtil))
                 .setControllerAdvice(new GlobalExceptionAdvice())
                 .setMessageConverters(new MappingJackson2HttpMessageConverter(objectMapper))
                 .build();
@@ -73,6 +80,40 @@ class AuthControllerTest {
         assertBodyContains(response, "\"success\":true", "\"code\":\"OK\"");
 
         verify(phoneVerificationService).sendCode("010-1234-5678");
+    }
+
+    @Test
+    void legalGuardianVerificationSendUsesLegalGuardianPhoneNumber() throws Exception {
+        var response = mockMvc.perform(post("/auth/legal-guardian-verification/send")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"phoneNumber\":\"010-1234-5678\"}"))
+                .andReturn().getResponse();
+
+        assertEquals(200, response.getStatus());
+        verify(legalGuardianVerificationService).sendCode("010-1234-5678");
+    }
+
+    @Test
+    void legalGuardianVerificationConfirmReturnsOneTimeConsentToken() throws Exception {
+        when(legalGuardianVerificationService.confirm(
+                "김보호", "MOTHER", "010-1234-5678", "123456", "1.0", "1.0"))
+                .thenReturn("legal-guardian-token");
+
+        var response = mockMvc.perform(post("/auth/legal-guardian-verification/confirm")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{"
+                                + "\"legalGuardianName\":\"김보호\","
+                                + "\"relationship\":\"MOTHER\","
+                                + "\"phoneNumber\":\"010-1234-5678\","
+                                + "\"verificationCode\":\"123456\","
+                                + "\"legalGuardianTermsAgreed\":true,"
+                                + "\"serviceTermsVersion\":\"1.0\","
+                                + "\"privacyTermsVersion\":\"1.0\""
+                                + "}"))
+                .andReturn().getResponse();
+
+        assertEquals(200, response.getStatus());
+        assertBodyContains(response, "\"legalGuardianConsentToken\":\"legal-guardian-token\"");
     }
 
     @Test
@@ -146,10 +187,10 @@ class AuthControllerTest {
     }
 
     @Test
-    void passwordMustContainBothLetterAndDigit() throws Exception {
+    void passwordMustContainLetterDigitAndSpecialCharacter() throws Exception {
         var response = mockMvc.perform(post("/auth/signup")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(validSignupJson().replace("password123", "abcdefgh")))
+                        .content(validSignupJson().replace("Password1!", "Password123")))
                 .andReturn().getResponse();
 
         assertEquals(400, response.getStatus());
@@ -286,7 +327,12 @@ class AuthControllerTest {
                 + "\"phoneNumber\":\"010-1234-5678\","
                 + "\"verificationCode\":\"123456\","
                 + "\"email\":\"user@example.com\","
-                + "\"password\":\"password123\""
+                + "\"password\":\"Password1!\","
+                + "\"passwordConfirm\":\"Password1!\","
+                + "\"serviceTermsAgreed\":true,"
+                + "\"privacyAgreed\":true,"
+                + "\"serviceTermsVersion\":\"1.0\","
+                + "\"privacyTermsVersion\":\"1.0\""
                 + "}";
     }
 

@@ -61,4 +61,7 @@ public class SignupRequestDTO {
     @NotBlank
     private String privacyTermsVersion;
 
+    // [보호자 가입 흐름 8] 만 14세 미만일 때만 필수이며, 보호자 인증 확인 API가 발급한다.
+    private String legalGuardianConsentToken;
+
 }
