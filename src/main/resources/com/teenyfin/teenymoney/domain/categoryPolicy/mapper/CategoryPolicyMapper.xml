@@ -11,19 +11,27 @@
     </resultMap>
 
     <select id="selectByParentId" resultMap="categoryPolicyResultMap">
-        SELECT a.id, b.name, a.policy
-        FROM T_MCC_POLICY_M a
-        JOIN T_MCC_CTGR_C b
-        ON a.merchant_category_id = b.id
-        WHERE a.parent_id = #{parentId}
+        SELECT p.id, c.name, p.policy
+        FROM T_MCC_POLICY_M p
+        JOIN T_MCC_CTGR_C c
+        ON p.merchant_category_id = c.id
+        WHERE p.parent_id = #{parentId}
     </select>
 
     <select id="selectByChildId" resultMap="categoryPolicyResultMap">
-        SELECT a.id, b.name, a.policy
-        FROM T_MCC_POLICY_M a
-        JOIN T_MCC_CTGR_C b
-        ON a.merchant_category_id = b.id
-        WHERE a.child_id = #{childId}
+        SELECT p.id, c.name, p.policy
+        FROM T_MCC_POLICY_M p
+        JOIN T_MCC_CTGR_C c
+        ON p.merchant_category_id = c.id
+        WHERE p.child_id = #{childId}
     </select>
+
+    <insert id="insertDefaultPolicy">
+        INSERT INTO T_MCC_POLICY_M
+        (parent_id, child_id, merchant_category_id, policy, created_at)
+        SELECT
+        #{parentId}, #{childId}, c.id, c.default_policy, NOW()
+        FROM T_MCC_CTGR_C c
+    </insert>
 
 </mapper>
