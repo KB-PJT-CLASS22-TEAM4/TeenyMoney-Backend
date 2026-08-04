@@ -63,7 +63,7 @@ public class CategoryPolicyService {
                 .toList();
     }
 
-    // 전체 카테고리 정책 일괄 수정
+    // 전체 카테고리 정책 단계 수정
     @Transactional
     public List<CategoryPolicyResponseDTO> updateCategoryPolicy(Long memberId, String role, List<CategoryPolicyUpdateRequestDTO> categoryPolicyList) {
 
