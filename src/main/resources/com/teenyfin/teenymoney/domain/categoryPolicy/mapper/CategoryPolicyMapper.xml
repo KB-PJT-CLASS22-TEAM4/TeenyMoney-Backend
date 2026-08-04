@@ -26,12 +26,27 @@
         WHERE p.child_id = #{childId}
     </select>
 
-    <insert id="insertDefaultPolicy">
+    <insert id="insertDefaultPolicies">
         INSERT INTO T_MCC_POLICY_M
         (parent_id, child_id, merchant_category_id, policy, created_at)
         SELECT
         #{parentId}, #{childId}, c.id, c.default_policy, NOW()
         FROM T_MCC_CTGR_C c
     </insert>
+
+    <update id="updateAllPolicies">
+        UPDATE T_MCC_POLICY_M
+        SET policy = CASE id
+        <foreach collection="categoryPolicyList" item="p">
+            WHEN #{p.id} THEN #{p.policy}
+        </foreach>
+        END,
+        updated_at = NOW()
+        WHERE parent_id = #{parentId}
+        AND id IN
+        <foreach collection="policies" item="p" open="(" separator="," close=")">
+            #{p.id}
+        </foreach>
+    </update>
 
 </mapper>

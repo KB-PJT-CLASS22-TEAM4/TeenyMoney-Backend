@@ -3,7 +3,6 @@ package com.teenyfin.teenymoney.domain.categoryPolicy.service;
 import com.teenyfin.teenymoney.domain.categoryPolicy.dto.response.CategoryPolicyResponseDTO;
 import com.teenyfin.teenymoney.domain.categoryPolicy.mapper.CategoryPolicyMapper;
 import com.teenyfin.teenymoney.domain.categoryPolicy.vo.CategoryPolicyVO;
-import com.teenyfin.teenymoney.global.security.MemberPrincipal;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -24,7 +23,9 @@ class CategoryPolicyServiceTest {
     @Test
     void 부모가_조회하면_selectByParentId를_호출한다() {
         // given
-        MemberPrincipal principal = new MemberPrincipal(1L, "PARENT");
+        Long memberId = 1L;
+        String role = "PARENT";
+
         CategoryPolicyVO vo = CategoryPolicyVO.builder()
                 .id(1L)
                 .merchantCategoryName("외식")
@@ -33,7 +34,7 @@ class CategoryPolicyServiceTest {
         given(categoryPolicyMapper.selectByParentId(1L)).willReturn(List.of(vo));
 
         // when
-        List<CategoryPolicyResponseDTO> result = categoryPolicyService.getCategoryPolicy(principal);
+        List<CategoryPolicyResponseDTO> result = categoryPolicyService.getCategoryPolicy(memberId, role);
 
         // then
         assertThat(result).hasSize(1);
@@ -46,7 +47,9 @@ class CategoryPolicyServiceTest {
     @Test
     void 자녀가_조회하면_selectByChildId를_호출한다() {
         // given
-        MemberPrincipal principal = new MemberPrincipal(2L, "CHILD");
+        Long memberId = 2L;
+        String role = "CHILD";
+
         CategoryPolicyVO vo = CategoryPolicyVO.builder()
                 .id(2L)
                 .merchantCategoryName("PC방")
@@ -55,7 +58,7 @@ class CategoryPolicyServiceTest {
         given(categoryPolicyMapper.selectByChildId(2L)).willReturn(List.of(vo));
 
         // when
-        List<CategoryPolicyResponseDTO> result = categoryPolicyService.getCategoryPolicy(principal);
+        List<CategoryPolicyResponseDTO> result = categoryPolicyService.getCategoryPolicy(memberId, role);
 
         // then
         assertThat(result).hasSize(1);
@@ -67,11 +70,13 @@ class CategoryPolicyServiceTest {
     @Test
     void 정책이_없으면_빈리스트를_반환한다() {
         // given
-        MemberPrincipal principal = new MemberPrincipal(1L, "PARENT");
+        Long memberId = 1L;
+        String role = "PARENT";
+
         given(categoryPolicyMapper.selectByParentId(1L)).willReturn(List.of());
 
         // when
-        List<CategoryPolicyResponseDTO> result = categoryPolicyService.getCategoryPolicy(principal);
+        List<CategoryPolicyResponseDTO> result = categoryPolicyService.getCategoryPolicy(memberId, role);
 
         // then
         assertThat(result).isEmpty();
@@ -80,10 +85,11 @@ class CategoryPolicyServiceTest {
     @Test
     void 알수없는_role이면_예외를_던진다() {
         // given
-        MemberPrincipal principal = new MemberPrincipal(1L, "UNKNOWN");
+        Long memberId = 1L;
+        String role = "UNKNOWN";
 
         // when & then
-        assertThatThrownBy(() -> categoryPolicyService.getCategoryPolicy(principal))
+        assertThatThrownBy(() -> categoryPolicyService.getCategoryPolicy(memberId, role))
                 .isInstanceOf(IllegalStateException.class);
 
         verify(categoryPolicyMapper, never()).selectByParentId(any());

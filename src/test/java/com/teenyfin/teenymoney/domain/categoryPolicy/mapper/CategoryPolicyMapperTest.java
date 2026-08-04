@@ -68,7 +68,7 @@ class CategoryPolicyMapperTest {
         Long childId = 3L;
 
         // when
-        categoryPolicyMapper.insertDefaultPolicy(parentId, childId);
+        categoryPolicyMapper.insertDefaultPolicies(parentId, childId);
         List<CategoryPolicyVO> result = categoryPolicyMapper.selectByChildId(childId);
 
         // then
@@ -86,7 +86,7 @@ class CategoryPolicyMapperTest {
 
         // when & then
         assertThatThrownBy(() ->
-                categoryPolicyMapper.insertDefaultPolicy(parentId, childId)
+                categoryPolicyMapper.insertDefaultPolicies(parentId, childId)
         ).isInstanceOf(DuplicateKeyException.class);
     }
 }
