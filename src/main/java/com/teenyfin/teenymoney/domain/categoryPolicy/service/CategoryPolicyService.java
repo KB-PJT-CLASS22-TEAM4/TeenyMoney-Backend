@@ -1,23 +1,48 @@
 package com.teenyfin.teenymoney.domain.categoryPolicy.service;
 
 import com.teenyfin.teenymoney.domain.categoryPolicy.dto.request.CategoryPolicyUpdateRequestDTO;
+import com.teenyfin.teenymoney.domain.categoryPolicy.dto.response.CategoryPolicyGroupResponseDTO;
 import com.teenyfin.teenymoney.domain.categoryPolicy.dto.response.CategoryPolicyResponseDTO;
 import com.teenyfin.teenymoney.domain.categoryPolicy.exception.CategoryPolicyErrorCode;
 import com.teenyfin.teenymoney.domain.categoryPolicy.mapper.CategoryPolicyMapper;
 import com.teenyfin.teenymoney.domain.categoryPolicy.vo.CategoryPolicyVO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
-import com.teenyfin.teenymoney.global.security.MemberPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class CategoryPolicyService {
 
     private final CategoryPolicyMapper categoryPolicyMapper;
+
+    private static final List<String> POLICY_ORDER = List.of("ALLOW", "WATCH", "BLOCK");
+
+    // 단계 별 카테고리 정책 조회
+    @Transactional(readOnly = true)
+    public List<CategoryPolicyGroupResponseDTO> getCategoryPolicyGroup(Long memberId, String role) {
+        List<CategoryPolicyResponseDTO> categoryPolicyResponseDTOList = getCategoryPolicy(memberId, role);
+
+        Map<String, List<CategoryPolicyResponseDTO>> grouped = categoryPolicyResponseDTOList.stream()
+                .collect(Collectors.groupingBy(
+                        CategoryPolicyResponseDTO::getPolicy,
+                        LinkedHashMap::new,
+                        Collectors.toList()
+                ));
+
+        return POLICY_ORDER.stream()
+                .map(policy -> CategoryPolicyGroupResponseDTO.builder()
+                        .policy(policy)
+                        .categoryPolicyList(grouped.getOrDefault(policy, List.of()))
+                        .build())
+                .toList();
+    }
 
     // 전체 카테고리 정책 조회
     @Transactional(readOnly = true)

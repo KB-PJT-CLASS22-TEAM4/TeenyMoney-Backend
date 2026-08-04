@@ -1,6 +1,7 @@
 package com.teenyfin.teenymoney.domain.categoryPolicy.controller;
 
 import com.teenyfin.teenymoney.domain.categoryPolicy.dto.request.CategoryPolicyUpdateRequestListDTO;
+import com.teenyfin.teenymoney.domain.categoryPolicy.dto.response.CategoryPolicyGroupResponseDTO;
 import com.teenyfin.teenymoney.domain.categoryPolicy.dto.response.CategoryPolicyResponseDTO;
 import com.teenyfin.teenymoney.domain.categoryPolicy.service.CategoryPolicyService;
 import com.teenyfin.teenymoney.global.response.ApiResponse;
@@ -13,11 +14,17 @@ import javax.validation.Valid;
 import java.util.List;
 
 @RestController
-@RequestMapping("/policies")
+@RequestMapping("/category-policies")
 @RequiredArgsConstructor
 public class CategoryPolicyController {
 
     private final CategoryPolicyService categoryPolicyService;
+
+    @GetMapping("/groups")
+    public ApiResponse<List<CategoryPolicyGroupResponseDTO>> getCategoryPolicyGroup(
+            @AuthenticationPrincipal MemberPrincipal memberPrincipal) {
+        return ApiResponse.ok(categoryPolicyService.getCategoryPolicyGroup(memberPrincipal.memberId(), memberPrincipal.role()));
+    }
 
     @GetMapping
     public ApiResponse<List<CategoryPolicyResponseDTO>> getCategoryPolicy(

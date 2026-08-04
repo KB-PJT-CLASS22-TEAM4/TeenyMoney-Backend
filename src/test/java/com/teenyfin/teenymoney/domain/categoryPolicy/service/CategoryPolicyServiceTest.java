@@ -1,5 +1,6 @@
 package com.teenyfin.teenymoney.domain.categoryPolicy.service;
 
+import com.teenyfin.teenymoney.domain.categoryPolicy.dto.response.CategoryPolicyGroupResponseDTO;
 import com.teenyfin.teenymoney.domain.categoryPolicy.dto.response.CategoryPolicyResponseDTO;
 import com.teenyfin.teenymoney.domain.categoryPolicy.mapper.CategoryPolicyMapper;
 import com.teenyfin.teenymoney.domain.categoryPolicy.vo.CategoryPolicyVO;
@@ -94,5 +95,25 @@ class CategoryPolicyServiceTest {
 
         verify(categoryPolicyMapper, never()).selectByParentId(any());
         verify(categoryPolicyMapper, never()).selectByChildId(any());
+    }
+
+    @Test
+    void 정책_단계별로_그룹핑되고_순서는_ALLOW_WATCH_BLOCK_순이다() {
+        // given
+        Long memberId = 1L;
+        String role = "PARENT";
+
+        given(categoryPolicyMapper.selectByParentId(1L)).willReturn(List.of(
+                CategoryPolicyVO.builder().id(1L).merchantCategoryName("편의점").policy("ALLOW").build(),
+                CategoryPolicyVO.builder().id(3L).merchantCategoryName("PC방").policy("WATCH").build(),
+                CategoryPolicyVO.builder().id(5L).merchantCategoryName("유흥주점").policy("BLOCK").build()
+        ));
+
+        // when
+        List<CategoryPolicyGroupResponseDTO> result = categoryPolicyService.getCategoryPolicyGroup(1L, "PARENT");
+
+        // then
+        assertThat(result).extracting(CategoryPolicyGroupResponseDTO::getPolicy)
+                .containsExactly("ALLOW", "WATCH", "BLOCK");
     }
 }
