@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC
+        "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.teenyfin.teenymoney.domain.teenyscore.mapper.TeenyScoreMapper">
+
+    <resultMap id="teenyScoreResultMap"
+               type="com.teenyfin.teenymoney.domain.teenyscore.vo.TeenyScoreVO">
+        <id property="childId" column="child_id"/>
+        <result property="teenyScore" column="teeny_score"/>
+        <result property="gradeId" column="grade_id"/>
+        <result property="gradeName" column="grade_name"/>
+        <result property="minScore" column="min_score"/>
+        <result property="maxScore" column="max_score"/>
+        <result property="bonusRate" column="bonus_rate"/>
+        <result property="color" column="color"/>
+    </resultMap>
+
+    <resultMap id="teenyScoreHistoryResultMap"
+               type="com.teenyfin.teenymoney.domain.teenyscore.vo.TeenyScoreHistoryVO">
+        <id property="historyId" column="id"/>
+        <result property="amount" column="amount"/>
+        <result property="scoreAfter" column="score_after"/>
+        <result property="description" column="description"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <resultMap id="teenyScoreGradeResultMap"
+               type="com.teenyfin.teenymoney.domain.teenyscore.vo.TeenyScoreGradeVO">
+        <id property="gradeId" column="grade_id"/>
+        <result property="gradeName" column="grade_name"/>
+        <result property="minScore" column="min_score"/>
+        <result property="maxScore" column="max_score"/>
+        <result property="bonusRate" column="bonus_rate"/>
+        <result property="color" column="color"/>
+    </resultMap>
+
+    <select id="selectTeenyScoreByChildId"
+            resultMap="teenyScoreResultMap">
+        SELECT
+            member.id AS child_id,
+            member.teeny_score,
+            grade.grade_id,
+            grade.grade_name,
+            grade.min_score,
+            grade.max_score,
+            grade.bonus_rate,
+            grade.color
+        FROM T_MBR_INFO_M member
+        INNER JOIN T_TNY_GRADE_A grade
+            ON member.teeny_score BETWEEN grade.min_score AND grade.max_score
+        WHERE member.id = #{childId}
+          AND member.role = 'CHILD'
+          AND member.status = 'ACTIVE'
+    </select>
+
+    <select id="selectHistoriesByChildId"
+            resultMap="teenyScoreHistoryResultMap">
+        SELECT
+            id,
+            amount,
+            score_after,
+            description,
+            created_at
+        FROM T_TNY_SCOREHIST_H
+        WHERE child_id = #{childId}
+        ORDER BY created_at DESC, id DESC
+    </select>
+
+    <select id="selectAllGrades"
+            resultMap="teenyScoreGradeResultMap">
+        SELECT
+            grade_id,
+            grade_name,
+            min_score,
+            max_score,
+            bonus_rate,
+            color
+        FROM T_TNY_GRADE_A
+        ORDER BY min_score DESC
+    </select>
+
+</mapper>
