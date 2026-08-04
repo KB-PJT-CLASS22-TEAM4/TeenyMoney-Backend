@@ -2,8 +2,10 @@ package com.teenyfin.teenymoney.domain.categoryPolicy.service;
 
 import com.teenyfin.teenymoney.domain.categoryPolicy.dto.request.CategoryPolicyUpdateRequestDTO;
 import com.teenyfin.teenymoney.domain.categoryPolicy.dto.response.CategoryPolicyResponseDTO;
+import com.teenyfin.teenymoney.domain.categoryPolicy.exception.CategoryPolicyErrorCode;
 import com.teenyfin.teenymoney.domain.categoryPolicy.mapper.CategoryPolicyMapper;
 import com.teenyfin.teenymoney.domain.categoryPolicy.vo.CategoryPolicyVO;
+import com.teenyfin.teenymoney.global.exception.BusinessException;
 import com.teenyfin.teenymoney.global.security.MemberPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -24,8 +26,7 @@ public class CategoryPolicyService {
         List<CategoryPolicyVO> categoryPolicyVOList = switch (role) {
             case "PARENT" -> categoryPolicyMapper.selectByParentId(memberId);
             case "CHILD" -> categoryPolicyMapper.selectByChildId(memberId);
-            // exception throw 커스텀하기
-            default -> throw new IllegalStateException();
+            default -> throw new BusinessException(CategoryPolicyErrorCode.INVALID_ROLE); // 추후 MemberErrorCode 추가 시 변경
         };
 
         return categoryPolicyVOList.stream()
@@ -37,19 +38,20 @@ public class CategoryPolicyService {
                 .toList();
     }
 
-    // 전체 카테고리 정책 수정
+    // 전체 카테고리 정책 일괄 수정
     @Transactional
     public List<CategoryPolicyResponseDTO> updateCategoryPolicy(Long memberId, String role, List<CategoryPolicyUpdateRequestDTO> categoryPolicyList) {
+
+        // 자녀는 수정 권한 없음
         if (role.equals("CHILD")) {
-            // 수정 권한 없음
-            throw new IllegalStateException("자녀는 정책 수정에 대한 권한이 없습니다.");
+            throw new BusinessException(CategoryPolicyErrorCode.CHILD_CAN_NOT_UPDATE_CATEGORY_POLICY);
         }
 
         int affected = categoryPolicyMapper.updateAllPolicies(memberId, categoryPolicyList);
 
-        // 예외 던진 후 전체 롤백
+        // 일부 실패 시 전체 롤백
         if (affected != categoryPolicyList.size()) {
-            throw new IllegalStateException("일부 정책이 본인 소유가 아니거나 존재하지 않습니다.");
+            throw new BusinessException(CategoryPolicyErrorCode.INVALID_CATEGORY_POLICY_ID);
         }
 
         List<CategoryPolicyVO> categoryPolicyVOList = categoryPolicyMapper.selectByParentId(memberId);

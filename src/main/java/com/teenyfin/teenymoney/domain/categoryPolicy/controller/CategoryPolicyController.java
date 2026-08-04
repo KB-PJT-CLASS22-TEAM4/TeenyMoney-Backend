@@ -19,12 +19,15 @@ public class CategoryPolicyController {
     private final CategoryPolicyService categoryPolicyService;
 
     @GetMapping
-    public ApiResponse<List<CategoryPolicyResponseDTO>> getCategoryPolicy(@AuthenticationPrincipal MemberPrincipal memberPrincipal) {
+    public ApiResponse<List<CategoryPolicyResponseDTO>> getCategoryPolicy(
+            @AuthenticationPrincipal MemberPrincipal memberPrincipal) {
         return ApiResponse.ok(categoryPolicyService.getCategoryPolicy(memberPrincipal.memberId(), memberPrincipal.role()));
     }
 
     @PatchMapping
-    public ApiResponse<List<CategoryPolicyResponseDTO>> modifyCategoryPolicy(@AuthenticationPrincipal MemberPrincipal memberPrincipal, @RequestBody List<CategoryPolicyUpdateRequestDTO> categoryPolicyUpdateRequestDTOList) {
+    public ApiResponse<List<CategoryPolicyResponseDTO>> modifyCategoryPolicy(
+            @AuthenticationPrincipal MemberPrincipal memberPrincipal,
+            @RequestBody List<CategoryPolicyUpdateRequestDTO> categoryPolicyUpdateRequestDTOList) {
         return ApiResponse.ok(categoryPolicyService.updateCategoryPolicy(memberPrincipal.memberId(), memberPrincipal.role(), categoryPolicyUpdateRequestDTOList));
     }
 }
