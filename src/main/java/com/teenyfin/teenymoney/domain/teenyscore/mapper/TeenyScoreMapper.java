@@ -2,6 +2,7 @@ package com.teenyfin.teenymoney.domain.teenyscore.mapper;
 
 import com.teenyfin.teenymoney.domain.teenyscore.vo.TeenyScoreGradeVO;
 import com.teenyfin.teenymoney.domain.teenyscore.vo.TeenyScoreHistoryVO;
+import com.teenyfin.teenymoney.domain.teenyscore.vo.TeenyScoreMonthlyHistoryVO;
 import com.teenyfin.teenymoney.domain.teenyscore.vo.TeenyScoreVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -16,5 +17,12 @@ public interface TeenyScoreMapper {
     List<TeenyScoreHistoryVO> selectHistoriesByChildId(
             @Param("childId") Long childId);
 
+    List<TeenyScoreMonthlyHistoryVO> selectMonthlyHistoriesByChildId(
+            @Param("childId") Long childId);
+
     List<TeenyScoreGradeVO> selectAllGrades();
+
+    boolean existsActiveConnection(
+            @Param("parentId") Long parentId,
+            @Param("childId") Long childId);
 }

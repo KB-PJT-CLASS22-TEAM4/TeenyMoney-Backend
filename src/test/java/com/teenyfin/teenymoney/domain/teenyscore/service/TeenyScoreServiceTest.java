@@ -2,13 +2,17 @@ package com.teenyfin.teenymoney.domain.teenyscore.service;
 
 import com.teenyfin.teenymoney.domain.teenyscore.dto.response.TeenyScoreGradeResponseDTO;
 import com.teenyfin.teenymoney.domain.teenyscore.dto.response.TeenyScoreHistoryResponseDTO;
+import com.teenyfin.teenymoney.domain.teenyscore.dto.response.TeenyScoreMonthlyHistoryResponseDTO;
 import com.teenyfin.teenymoney.domain.teenyscore.dto.response.TeenyScoreResponseDTO;
 import com.teenyfin.teenymoney.domain.teenyscore.exception.TeenyScoreErrorCode;
 import com.teenyfin.teenymoney.domain.teenyscore.mapper.TeenyScoreMapper;
 import com.teenyfin.teenymoney.domain.teenyscore.vo.TeenyScoreGradeVO;
 import com.teenyfin.teenymoney.domain.teenyscore.vo.TeenyScoreHistoryVO;
+import com.teenyfin.teenymoney.domain.teenyscore.vo.TeenyScoreMonthlyHistoryVO;
 import com.teenyfin.teenymoney.domain.teenyscore.vo.TeenyScoreVO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
+import com.teenyfin.teenymoney.global.exception.CommonErrorCode;
+import com.teenyfin.teenymoney.global.security.MemberPrincipal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -26,6 +30,11 @@ import static org.mockito.Mockito.when;
 
 class TeenyScoreServiceTest {
 
+    private static final MemberPrincipal CHILD =
+            new MemberPrincipal(2L, "CHILD");
+    private static final MemberPrincipal PARENT =
+            new MemberPrincipal(1L, "PARENT");
+
     private TeenyScoreMapper teenyScoreMapper;
     private TeenyScoreService teenyScoreService;
 
@@ -41,7 +50,7 @@ class TeenyScoreServiceTest {
                 .thenReturn(teenyScore());
 
         TeenyScoreResponseDTO response =
-                teenyScoreService.getTeenyScore(2L);
+                teenyScoreService.getTeenyScore(CHILD, 2L);
 
         assertEquals(2L, response.getChildId());
         assertEquals(610, response.getTeenyScore());
@@ -60,7 +69,8 @@ class TeenyScoreServiceTest {
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> teenyScoreService.getTeenyScore(999L));
+                () -> teenyScoreService.getTeenyScore(
+                        new MemberPrincipal(999L, "CHILD"), 999L));
 
         assertEquals(
                 TeenyScoreErrorCode.TEENY_SCORE_CHILD_NOT_FOUND,
@@ -68,7 +78,7 @@ class TeenyScoreServiceTest {
     }
 
     @Test
-    void getHistoriesReturnsConvertedHistoryList() {
+    void getMyHistoriesReturnsConvertedHistoryList() {
         LocalDateTime createdAt = LocalDateTime.of(2026, 6, 25, 9, 0);
         when(teenyScoreMapper.selectTeenyScoreByChildId(2L))
                 .thenReturn(teenyScore());
@@ -76,7 +86,7 @@ class TeenyScoreServiceTest {
                 .thenReturn(List.of(history(createdAt)));
 
         List<TeenyScoreHistoryResponseDTO> histories =
-                teenyScoreService.getHistories(2L);
+                teenyScoreService.getMyHistories(CHILD);
 
         assertEquals(1, histories.size());
         assertEquals(1L, histories.get(0).getHistoryId());
@@ -87,26 +97,27 @@ class TeenyScoreServiceTest {
     }
 
     @Test
-    void getHistoriesWithNoHistoryReturnsEmptyList() {
+    void getMyHistoriesWithNoHistoryReturnsEmptyList() {
         when(teenyScoreMapper.selectTeenyScoreByChildId(2L))
                 .thenReturn(teenyScore());
         when(teenyScoreMapper.selectHistoriesByChildId(2L))
                 .thenReturn(List.of());
 
         List<TeenyScoreHistoryResponseDTO> histories =
-                teenyScoreService.getHistories(2L);
+                teenyScoreService.getMyHistories(CHILD);
 
         assertTrue(histories.isEmpty());
     }
 
     @Test
-    void getHistoriesWithMissingChildDoesNotQueryHistories() {
+    void getMyHistoriesWithMissingChildDoesNotQueryHistories() {
         when(teenyScoreMapper.selectTeenyScoreByChildId(999L))
                 .thenReturn(null);
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
-                () -> teenyScoreService.getHistories(999L));
+                () -> teenyScoreService.getMyHistories(
+                        new MemberPrincipal(999L, "CHILD")));
 
         assertEquals(
                 TeenyScoreErrorCode.TEENY_SCORE_CHILD_NOT_FOUND,
@@ -141,6 +152,86 @@ class TeenyScoreServiceTest {
                 exception.getErrorCode());
     }
 
+    @Test
+    void childCannotReadAnotherChildScore() {
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> teenyScoreService.getTeenyScore(CHILD, 3L));
+
+        assertEquals(CommonErrorCode.AUTH_FORBIDDEN, exception.getErrorCode());
+        verify(teenyScoreMapper, never()).selectTeenyScoreByChildId(3L);
+    }
+
+    @Test
+    void connectedParentCanReadChildScore() {
+        when(teenyScoreMapper.existsActiveConnection(1L, 2L))
+                .thenReturn(true);
+        when(teenyScoreMapper.selectTeenyScoreByChildId(2L))
+                .thenReturn(teenyScore());
+
+        TeenyScoreResponseDTO response =
+                teenyScoreService.getTeenyScore(PARENT, 2L);
+
+        assertEquals(2L, response.getChildId());
+        verify(teenyScoreMapper).existsActiveConnection(1L, 2L);
+    }
+
+    @Test
+    void unconnectedParentCannotReadMonthlyHistory() {
+        when(teenyScoreMapper.existsActiveConnection(1L, 3L))
+                .thenReturn(false);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> teenyScoreService.getMonthlyHistories(PARENT, 3L));
+
+        assertEquals(CommonErrorCode.AUTH_FORBIDDEN, exception.getErrorCode());
+        verify(teenyScoreMapper, never())
+                .selectMonthlyHistoriesByChildId(3L);
+    }
+
+    @Test
+    void parentCannotReadDetailedHistory() {
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> teenyScoreService.getMyHistories(PARENT));
+
+        assertEquals(CommonErrorCode.AUTH_FORBIDDEN, exception.getErrorCode());
+        verify(teenyScoreMapper, never()).selectHistoriesByChildId(1L);
+    }
+
+    @Test
+    void childCanReadOwnMonthlyHistory() {
+        when(teenyScoreMapper.selectTeenyScoreByChildId(2L))
+                .thenReturn(teenyScore());
+        when(teenyScoreMapper.selectMonthlyHistoriesByChildId(2L))
+                .thenReturn(List.of(monthlyHistory("2026-06", 610)));
+
+        List<TeenyScoreMonthlyHistoryResponseDTO> histories =
+                teenyScoreService.getMonthlyHistories(CHILD, 2L);
+
+        assertEquals(1, histories.size());
+        assertEquals("2026-06", histories.get(0).getYearMonth());
+        assertEquals(610, histories.get(0).getTeenyScore());
+    }
+
+    @Test
+    void connectedParentCanReadMonthlyHistory() {
+        when(teenyScoreMapper.existsActiveConnection(1L, 2L))
+                .thenReturn(true);
+        when(teenyScoreMapper.selectTeenyScoreByChildId(2L))
+                .thenReturn(teenyScore());
+        when(teenyScoreMapper.selectMonthlyHistoriesByChildId(2L))
+                .thenReturn(List.of(monthlyHistory("2026-06", 610)));
+
+        List<TeenyScoreMonthlyHistoryResponseDTO> histories =
+                teenyScoreService.getMonthlyHistories(PARENT, 2L);
+
+        assertEquals(1, histories.size());
+        assertEquals("2026-06", histories.get(0).getYearMonth());
+        assertEquals(610, histories.get(0).getTeenyScore());
+    }
+
     private TeenyScoreVO teenyScore() {
         TeenyScoreVO teenyScore = new TeenyScoreVO();
         teenyScore.setChildId(2L);
@@ -161,6 +252,16 @@ class TeenyScoreServiceTest {
         history.setScoreAfter(610);
         history.setDescription("적금납입성공");
         history.setCreatedAt(createdAt);
+        return history;
+    }
+
+    private TeenyScoreMonthlyHistoryVO monthlyHistory(
+            String yearMonth,
+            Integer teenyScore) {
+        TeenyScoreMonthlyHistoryVO history =
+                new TeenyScoreMonthlyHistoryVO();
+        history.setYearMonth(yearMonth);
+        history.setTeenyScore(teenyScore);
         return history;
     }
 

@@ -36,6 +36,12 @@
         <result property="color" column="color"/>
     </resultMap>
 
+    <resultMap id="teenyScoreMonthlyHistoryResultMap"
+               type="com.teenyfin.teenymoney.domain.teenyscore.vo.TeenyScoreMonthlyHistoryVO">
+        <id property="yearMonth" column="score_month"/>
+        <result property="teenyScore" column="teeny_score"/>
+    </resultMap>
+
     <select id="selectTeenyScoreByChildId"
             resultMap="teenyScoreResultMap">
         SELECT
@@ -68,6 +74,27 @@
         ORDER BY created_at DESC, id DESC
     </select>
 
+    <select id="selectMonthlyHistoriesByChildId"
+            resultMap="teenyScoreMonthlyHistoryResultMap">
+        WITH monthly_ranked AS (
+            SELECT
+                DATE_FORMAT(created_at, '%Y-%m') AS score_month,
+                score_after,
+                ROW_NUMBER() OVER (
+                    PARTITION BY DATE_FORMAT(created_at, '%Y-%m')
+                    ORDER BY created_at DESC, id DESC
+                ) AS rn
+            FROM T_TNY_SCOREHIST_H
+            WHERE child_id = #{childId}
+        )
+        SELECT
+            score_month,
+            score_after AS teeny_score
+        FROM monthly_ranked
+        WHERE rn = 1
+        ORDER BY score_month ASC
+    </select>
+
     <select id="selectAllGrades"
             resultMap="teenyScoreGradeResultMap">
         SELECT
@@ -79,6 +106,16 @@
             color
         FROM T_TNY_GRADE_A
         ORDER BY min_score DESC
+    </select>
+
+    <select id="existsActiveConnection" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1
+            FROM T_MBR_CONN_R
+            WHERE parent_id = #{parentId}
+              AND child_id = #{childId}
+              AND status = 'ACTIVE'
+        )
     </select>
 
 </mapper>
