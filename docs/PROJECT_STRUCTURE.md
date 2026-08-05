@@ -55,8 +55,6 @@ teenymoney-backend/
     │       ├── mybatis-config.xml
     │       ├── log4j2.xml
     │       ├── log4jdbc.log4j2.properties
-    │       ├── swagger-ui/
-    │       │   └── swagger-initializer.js
     │       └── com/teenyfin/teenymoney/
     │           ├── mapper/MapperTemplate.xml
     │           └── global/health/mapper/HealthMapper.xml

@@ -55,7 +55,6 @@ jobs:
           check_file gradle/wrapper/gradle-wrapper.jar
           check_file gradle/wrapper/gradle-wrapper.properties
           check_file src/main/resources/application.properties
-          check_file src/main/resources/swagger-ui/swagger-initializer.js
           check_file sql/README.md
           check_file .github/pull_request_template.md
           check_directory .github/ISSUE_TEMPLATE

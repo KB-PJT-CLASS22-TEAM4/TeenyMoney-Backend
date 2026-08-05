@@ -152,7 +152,6 @@ Nginx는 프론트엔드 정적 파일을 제공하고 백엔드 요청을 Tomca
 │   │   └── resources/
 │   │       ├── application.properties
 │   │       ├── mybatis-config.xml
-│   │       ├── swagger-ui/swagger-initializer.js
 │   │       └── com/teenyfin/teenymoney/
 │   └── test/java/com/teenyfin/teenymoney/
 ├── build.gradle
@@ -391,7 +390,7 @@ sql/
 
 CI는 다음 항목을 검사합니다.
 
-- 필수 Gradle, Swagger 초기화, GitHub 템플릿 파일
+- 필수 Gradle, GitHub 템플릿 파일
 - SQL 변경 관리 문서
 - `.idea`, 실제 `.env`, 로컬 설정, 키 및 인증서 파일 커밋 여부
 - DB 접속 정보의 환경변수 사용 여부
