@@ -1,6 +1,7 @@
 package com.teenyfin.teenymoney.domain.member.mapper;
 
 import com.teenyfin.teenymoney.config.RootConfig;
+import com.teenyfin.teenymoney.domain.member.vo.MemberChildVO;
 import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -14,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import javax.sql.DataSource;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -171,4 +173,82 @@ class MemberMapperTest {
         assertEquals(expected.getEmail(), actual.getEmail());
         assertEquals(expected.getPassword(), actual.getPassword());
     }
+
+    // --- selectChildrenByParentId -----------------------------------------------
+
+    @Test
+    void selectChildrenByParentIdJoinsMemberWalletAndDefaultsMissingWalletToZero() {
+        MemberVO parent = newMember("PARENT");
+        memberMapper.insert(parent);
+
+        MemberVO withWallet = newMember("CHILD");
+        memberMapper.insert(withWallet);
+        MemberVO withoutWallet = newMember("CHILD");
+        memberMapper.insert(withoutWallet);
+
+        link(parent.getId(), withWallet.getId(), "ACTIVE");
+        link(parent.getId(), withoutWallet.getId(), "ACTIVE");
+        wallet(withWallet.getId(), 96500L, "MEMBER");
+        // 예금 지갑은 잔액에 섞이면 안 된다. w.type = 'MEMBER' 조건이 없으면 행이 두 개로 늘어난다.
+        wallet(withWallet.getId(), 50000L, "DEPOSIT");
+
+        List<MemberChildVO> children =
+                memberMapper.selectChildrenByParentId(parent.getId());
+
+        assertEquals(2, children.size());
+
+        MemberChildVO funded = byId(children, withWallet.getId());
+        assertEquals(96500L, funded.getBalance());
+        assertEquals(600, funded.getTeenyScore());   // CHILD는 DB 기본값 600
+        assertEquals(withWallet.getEmail(), funded.getEmail());
+
+        // 지갑이 아직 없는 자녀도 목록에 남아야 한다. INNER JOIN이면 여기서 통째로 사라진다.
+        assertEquals(0L, byId(children, withoutWallet.getId()).getBalance());
+    }
+
+    @Test
+    void selectChildrenByParentIdExcludesInactiveLinksInactiveMembersAndOtherParentsChildren() {
+        MemberVO parent = newMember("PARENT");
+        memberMapper.insert(parent);
+        MemberVO otherParent = newMember("PARENT");
+        memberMapper.insert(otherParent);
+
+        MemberVO unlinked = newMember("CHILD");
+        memberMapper.insert(unlinked);
+        MemberVO inactiveChild = newMember("CHILD");
+        memberMapper.insert(inactiveChild);
+        MemberVO othersChild = newMember("CHILD");
+        memberMapper.insert(othersChild);
+
+        link(parent.getId(), unlinked.getId(), "INACTIVE");
+        link(parent.getId(), inactiveChild.getId(), "ACTIVE");
+        jdbcTemplate.update(
+                "UPDATE T_MBR_INFO_M SET status = 'INACTIVE' WHERE id = ?",
+                inactiveChild.getId());
+        link(otherParent.getId(), othersChild.getId(), "ACTIVE");
+
+        assertTrue(memberMapper.selectChildrenByParentId(parent.getId()).isEmpty());
+        assertEquals(1, memberMapper.selectChildrenByParentId(otherParent.getId()).size());
+    }
+
+    private void link(Long parentId, Long childId, String status) {
+        jdbcTemplate.update(
+                "INSERT INTO T_MBR_CONN_R (parent_id, child_id, status) VALUES (?, ?, ?)",
+                parentId, childId, status);
+    }
+
+    private void wallet(Long memberId, long balance, String type) {
+        jdbcTemplate.update(
+                "INSERT INTO T_WLT_BASE_M (member_id, balance, type) VALUES (?, ?, ?)",
+                memberId, balance, type);
+    }
+
+    /** childId로 찾는다. c.id AS child_id 별칭이 빠지면 여기서 바로 걸린다. */
+    private MemberChildVO byId(List<MemberChildVO> children, Long childId) {
+        return children.stream()
+                .filter(child -> childId.equals(child.getChildId()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("자녀 " + childId + "가 목록에 없다"));
+    }
+
 }

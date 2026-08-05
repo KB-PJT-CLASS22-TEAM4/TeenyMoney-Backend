@@ -1,12 +1,16 @@
 package com.teenyfin.teenymoney.domain.member.service;
 
 import com.teenyfin.teenymoney.domain.auth.exception.AuthErrorCode;
+import com.teenyfin.teenymoney.domain.member.dto.response.MemberChildResponseDTO;
 import com.teenyfin.teenymoney.domain.member.dto.response.MemberMeResponseDTO;
 import com.teenyfin.teenymoney.domain.member.dto.response.MemberProfileImageResponseDTO;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
+import com.teenyfin.teenymoney.domain.member.vo.MemberChildVO;
 import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
+import com.teenyfin.teenymoney.global.exception.CommonErrorCode;
 import com.teenyfin.teenymoney.global.exception.ErrorCode;
+import com.teenyfin.teenymoney.global.security.MemberPrincipal;
 import com.teenyfin.teenymoney.global.storage.ImageFile;
 import com.teenyfin.teenymoney.global.storage.S3Storage;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
@@ -19,6 +23,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
@@ -233,5 +238,74 @@ class MemberServiceTest {
                 () -> memberService.updateProfileImage(17L, disguised));
 
         verifyNoInteractions(s3Storage);
+    }
+
+    // --- getChildren ------------------------------------------------------------
+
+    private MemberChildVO childVO(long id, String name, String key, long balance) {
+        MemberChildVO child = new MemberChildVO();
+        child.setChildId(id);
+        child.setName(name);
+        child.setEmail(name + "@example.com");
+        child.setProfileImageKey(key);
+        child.setTeenyScore(610);
+        child.setBalance(balance);
+        return child;
+    }
+
+    @Test
+    @DisplayName("부모가 조회 -> 자녀마다 key가 아니라 서명된 URL이 담긴다")
+    void getChildrenSignsEveryChildProfileKey() {
+        when(memberMapper.selectChildrenByParentId(17L)).thenReturn(List.of(
+                childVO(2L, "first", "profile/2/a.png", 96500L),
+                childVO(3L, "second", null, 1000L)));
+        when(s3Storage.presignedUrl("profile/2/a.png"))
+                .thenReturn("https://s3.example.com/signed-2");
+
+        List<MemberChildResponseDTO> children =
+                memberService.getChildren(new MemberPrincipal(17L, "PARENT"));
+
+        System.out.printf("    입력: 자녀 2명 (한 명은 프로필 key 없음)%n"
+                        + "    기대: key가 아니라 서명 URL, key 없으면 null%n"
+                        + "    실제: %s / %s%n%n",
+                children.get(0).getProfileImageUrl(), children.get(1).getProfileImageUrl());
+
+        assertThat(children).hasSize(2);
+        assertThat(children.get(0).getProfileImageUrl())
+                .isEqualTo("https://s3.example.com/signed-2");
+        // key가 그대로 새어나가면 브라우저가 403을 받는다.
+        assertThat(children.get(0).getProfileImageUrl()).isNotEqualTo("profile/2/a.png");
+        assertThat(children.get(0).getChildId()).isEqualTo(2L);
+        assertThat(children.get(0).getBalance()).isEqualTo(96500L);
+        assertThat(children.get(0).getTeenyScore()).isEqualTo(610);
+        // 지갑이 없는 자녀도 목록에 남고, 프로필이 없으면 URL만 null이다.
+        assertThat(children.get(1).getProfileImageUrl()).isNull();
+        assertThat(children.get(1).getBalance()).isEqualTo(1000L);
+    }
+
+    @Test
+    @DisplayName("자녀가 조회 -> 쿼리를 던지기 전에 AUTH_FORBIDDEN으로 거부")
+    void getChildrenRejectsChildRoleBeforeQuerying() {
+        expectRejected("role = CHILD인 토큰으로 자녀 목록 요청",
+                CommonErrorCode.AUTH_FORBIDDEN,
+                () -> memberService.getChildren(new MemberPrincipal(17L, "CHILD")));
+
+        // 역할 확인이 조회보다 먼저여야 한다. 순서가 뒤집히면 거부하기 전에 남의 자녀를 읽는다.
+        verifyNoInteractions(memberMapper);
+    }
+
+    @Test
+    @DisplayName("연동된 자녀가 없는 부모 -> 예외가 아니라 빈 리스트")
+    void getChildrenReturnsEmptyListWhenParentHasNoChildren() {
+        when(memberMapper.selectChildrenByParentId(17L)).thenReturn(List.of());
+
+        List<MemberChildResponseDTO> children =
+                memberService.getChildren(new MemberPrincipal(17L, "PARENT"));
+
+        System.out.printf("    입력: 연동된 자녀 0명 (가입 직후 부모)%n"
+                        + "    기대: 빈 리스트 (예외 아님)%n"
+                        + "    실제: size=%d%n%n", children.size());
+
+        assertThat(children).isEmpty();
     }
 }

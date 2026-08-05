@@ -1,10 +1,12 @@
 package com.teenyfin.teenymoney.domain.member.mapper;
 
+import com.teenyfin.teenymoney.domain.member.vo.MemberChildVO;
 import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Mapper
 public interface MemberMapper {
@@ -21,6 +23,9 @@ public interface MemberMapper {
 
     int updateProfileImageKey(@Param("id") Long id,
                               @Param("profileImageKey") String profileImageKey);
+
+    List<MemberChildVO> selectChildrenByParentId(@Param("parentId") Long parentId);
+
     Long selectEffectiveAgreementId(
             // [보호자 가입 흐름 9] 요청한 약관 코드·버전이 현재 유효한지 조회한다.
             @Param("code") String code,
