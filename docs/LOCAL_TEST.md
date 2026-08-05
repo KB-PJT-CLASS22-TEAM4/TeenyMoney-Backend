@@ -187,13 +187,13 @@ DB 실패 응답의 HTTP 상태는 503입니다. `/health`가 200이고 `/health
 브라우저:
 
 ```text
-http://localhost:8080/swagger-ui/index.html
+http://localhost:8080/swagger-ui.html
 ```
 
-OpenAPI 원본:
+springfox가 생성한 OpenAPI 문서:
 
 ```text
-http://localhost:8080/api-docs/teenymoney-api.yaml
+http://localhost:8080/v2/api-docs
 ```
 
 확인 항목:
@@ -202,11 +202,11 @@ http://localhost:8080/api-docs/teenymoney-api.yaml
 [ ] Swagger UI가 빈 화면이나 Petstore가 아닌 TeenyMoney API를 표시한다.
 [ ] Health API 두 개가 표시된다.
 [ ] Try it out에서 현재 서버의 API가 호출된다.
-[ ] /api-docs/teenymoney-api.yaml이 HTTP 200으로 열린다.
+[ ] /v2/api-docs가 HTTP 200으로 열린다.
 ```
 
-Swagger는 정적 YAML을 읽습니다. Controller와 DTO를 변경했다면 테스트 전에
-`src/main/resources/openapi/teenymoney-api.yaml`을 반드시 함께 수정합니다.
+Swagger 문서는 springfox가 코드에서 생성합니다. Controller와 DTO를 변경했다면
+`@ApiOperation`, `@ApiResponses`, `@ApiModelProperty`도 함께 수정합니다.
 
 ## 6. 배포 전 확인
 
@@ -215,7 +215,7 @@ Swagger는 정적 YAML을 읽습니다. Controller와 DTO를 변경했다면 테
 [ ] ROOT.war 생성
 [ ] /api/v1/health HTTP 200
 [ ] /api/v1/health/db HTTP 200 또는 의도한 503
-[ ] /swagger-ui/index.html HTTP 200
-[ ] /api-docs/teenymoney-api.yaml HTTP 200
-[ ] 실제 응답과 OpenAPI 스키마 및 예시 일치
+[ ] /swagger-ui.html HTTP 200
+[ ] /v2/api-docs HTTP 200
+[ ] 실제 응답과 Swagger 스키마 및 예시 일치
 ```

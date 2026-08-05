@@ -9,7 +9,7 @@
 - Java 17, Gradle, WAR, Tomcat 9, `javax.servlet`을 사용합니다.
 - JPA가 아닌 MyBatis와 직접 작성한 SQL을 사용합니다.
 - 공통 응답은 `ApiResponse<T>` 형식입니다.
-- API 명세는 코드에서 자동 생성하지 않고 OpenAPI YAML로 직접 관리합니다.
+- API 명세는 springfox가 Swagger 애노테이션에서 자동 생성합니다.
 
 ## 2. 현재 구조
 
@@ -55,10 +55,6 @@ teenymoney-backend/
     │       ├── mybatis-config.xml
     │       ├── log4j2.xml
     │       ├── log4jdbc.log4j2.properties
-    │       ├── openapi/
-    │       │   └── teenymoney-api.yaml
-    │       ├── swagger-ui/
-    │       │   └── swagger-initializer.js
     │       └── com/teenyfin/teenymoney/
     │           ├── mapper/MapperTemplate.xml
     │           └── global/health/mapper/HealthMapper.xml
@@ -163,13 +159,14 @@ sql/
 EC2에는 Pull Request 검토가 끝난 SQL만 반영합니다. 이미 적용한 migration
 파일은 수정하지 않고 새 파일을 추가하며, 상세 규칙은 `sql/README.md`를 따릅니다.
 
-## 5. API 구현 시 OpenAPI 갱신은 필수
+## 5. API 구현 시 Swagger 애노테이션 갱신은 필수
 
 > Controller에 외부 API를 추가하거나 API 계약을 변경했다면
-> `src/main/resources/openapi/teenymoney-api.yaml`도 같은 작업에서 반드시 수정합니다.
-> YAML이 갱신되지 않은 API는 구현이 완료된 것으로 보지 않습니다.
+> Controller의 `@Api`, `@ApiOperation`, `@ApiResponses`와
+> DTO의 `@ApiModel`, `@ApiModelProperty`도 같은 작업에서 반드시 수정합니다.
+> 애노테이션이 갱신되지 않은 API는 구현이 완료된 것으로 보지 않습니다.
 
-다음 변경은 모두 OpenAPI 갱신 대상입니다.
+다음 변경은 모두 Swagger 애노테이션 갱신 대상입니다.
 
 - API 경로 또는 HTTP 메서드 추가·변경·삭제
 - Path, Query, Header 파라미터 변경
@@ -187,23 +184,25 @@ EC2에는 Pull Request 검토가 끝난 SQL만 반영합니다. 이미 적용한
 [ ] Service 구현
 [ ] 필요한 경우 Mapper, VO, Mapper XML 구현
 [ ] 검증 또는 테스트 완료
-[ ] teenymoney-api.yaml의 tags, paths, schemas, examples 갱신
+[ ] Controller에 @Api, @ApiOperation, @ApiResponses 부여
+[ ] Request/Response DTO에 @ApiModel, @ApiModelProperty 부여
 [ ] Swagger UI에서 명세 확인
 [ ] Postman 또는 실제 클라이언트로 호출 확인
 ```
 
-현재 명세는 수동 YAML 방식입니다. Java Controller나 DTO를 바꿔도 Swagger 문서는
-자동으로 바뀌지 않습니다. 코드와 YAML은 같은 브랜치와 커밋 또는 PR에서 관리합니다.
+현재 명세는 springfox 자동 생성 방식입니다. `SwaggerConfig`의 Docket이 모든
+`@RestController`를 스캔하므로, 애노테이션만 붙이면 문서가 코드와 함께 갱신됩니다.
+별도로 관리하는 명세 파일은 없습니다.
 
 Swagger 관련 경로는 다음과 같습니다.
 
 ```text
-Swagger UI  : /swagger-ui/index.html
-OpenAPI YAML: /api-docs/teenymoney-api.yaml
+Swagger UI  : /swagger-ui.html
+OpenAPI JSON: /v2/api-docs
 ```
 
-Swagger UI의 `index.html`, CSS, JavaScript는 WebJar가 제공합니다. 저장소에는 커스텀
-초기화 파일과 OpenAPI YAML만 둡니다.
+Swagger UI의 `swagger-ui.html`, CSS, JavaScript는 모두 springfox WebJar가 제공합니다.
+저장소에 별도로 둘 정적 파일은 없습니다.
 
 ## 6. Spring 컨텍스트
 
@@ -261,5 +260,5 @@ REDIS_PORT
 
 ## 9. 배포 확인 사항
 
-- Swagger UI와 OpenAPI 외부 접근을 위해 Nginx에서 `/swagger-ui/`와 `/api-docs/`를
-  Tomcat으로 전달해야 합니다.
+- Swagger UI와 OpenAPI 외부 접근을 위해 Nginx에서 `/swagger-ui.html`, `/webjars/`,
+  `/swagger-resources/`, `/v2/api-docs`를 Tomcat으로 전달해야 합니다.

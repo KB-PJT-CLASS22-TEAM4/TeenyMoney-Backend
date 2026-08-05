@@ -319,7 +319,7 @@ CREATE TABLE `T_MBR_INFO_M` (
 	`payment_password`	VARCHAR(255)	NULL	COMMENT '결제 비밀번호 (자녀만 사용)',
 	`payment_password_failed_count`	TINYINT	NOT NULL	DEFAULT 0	COMMENT '결제 비밀번호 연속 실패 횟수 (5회시 잠금)',
 	`payment_locked_until`	DATETIME	NULL	COMMENT '결제 잠금 해제 예정 일시',
-	`profile_image_key`	VARCHAR(1024)	NULL	COMMENT '프로필 이미지 S3 오브젝트 key (조회 시 presigned URL로 변환)',
+	`profile_image_url`	VARCHAR(1024)	NULL	COMMENT '프로필 이미지 URL',
 	`teeny_score`	SMALLINT	NULL	DEFAULT 600	COMMENT '티니점수 0~1000 (CHECK), 초기 600 (자녀만 사용)',
 	`customer_key`	VARCHAR(100)	NULL	COMMENT '토스 빌링용 구매자 UUID (부모만 사용)',
 	`fcm_token`	VARCHAR(255)	NULL	COMMENT 'FCM 푸시 토큰, 로그아웃시 NULL',
@@ -835,89 +835,3 @@ ALTER TABLE `T_SVG_PAYHIST_H` ADD CONSTRAINT `CK_SVG_PAYHIST_H_PAID_AMOUNT`
 	CHECK (`paid_amount` >= 0);
 ALTER TABLE `T_SVG_PAYHIST_H` ADD CONSTRAINT `CK_SVG_PAYHIST_H_STATUS`
 	CHECK (`status` IN ('PAID', 'MISSED', 'PARTIAL'));
-
--- [보호자 가입 흐름 9] 가입 요청 버전의 유효성을 확인할 약관 원본 테이블
-CREATE TABLE `T_MBR_AGRMT_M` (
-                                 `id` BIGINT NOT NULL COMMENT '약관 아이디',
-                                 `code` VARCHAR(50) NOT NULL COMMENT '약관 코드',
-                                 `version` VARCHAR(20) NOT NULL COMMENT '약관 버전',
-                                 `title` VARCHAR(100) NOT NULL COMMENT '약관 제목',
-                                 `content` TEXT NOT NULL COMMENT '약관 내용',
-                                 `is_required` BOOLEAN NOT NULL DEFAULT FALSE COMMENT '필수 동의 여부',
-                                 `effective_at` DATETIME NOT NULL COMMENT '적용 시작 일시',
-                                 `expired_at` DATETIME NULL COMMENT '적용 종료 일시',
-                                 `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '생성 일시',
-                                 `updated_at` DATETIME NULL COMMENT '수정 일시'
-);
-
--- [보호자 가입 흐름 14] 회원별 약관 동의 주체와 인증 근거 이력
-CREATE TABLE `T_MBR_AGRMT_H` (
-                                 `id` BIGINT NOT NULL COMMENT '회원 약관 동의 이력 아이디',
-                                 `member_id` BIGINT NOT NULL COMMENT '동의 대상 회원 아이디',
-                                 `agreement_id` BIGINT NOT NULL COMMENT '약관 아이디',
-                                 `status` VARCHAR(20) NOT NULL COMMENT '동의 상태: AGREED/WITHDRAWN',
-                                 `actor_type` VARCHAR(20) NOT NULL COMMENT '동의 수행자: SELF/LEGAL_GUARDIAN',
-                                 `actor_member_id` BIGINT NULL COMMENT '동의 수행 회원 아이디',
-                                 `verification_method` VARCHAR(20) NULL COMMENT '법정대리인 확인 방법: SMS/PASS 등',
-                                 `verification_reference` VARCHAR(100) NULL COMMENT '본인확인 요청 식별값',
-                                 `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '동의 또는 철회 일시'
-);
-
-ALTER TABLE `T_MBR_AGRMT_M`
-    MODIFY `id` BIGINT NOT NULL AUTO_INCREMENT,
-    ADD CONSTRAINT `PK_MBR_AGRMT_M` PRIMARY KEY (`id`),
-    ADD CONSTRAINT `UQ_MBR_AGRMT_M_CODE_VERSION`
-        UNIQUE (`code`, `version`);
-
-ALTER TABLE `T_MBR_AGRMT_H`
-    MODIFY `id` BIGINT NOT NULL AUTO_INCREMENT,
-    ADD CONSTRAINT `PK_MBR_AGRMT_H` PRIMARY KEY (`id`);
-
-ALTER TABLE `T_MBR_AGRMT_H`
-    ADD CONSTRAINT `FK_T_MBR_INFO_M_TO_T_MBR_AGRMT_H_1`
-        FOREIGN KEY (`member_id`)
-            REFERENCES `T_MBR_INFO_M` (`id`) ON DELETE RESTRICT;
-
-ALTER TABLE `T_MBR_AGRMT_H`
-    ADD CONSTRAINT `FK_T_MBR_AGRMT_M_TO_T_MBR_AGRMT_H_1`
-        FOREIGN KEY (`agreement_id`)
-            REFERENCES `T_MBR_AGRMT_M` (`id`) ON DELETE RESTRICT;
-
-ALTER TABLE `T_MBR_AGRMT_H`
-    ADD CONSTRAINT `FK_T_MBR_INFO_M_TO_T_MBR_AGRMT_H_2`
-        FOREIGN KEY (`actor_member_id`)
-            REFERENCES `T_MBR_INFO_M` (`id`) ON DELETE RESTRICT;
-
-CREATE INDEX `IX_MBR_AGRMT_H_N01`
-    ON `T_MBR_AGRMT_H` (`member_id`, `agreement_id`, `created_at`);
-
-ALTER TABLE `T_MBR_AGRMT_H`
-    ADD CONSTRAINT `CK_MBR_AGRMT_H_STATUS`
-        CHECK (`status` IN ('AGREED', 'WITHDRAWN'));
-
-ALTER TABLE `T_MBR_AGRMT_H`
-    ADD CONSTRAINT `CK_MBR_AGRMT_H_ACTOR_TYPE`
-        CHECK (`actor_type` IN ('SELF', 'LEGAL_GUARDIAN'));
-
--- [보호자 가입 흐름 13] 비회원 법정대리인 인증 정보를 자녀 회원과 연결
-CREATE TABLE `T_MBR_LEGAL_GUARDIAN_M` (
-    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '비회원 법정대리인 정보 아이디',
-    `child_member_id` BIGINT NOT NULL COMMENT '동의 대상 자녀 회원 아이디',
-    `name` VARCHAR(50) NOT NULL COMMENT '법정대리인 이름',
-    `phone_number` VARCHAR(20) NOT NULL COMMENT '인증한 휴대폰 번호',
-    `relationship` VARCHAR(30) NOT NULL COMMENT '관계: FATHER/MOTHER/OTHER_LEGAL_GUARDIAN',
-    `verification_method` VARCHAR(20) NOT NULL COMMENT '확인 방법: SMS_TEST/PASS 등',
-    `verification_reference` VARCHAR(100) NOT NULL COMMENT '인증 요청 식별값',
-    `verified_at` DATETIME NOT NULL COMMENT '인증 완료 일시',
-    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '생성 일시',
-    CONSTRAINT `PK_MBR_LEGAL_GUARDIAN_M` PRIMARY KEY (`id`),
-    CONSTRAINT `UQ_MBR_LEGAL_GUARDIAN_M_VERIFICATION_REFERENCE`
-        UNIQUE (`verification_reference`),
-    CONSTRAINT `FK_T_MBR_INFO_M_TO_T_MBR_LEGAL_GUARDIAN_M_1`
-        FOREIGN KEY (`child_member_id`) REFERENCES `T_MBR_INFO_M` (`id`) ON DELETE RESTRICT,
-    CONSTRAINT `CK_MBR_LEGAL_GUARDIAN_M_RELATIONSHIP`
-        CHECK (`relationship` IN ('FATHER', 'MOTHER', 'OTHER_LEGAL_GUARDIAN'))
-);
-
-CREATE INDEX `IX_MBR_LEGAL_GUARDIAN_M_N01`
-    ON `T_MBR_LEGAL_GUARDIAN_M` (`child_member_id`);
