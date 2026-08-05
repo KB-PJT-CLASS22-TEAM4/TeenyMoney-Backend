@@ -623,10 +623,17 @@ components:
         - verificationCode
         - email
         - password
+        - passwordConfirm
+        - serviceTermsAgreed
+        - privacyAgreed
+        - serviceTermsVersion
+        - privacyTermsVersion
       properties:
         name:
           type: string
-          maxLength: 50
+          minLength: 2
+          maxLength: 7
+          pattern: '^[가-힣]+$'
           example: 홍길동
         birthDate:
           type: string
@@ -650,10 +657,25 @@ components:
           type: string
           format: password
           minLength: 8
-          maxLength: 64
-          pattern: '^(?=.*[A-Za-z])(?=.*\d).+$'
-          example: password123
-
+          maxLength: 32
+          pattern: '^(?=.*[A-Za-z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>])\S+$'
+          example: Password1!
+        passwordConfirm:
+          type: string
+          format: password
+          example: Password1!
+        serviceTermsAgreed:
+          type: boolean
+          enum: [true]
+        privacyAgreed:
+          type: boolean
+          enum: [true]
+        serviceTermsVersion:
+          type: string
+          example: "1.0"
+        privacyTermsVersion:
+          type: string
+          example: "1.0"
     SignupResponse:
       type: object
       required: [memberId]

@@ -58,6 +58,8 @@ public class SecurityConfig {
             "/api/v1/auth/csrf",
             "/api/v1/auth/check-email", // 이메일 중복 확인 - 가입 전이라 토큰이 없다 (하위3)
             "/api/v1/auth/phone-verification/send",
+            "/api/v1/auth/legal-guardian-verification/send", // [보호자 가입 흐름 1] 가입 전 SMS 발송 API
+            "/api/v1/auth/legal-guardian-verification/confirm", // [보호자 가입 흐름 3] 가입 전 동의 토큰 발급 API
             "/api/v1/health",         // 헬스체크 — 모니터링이 토큰 없이 호출
             "/api/v1/health/**",
 

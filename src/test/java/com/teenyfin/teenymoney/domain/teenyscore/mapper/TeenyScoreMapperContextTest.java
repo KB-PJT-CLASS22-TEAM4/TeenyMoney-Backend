@@ -39,7 +39,9 @@ class TeenyScoreMapperContextTest {
         for (String statement : List.of(
                 "selectTeenyScoreByChildId",
                 "selectHistoriesByChildId",
-                "selectAllGrades")) {
+                "selectMonthlyHistoriesByChildId",
+                "selectAllGrades",
+                "existsActiveConnection")) {
             assertTrue(sqlSessionFactory.getConfiguration()
                     .hasStatement(NAMESPACE + "." + statement));
         }

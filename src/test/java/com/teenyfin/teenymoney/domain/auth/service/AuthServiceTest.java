@@ -7,6 +7,7 @@ import com.teenyfin.teenymoney.domain.auth.exception.AuthErrorCode;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
 import com.teenyfin.teenymoney.global.auth.RefreshTokenStore;
+import com.teenyfin.teenymoney.global.auth.LegalGuardianConsentStore;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import com.teenyfin.teenymoney.global.exception.CommonErrorCode;
 import com.teenyfin.teenymoney.global.security.jwt.JwtProvider;
@@ -24,12 +25,14 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
@@ -48,6 +51,7 @@ class AuthServiceTest {
     private PhoneVerificationService phoneVerificationService;
     private JwtProvider jwtProvider;
     private RefreshTokenStore refreshTokenStore;
+    private LegalGuardianConsentStore legalGuardianConsentStore;
     private AuthService authService;
 
     @BeforeEach
@@ -57,14 +61,22 @@ class AuthServiceTest {
         phoneVerificationService = mock(PhoneVerificationService.class);
         jwtProvider = mock(JwtProvider.class);
         refreshTokenStore = mock(RefreshTokenStore.class);
+        legalGuardianConsentStore = mock(LegalGuardianConsentStore.class);
         authService = new AuthService(
                 memberMapper,
                 passwordEncoder,
                 phoneVerificationService,
                 jwtProvider,
                 refreshTokenStore,
+                legalGuardianConsentStore,
                 CLOCK);
         when(passwordEncoder.encode("password123")).thenReturn("encoded-password");
+        when(memberMapper.selectEffectiveAgreementId(
+                eq("SERVICE_TERMS"), eq("1.0"), any(LocalDateTime.class)))
+                .thenReturn(101L);
+        when(memberMapper.selectEffectiveAgreementId(
+                eq("PRIVACY"), eq("1.0"), any(LocalDateTime.class)))
+                .thenReturn(102L);
     }
 
     @Test
@@ -96,6 +108,60 @@ class AuthServiceTest {
     }
 
     @Test
+    void signupRecordsServiceAndPrivacyAgreementHistory() {
+        doAnswer(invocation -> {
+            MemberVO member = invocation.getArgument(0);
+            member.setId(17L);
+            return 1;
+        }).when(memberMapper).insert(any(MemberVO.class));
+
+        authService.signup(request(LocalDate.of(2010, 1, 2)));
+
+        verify(memberMapper).insertAgreementHistory(
+                17L, 101L, "AGREED", "SELF", 17L, null, null);
+        verify(memberMapper).insertAgreementHistory(
+                17L, 102L, "AGREED", "SELF", 17L, null, null);
+    }
+
+    @Test
+    void underFourteenSignupRequiresLegalGuardianConsentToken() {
+        SignupRequestDTO request = request(LocalDate.of(2013, 3, 14));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class, () -> authService.signup(request));
+
+        assertEquals(AuthErrorCode.AUTH_LEGAL_GUARDIAN_CONSENT_REQUIRED, exception.getErrorCode());
+        verify(memberMapper, never()).insert(any(MemberVO.class));
+    }
+
+    @Test
+    void underFourteenSignupRecordsVerifiedLegalGuardianAndAgreementHistory() {
+        SignupRequestDTO request = request(LocalDate.of(2013, 3, 14));
+        request.setLegalGuardianConsentToken("legal-guardian-token");
+        LegalGuardianConsent consent = new LegalGuardianConsent(
+                "김보호", "01099998888", "MOTHER", "SMS_TEST",
+                "verification-17", LocalDateTime.of(2026, 8, 3, 12, 0),
+                "1.0", "1.0");
+        when(legalGuardianConsentStore.find("legal-guardian-token")).thenReturn(consent);
+        doAnswer(invocation -> {
+            MemberVO member = invocation.getArgument(0);
+            member.setId(17L);
+            return 1;
+        }).when(memberMapper).insert(any(MemberVO.class));
+
+        authService.signup(request);
+
+        verify(memberMapper).insertLegalGuardian(
+                17L, "김보호", "01099998888", "MOTHER", "SMS_TEST",
+                "verification-17", LocalDateTime.of(2026, 8, 3, 12, 0));
+        verify(memberMapper).insertAgreementHistory(
+                17L, 101L, "AGREED", "LEGAL_GUARDIAN", null, "SMS_TEST", "verification-17");
+        verify(memberMapper).insertAgreementHistory(
+                17L, 102L, "AGREED", "LEGAL_GUARDIAN", null, "SMS_TEST", "verification-17");
+        verify(legalGuardianConsentStore).delete("legal-guardian-token");
+    }
+
+    @Test
     void exactAgeSevenIsChild() {
         assertEquals("CHILD", signupAndCaptureRole(LocalDate.of(2019, 8, 3)));
     }
@@ -120,11 +186,11 @@ class AuthServiceTest {
     }
 
     @Test
-    void todayBirthDateIsInvalidInput() {
+    void todayBirthDateIsRejectedByMinimumAgePolicy() {
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> authService.signup(request(LocalDate.of(2026, 8, 3))));
 
-        assertEquals(CommonErrorCode.COMMON_INVALID_INPUT, exception.getErrorCode());
+        assertEquals(AuthErrorCode.AUTH_INCORRECT_AGE, exception.getErrorCode());
         verify(memberMapper, never()).insert(any(MemberVO.class));
     }
 
@@ -439,7 +505,15 @@ class AuthServiceTest {
             member.setId(17L);
             return 1;
         }).when(memberMapper).insert(any(MemberVO.class));
-        authService.signup(request(birthDate));
+        SignupRequestDTO request = request(birthDate);
+        if (birthDate.plusYears(14).isAfter(LocalDate.now(CLOCK))) {
+            request.setLegalGuardianConsentToken("legal-guardian-token");
+            when(legalGuardianConsentStore.find("legal-guardian-token")).thenReturn(new LegalGuardianConsent(
+                    "김보호", "01099998888", "MOTHER", "SMS_TEST",
+                    "verification-17", LocalDateTime.of(2026, 8, 3, 12, 0),
+                    "1.0", "1.0"));
+        }
+        authService.signup(request);
 
         ArgumentCaptor<MemberVO> captor = ArgumentCaptor.forClass(MemberVO.class);
         verify(memberMapper).insert(captor.capture());
@@ -454,6 +528,11 @@ class AuthServiceTest {
         request.setVerificationCode("123456");
         request.setEmail("user@example.com");
         request.setPassword("password123");
+        request.setPasswordConfirm("password123");
+        request.setServiceTermsAgreed(true);
+        request.setPrivacyAgreed(true);
+        request.setServiceTermsVersion("1.0");
+        request.setPrivacyTermsVersion("1.0");
         return request;
     }
 
