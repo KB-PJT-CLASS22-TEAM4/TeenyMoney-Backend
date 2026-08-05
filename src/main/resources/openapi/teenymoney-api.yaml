@@ -426,6 +426,69 @@ paths:
                 message: 지갑을 찾을 수 없습니다.
                 data: null
 
+  /api/v1/wallet/me/transactions:
+    get:
+      tags: [Wallet]
+      summary: 내 거래내역 목록 조회
+      description: |
+        Access Token으로 인증된 회원의 MEMBER 타입 지갑 거래내역을 조회합니다.
+        종류(type)/기간(period)/정렬(sort) 세 조건을 조합해서 필터링하며,
+        세 파라미터를 아무것도 안 보내면 기본값(전체/1개월/최신순)이 적용됩니다.
+      operationId: getMyTransactions
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: type
+          required: false
+          schema:
+            type: string
+            enum: [ALL, CREDIT, DEBIT]
+            default: ALL
+          example: ALL
+        - in: query
+          name: period
+          required: false
+          schema:
+            type: string
+            enum: [WEEK, MONTH, THREE_MONTHS, SIX_MONTHS]
+            default: MONTH
+          example: MONTH
+        - in: query
+          name: sort
+          required: false
+          schema:
+            type: string
+            enum: [DESC, ASC]
+            default: DESC
+          example: DESC
+      responses:
+        "200":
+          description: 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WalletTransactionListApiResponse"
+
+        "401":
+          description: 토큰이 없거나 유효하지 않음
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorApiResponse"
+
+        "404":
+          description: 지갑을 찾을 수 없음
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorApiResponse"
+              example:
+                success: false
+                code: WALLET_NOT_FOUND
+                message: 지갑을 찾을 수 없습니다.
+                data: null
+
   /api/v1/health:
     get:
       tags: [Health]
@@ -758,6 +821,24 @@ components:
           example: 성공
         data:
           $ref: "#/components/schemas/WalletDetailResponse"
+
+    WalletTransactionListApiResponse:
+      type: object
+      required: [ success, code, message, data ]
+      properties:
+        success:
+          type: boolean
+          example: true
+        code:
+          type: string
+          example: OK
+        message:
+          type: string
+          example: 성공
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/WalletTransaction"
 
     HealthResponse:
       type: object
