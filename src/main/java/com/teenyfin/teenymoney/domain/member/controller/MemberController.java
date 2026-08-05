@@ -1,5 +1,6 @@
 package com.teenyfin.teenymoney.domain.member.controller;
 
+import com.teenyfin.teenymoney.domain.member.dto.response.MemberChildResponseDTO;
 import com.teenyfin.teenymoney.domain.member.dto.response.MemberMeResponseDTO;
 import com.teenyfin.teenymoney.domain.member.dto.response.MemberProfileImageResponseDTO;
 import com.teenyfin.teenymoney.domain.member.service.MemberService;
@@ -16,6 +17,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/members")
@@ -56,5 +59,20 @@ public class MemberController {
             @RequestParam("file") MultipartFile file) {
         return ApiResponse.ok(
                 memberService.updateProfileImage(principal.memberId(), file));
+    }
+
+    @GetMapping(value ="/me/children")
+    @ApiOperation(
+            value = "연동된 자녀 목록 조회",
+            notes = "인증된 부모와 ACTIVE 상태로 연동된 자녀 목록을 조회합니다.",
+            authorizations = {@io.swagger.annotations.Authorization(value = "JWT")})
+    @ApiResponses({
+            @io.swagger.annotations.ApiResponse(code = 200, message = "조회 성공"),
+            @io.swagger.annotations.ApiResponse(code = 401, message = "인증 토큰 없음 또는 만료"),
+            @io.swagger.annotations.ApiResponse(code = 403, message = "부모 회원이 아님")
+    })
+    public ApiResponse<List<MemberChildResponseDTO>> getMemberChild(
+        @AuthenticationPrincipal MemberPrincipal principal) {
+        return ApiResponse.ok(memberService.getChildren(principal));
     }
 }

@@ -1,16 +1,21 @@
 package com.teenyfin.teenymoney.domain.member.service;
 
 import com.teenyfin.teenymoney.domain.auth.exception.AuthErrorCode;
+import com.teenyfin.teenymoney.domain.member.dto.response.MemberChildResponseDTO;
 import com.teenyfin.teenymoney.domain.member.dto.response.MemberMeResponseDTO;
 import com.teenyfin.teenymoney.domain.member.dto.response.MemberProfileImageResponseDTO;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
+import com.teenyfin.teenymoney.global.exception.CommonErrorCode;
+import com.teenyfin.teenymoney.global.security.MemberPrincipal;
 import com.teenyfin.teenymoney.global.storage.ImageFile;
 import com.teenyfin.teenymoney.global.storage.S3Storage;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 
 @Service
 public class MemberService {
@@ -66,5 +71,18 @@ public class MemberService {
             throw new BusinessException(AuthErrorCode.AUTH_INACTIVE_MEMBER);
         }
         return member;
+    }
+
+    @Transactional(readOnly = true)
+    public List<MemberChildResponseDTO> getChildren(MemberPrincipal principal) {
+        if (!"PARENT".equals(principal.role())) {
+            throw new BusinessException(CommonErrorCode.AUTH_FORBIDDEN);
+        }
+
+        return memberMapper.selectChildrenByParentId(principal.memberId())
+                .stream()
+                .map(child -> MemberChildResponseDTO.of(
+                        child, s3Storage.presignedUrl(child.getProfileImageKey())))
+                .toList();
     }
 }

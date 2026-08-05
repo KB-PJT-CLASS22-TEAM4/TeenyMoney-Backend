@@ -2,9 +2,11 @@ package com.teenyfin.teenymoney.domain.member.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.teenyfin.teenymoney.domain.member.dto.response.MemberChildResponseDTO;
 import com.teenyfin.teenymoney.domain.member.dto.response.MemberMeResponseDTO;
 import com.teenyfin.teenymoney.domain.member.dto.response.MemberProfileImageResponseDTO;
 import com.teenyfin.teenymoney.domain.member.service.MemberService;
+import com.teenyfin.teenymoney.domain.member.vo.MemberChildVO;
 import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
 import com.teenyfin.teenymoney.global.security.MemberPrincipal;
 import org.junit.jupiter.api.AfterEach;
@@ -117,6 +119,44 @@ class MemberControllerTest {
                 "\"profileImageUrl\":\"https://s3.example.com/signed\""), body);
         // 요청 본문이 아니라 토큰의 memberId로 처리해야 남의 프로필을 못 바꾼다.
         verify(memberService).updateProfileImage(eq(17L), any(MultipartFile.class));
+    }
+
+    @Test
+    @DisplayName("GET /members/me/children -> 토큰의 principal로 위임하고 자녀 배열을 반환한다")
+    void getChildrenDelegatesWithAuthenticatedPrincipalAndReturnsArray() throws Exception {
+        when(memberService.getChildren(any(MemberPrincipal.class)))
+                .thenReturn(List.of(childResponse()));
+
+        var response = mockMvc.perform(get("/members/me/children"))
+                .andReturn().getResponse();
+
+        String body = response.getContentAsString(StandardCharsets.UTF_8);
+        System.out.printf("    입력: GET /members/me/children (토큰의 memberId=17, PARENT)%n"
+                        + "    기대: 200, 자녀 배열 + 서명 URL%n"
+                        + "    실제: %d, %s%n%n", response.getStatus(), body);
+
+        assertEquals(200, response.getStatus(), body);
+        assertTrue(body.contains("\"childId\":2"), body);
+        assertTrue(body.contains("\"name\":\"김첫째\""), body);
+        assertTrue(body.contains("\"email\":\"child1@test.com\""), body);
+        assertTrue(body.contains("\"teenyScore\":610"), body);
+        assertTrue(body.contains("\"balance\":96500"), body);
+        assertTrue(body.contains(
+                "\"profileImageUrl\":\"https://s3.example.com/signed\""), body);
+        // parentId를 요청으로 받으면 남의 자녀를 조회할 수 있다. 토큰에서만 나와야 한다.
+        verify(memberService).getChildren(any(MemberPrincipal.class));
+    }
+
+    private MemberChildResponseDTO childResponse() {
+        MemberChildVO child = new MemberChildVO();
+        child.setChildId(2L);
+        child.setName("김첫째");
+        child.setEmail("child1@test.com");
+        child.setProfileImageKey("profile/2/a.png");
+        child.setTeenyScore(610);
+        child.setBalance(96500L);
+        // 서비스가 서명한 URL을 넘긴다. key가 그대로 나가면 안 된다.
+        return MemberChildResponseDTO.of(child, "https://s3.example.com/signed");
     }
 
     private MemberMeResponseDTO memberResponse() {

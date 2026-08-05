@@ -101,6 +101,15 @@
           AND effective_at &lt;= #{now}
           AND (expired_at IS NULL OR expired_at &gt; #{now})
     </select>
+    <select id="selectChildrenByParentId" resultType="com.teenyfin.teenymoney.domain.member.vo.MemberChildVO">
+        SELECT c.id AS child_id, c.name, c.email, c.profile_image_key, c.teeny_score,
+        COALESCE(w.balance, 0) AS balance
+        FROM T_MBR_CONN_R conn
+        JOIN T_MBR_INFO_M c ON c.id = conn.child_id AND c.status = 'ACTIVE'
+        LEFT JOIN T_WLT_BASE_M w ON w.member_id = c.id AND w.type = 'MEMBER'
+        WHERE conn.parent_id = #{parentId} AND conn.status = 'ACTIVE'
+        ORDER BY conn.id
+    </select>
 
     <!-- [보호자 가입 흐름 14] 동의 주체와 SMS 인증 근거를 약관 이력에 저장한다. -->
     <insert id="insertAgreementHistory">
