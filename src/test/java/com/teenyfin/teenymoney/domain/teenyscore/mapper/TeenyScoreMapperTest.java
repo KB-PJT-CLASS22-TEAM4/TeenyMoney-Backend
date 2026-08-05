@@ -3,6 +3,7 @@ package com.teenyfin.teenymoney.domain.teenyscore.mapper;
 import com.teenyfin.teenymoney.config.RootConfig;
 import com.teenyfin.teenymoney.domain.teenyscore.vo.TeenyScoreGradeVO;
 import com.teenyfin.teenymoney.domain.teenyscore.vo.TeenyScoreHistoryVO;
+import com.teenyfin.teenymoney.domain.teenyscore.vo.TeenyScoreMonthlyHistoryVO;
 import com.teenyfin.teenymoney.domain.teenyscore.vo.TeenyScoreVO;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -71,5 +72,21 @@ class TeenyScoreMapperTest {
             assertTrue(grades.get(index).getMinScore()
                     > grades.get(index + 1).getMinScore());
         }
+    }
+
+    @Test
+    void selectMonthlyHistoriesByChildIdReturnsMonthlyLastScore() {
+        List<TeenyScoreMonthlyHistoryVO> histories =
+                teenyScoreMapper.selectMonthlyHistoriesByChildId(2L);
+
+        assertFalse(histories.isEmpty());
+        assertEquals("2026-06", histories.get(0).getYearMonth());
+        assertEquals(610, histories.get(0).getTeenyScore());
+    }
+
+    @Test
+    void existsActiveConnectionReturnsRelationshipStatus() {
+        assertTrue(teenyScoreMapper.existsActiveConnection(1L, 2L));
+        assertFalse(teenyScoreMapper.existsActiveConnection(1L, Long.MAX_VALUE));
     }
 }

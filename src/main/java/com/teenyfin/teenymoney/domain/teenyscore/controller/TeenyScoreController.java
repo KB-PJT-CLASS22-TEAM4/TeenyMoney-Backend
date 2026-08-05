@@ -2,9 +2,12 @@ package com.teenyfin.teenymoney.domain.teenyscore.controller;
 
 import com.teenyfin.teenymoney.domain.teenyscore.dto.response.TeenyScoreGradeResponseDTO;
 import com.teenyfin.teenymoney.domain.teenyscore.dto.response.TeenyScoreHistoryResponseDTO;
+import com.teenyfin.teenymoney.domain.teenyscore.dto.response.TeenyScoreMonthlyHistoryResponseDTO;
 import com.teenyfin.teenymoney.domain.teenyscore.dto.response.TeenyScoreResponseDTO;
 import com.teenyfin.teenymoney.domain.teenyscore.service.TeenyScoreService;
 import com.teenyfin.teenymoney.global.response.ApiResponse;
+import com.teenyfin.teenymoney.global.security.MemberPrincipal;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -24,16 +27,26 @@ public class TeenyScoreController {
 
     @GetMapping("/children/{childId}")
     public ApiResponse<TeenyScoreResponseDTO> getTeenyScore(
+            @AuthenticationPrincipal MemberPrincipal principal,
             @PathVariable Long childId) {
         return ApiResponse.ok(
-                teenyScoreService.getTeenyScore(childId));
+                teenyScoreService.getTeenyScore(principal, childId));
     }
 
-    @GetMapping("/children/{childId}/history")
-    public ApiResponse<List<TeenyScoreHistoryResponseDTO>> getHistories(
-            @PathVariable Long childId) {
+    @GetMapping("/me/history")
+    public ApiResponse<List<TeenyScoreHistoryResponseDTO>> getMyHistories(
+            @AuthenticationPrincipal MemberPrincipal principal) {
         return ApiResponse.ok(
-                teenyScoreService.getHistories(childId));
+                teenyScoreService.getMyHistories(principal));
+    }
+
+    @GetMapping("/children/{childId}/monthly-history")
+    public ApiResponse<List<TeenyScoreMonthlyHistoryResponseDTO>>
+            getMonthlyHistories(
+                    @AuthenticationPrincipal MemberPrincipal principal,
+                    @PathVariable Long childId) {
+        return ApiResponse.ok(
+                teenyScoreService.getMonthlyHistories(principal, childId));
     }
 
     @GetMapping("/grades")
