@@ -4,6 +4,7 @@ import com.teenyfin.teenymoney.config.RootConfig;
 import com.teenyfin.teenymoney.domain.auth.dto.request.SignupRequestDTO;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.global.auth.RefreshTokenStore;
+import com.teenyfin.teenymoney.global.auth.LegalGuardianConsentStore;
 import com.teenyfin.teenymoney.global.security.jwt.JwtProvider;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -176,6 +177,11 @@ public class AuthServiceTransactionIntegrationTest {
         request.setVerificationCode("123456");
         request.setEmail(email);
         request.setPassword("password123");
+        request.setPasswordConfirm("password123");
+        request.setServiceTermsAgreed(true);
+        request.setPrivacyAgreed(true);
+        request.setServiceTermsVersion("1.0");
+        request.setPrivacyTermsVersion("1.0");
 
         return request;
     }
@@ -206,6 +212,11 @@ public class AuthServiceTransactionIntegrationTest {
         RefreshTokenStore refreshTokenStore() {
             return mock(RefreshTokenStore.class);
         }
+
+        @Bean
+        LegalGuardianConsentStore legalGuardianConsentStore() {
+            return mock(LegalGuardianConsentStore.class);
+        }
     }
 
     /*
@@ -223,6 +234,7 @@ public class AuthServiceTransactionIntegrationTest {
                 PhoneVerificationService phoneVerificationService,
                 JwtProvider jwtProvider,
                 RefreshTokenStore refreshTokenStore,
+                LegalGuardianConsentStore legalGuardianConsentStore,
                 Clock clock) {
 
             return new AuthService(
@@ -231,6 +243,7 @@ public class AuthServiceTransactionIntegrationTest {
                     phoneVerificationService,
                     jwtProvider,
                     refreshTokenStore,
+                    legalGuardianConsentStore,
                     clock
             );
         }

@@ -86,4 +86,56 @@
         )
     </insert>
 
+    <!-- [보호자 가입 흐름 9] 현재 적용 기간에 포함되는 정확한 약관 버전만 조회한다. -->
+    <select id="selectEffectiveAgreementId" resultType="long">
+        SELECT id
+        FROM T_MBR_AGRMT_M
+        WHERE code = #{code}
+          AND version = #{version}
+          AND effective_at &lt;= #{now}
+          AND (expired_at IS NULL OR expired_at &gt; #{now})
+    </select>
+
+    <!-- [보호자 가입 흐름 14] 동의 주체와 SMS 인증 근거를 약관 이력에 저장한다. -->
+    <insert id="insertAgreementHistory">
+        INSERT INTO T_MBR_AGRMT_H (
+            member_id,
+            agreement_id,
+            status,
+            actor_type,
+            actor_member_id,
+            verification_method,
+            verification_reference
+        ) VALUES (
+            #{memberId},
+            #{agreementId},
+            #{status},
+            #{actorType},
+            #{actorMemberId},
+            #{verificationMethod},
+            #{verificationReference}
+        )
+    </insert>
+
+    <!-- [보호자 가입 흐름 13] 비회원 법정대리인 정보를 가입한 자녀 회원과 연결한다. -->
+    <insert id="insertLegalGuardian">
+        INSERT INTO T_MBR_LEGAL_GUARDIAN_M (
+            child_member_id,
+            name,
+            phone_number,
+            relationship,
+            verification_method,
+            verification_reference,
+            verified_at
+        ) VALUES (
+            #{childMemberId},
+            #{name},
+            #{phoneNumber},
+            #{relationship},
+            #{verificationMethod},
+            #{verificationReference},
+            #{verifiedAt}
+        )
+    </insert>
+
 </mapper>

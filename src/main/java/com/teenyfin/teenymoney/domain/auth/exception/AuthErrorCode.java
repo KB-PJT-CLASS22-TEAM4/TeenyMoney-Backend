@@ -41,7 +41,22 @@ public enum AuthErrorCode implements ErrorCode {
     AUTH_DUPLICATE_EMAIL(HttpStatus.CONFLICT, "이미 가입된 이메일입니다."),
     AUTH_DUPLICATE_PHONE_NUMBER(HttpStatus.CONFLICT, "이미 가입된 휴대폰 번호입니다."),
 
-    AUTH_INCORRECT_AGE(HttpStatus.BAD_REQUEST, "올바르지 않은 연령대 입니다.");
+    AUTH_INCORRECT_AGE(HttpStatus.BAD_REQUEST, "올바르지 않은 연령대 입니다."),
+
+    AUTH_PASSWORD_MISMATCH(HttpStatus.BAD_REQUEST, "비밀번호와 비밀번호 확인이 일치하지 않습니다."),
+
+    AUTH_PASSWORD_CONTAINS_PERSONAL_INFO(HttpStatus.BAD_REQUEST,
+            "비밀번호에 이메일 또는 휴대폰 번호를 포함할 수 없습니다."),
+
+    AUTH_INVALID_AGREEMENT_VERSION(HttpStatus.BAD_REQUEST,
+            "현재 유효한 약관 버전이 아닙니다."),
+
+    // [보호자 가입 흐름 10] 미성년 가입에 토큰이 없거나 Redis 조회·약관 버전 검증에 실패한 경우다.
+    AUTH_LEGAL_GUARDIAN_CONSENT_REQUIRED(HttpStatus.BAD_REQUEST,
+            "만 14세 미만 회원은 법정대리인 동의가 필요합니다."),
+
+    AUTH_LEGAL_GUARDIAN_CONSENT_INVALID(HttpStatus.BAD_REQUEST,
+            "법정대리인 동의가 만료되었거나 올바르지 않습니다.");
 
     private final HttpStatus status;
     private final String message;
