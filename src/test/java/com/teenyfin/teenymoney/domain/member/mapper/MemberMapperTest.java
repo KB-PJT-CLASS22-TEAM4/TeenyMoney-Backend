@@ -2,6 +2,7 @@ package com.teenyfin.teenymoney.domain.member.mapper;
 
 import com.teenyfin.teenymoney.config.RootConfig;
 import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -11,6 +12,7 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.transaction.annotation.Transactional;
 
+import javax.sql.DataSource;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -31,8 +33,15 @@ class MemberMapperTest {
     @Autowired
     private MemberMapper memberMapper;
 
-    @Autowired
+    // RootConfig는 JdbcTemplate 빈을 등록하지 않는다. 프로덕션 코드가 쓰지 않기 때문이다.
+    // 여기서만 필요하므로 DataSource로 직접 만든다. 같은 트랜잭션에 참여해야 하므로
+    // 반드시 컨텍스트의 DataSource를 써야 한다(새로 만들면 롤백 대상에서 빠진다).
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    void setDataSource(DataSource dataSource) {
+        this.jdbcTemplate = new JdbcTemplate(dataSource);
+    }
 
     @Test
     void insertAssignsIdAndMemberCanBeSelectedByIdAndEmail() {
@@ -70,6 +79,65 @@ class MemberMapperTest {
 
         assertNull(teenyScore(parent.getId()));
         assertEquals(600, teenyScore(child.getId()));
+    }
+
+    @Test
+    @DisplayName("profileImageKey를 넣고 조회 -> 실제 profile_image_key 컬럼을 왕복한다 (#55)")
+    void profileImageKeyRoundTripsThroughRealColumn() {
+        // 컬럼명을 profile_image_url -> profile_image_key로 바꿨다(V002).
+        // 매퍼 XML과 실제 DB 컬럼이 어긋나면 여기서 SQL 오류나 null로 드러난다.
+        MemberVO member = newMember("PARENT");
+        member.setProfileImageKey("profile/test/9f2c.png");
+        memberMapper.insert(member);
+
+        MemberVO loaded = memberMapper.selectById(member.getId());
+        // 매퍼를 거치지 않고 컬럼을 직접 읽어 이름 자체를 못 박는다.
+        String rawColumn = jdbcTemplate.queryForObject(
+                "SELECT profile_image_key FROM T_MBR_INFO_M WHERE id = ?",
+                String.class, member.getId());
+
+        System.out.printf("    입력: insert 시 profileImageKey = profile/test/9f2c.png%n"
+                        + "    기대: 조회·직접읽기 모두 같은 값%n"
+                        + "    실제: selectById=%s, 컬럼 직접읽기=%s%n%n",
+                loaded.getProfileImageKey(), rawColumn);
+
+        assertEquals("profile/test/9f2c.png", loaded.getProfileImageKey());
+        assertEquals("profile/test/9f2c.png", rawColumn);
+    }
+
+    @Test
+    @DisplayName("updateProfileImageKey 호출 -> 실제 컬럼이 갱신된다 (#55)")
+    void updateProfileImageKeyWritesToRealColumn() {
+        MemberVO member = newMember("CHILD");
+        memberMapper.insert(member);
+
+        int updated = memberMapper.updateProfileImageKey(member.getId(), "profile/99/new.png");
+
+        String rawColumn = jdbcTemplate.queryForObject(
+                "SELECT profile_image_key FROM T_MBR_INFO_M WHERE id = ?",
+                String.class, member.getId());
+
+        System.out.printf("    입력: updateProfileImageKey(%d, profile/99/new.png)%n"
+                        + "    기대: 1행 갱신, 컬럼 값이 profile/99/new.png%n"
+                        + "    실제: %d행 갱신, 컬럼=%s%n%n",
+                member.getId(), updated, rawColumn);
+
+        assertEquals(1, updated);
+        assertEquals("profile/99/new.png", rawColumn);
+    }
+
+    @Test
+    @DisplayName("프로필 이미지 없이 가입 -> profile_image_key가 null이다")
+    void memberWithoutProfileImageHasNullKey() {
+        MemberVO member = newMember("CHILD");
+        memberMapper.insert(member);
+
+        MemberVO loaded = memberMapper.selectById(member.getId());
+
+        System.out.printf("    입력: profileImageKey 없이 insert (대다수 회원)%n"
+                        + "    기대: null%n    실제: %s%n%n", loaded.getProfileImageKey());
+
+        assertNull(loaded.getProfileImageKey());
     }
 
     private MemberVO newMember(String role) {

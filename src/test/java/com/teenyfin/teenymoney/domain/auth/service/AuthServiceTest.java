@@ -473,7 +473,7 @@ class AuthServiceTest {
         member.setPhoneNumber("01012345678");
         member.setEmail("user@example.com");
         member.setPassword("encoded-password");
-        member.setProfileImageUrl("https://example.com/profile.png");
+        member.setProfileImageKey("profile/17/9f2c.png");
         member.setStatus("ACTIVE");
         return member;
     }

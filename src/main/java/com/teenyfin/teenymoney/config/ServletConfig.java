@@ -1,6 +1,9 @@
 package com.teenyfin.teenymoney.config;
 
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
+import org.springframework.web.multipart.MultipartResolver;
+import org.springframework.web.multipart.support.StandardServletMultipartResolver;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.web.bind.annotation.RestController;
@@ -28,6 +31,21 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @ComponentScan(basePackages = {"com.teenyfin.teenymoney.domain",
                                 "com.teenyfin.teenymoney.global"})
 public class ServletConfig implements WebMvcConfigurer {
+
+    /**
+     * 멀티파트 파싱기. 반드시 이 자식 컨텍스트에, 반드시 "multipartResolver"라는
+     * 이름으로 둔다. DispatcherServlet이 자기 컨텍스트에서 이 이름으로 찾기 때문이다.
+     *
+     * 루트에 두거나 이름이 다르면 예외도 로그도 없이 멀티파트 파싱이 일어나지 않고,
+     * @RequestParam MultipartFile 이 비어서 들어온다.
+     *
+     * 실제 용량 상한은 WebConfig의 MultipartConfigElement가 건다.
+     */
+    @Bean
+    public MultipartResolver multipartResolver() {
+        return new StandardServletMultipartResolver();
+    }
+
     @Override
     public void configurePathMatch(PathMatchConfigurer configurer) {
         configurer.addPathPrefix(

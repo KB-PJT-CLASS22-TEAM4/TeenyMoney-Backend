@@ -16,4 +16,7 @@ public interface MemberMapper {
     boolean existsByPhoneNumber(@Param("phoneNumber") String phoneNumber);
 
     int insert(MemberVO member);
+
+    int updateProfileImageKey(@Param("id") Long id,
+                              @Param("profileImageKey") String profileImageKey);
 }

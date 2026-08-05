@@ -1,6 +1,7 @@
 package com.teenyfin.teenymoney.global.exception;
 
 import com.teenyfin.teenymoney.global.response.ApiResponse;
+import com.teenyfin.teenymoney.global.storage.StorageErrorCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 
 import java.util.LinkedHashMap;
@@ -81,6 +83,19 @@ public class GlobalExceptionAdvice {
     public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException e) {
         log.warn("권한 없음: {}", e.getMessage());
         return status(CommonErrorCode.AUTH_FORBIDDEN);
+    }
+
+    /**
+     * 컨테이너 레벨 용량 상한 초과.
+     *
+     * WebConfig의 MultipartConfigElement가 애플리케이션 코드에 닿기 전에 요청을 끊으므로
+     * ImageFile의 검사와 별개로 여기서 받아야 한다. 처리하지 않으면 아래 Exception
+     * 핸들러에 걸려 500 COMMON_INTERNAL_ERROR가 나가고, 사용자 잘못이 서버 오류로 보인다.
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMaxUploadSize(MaxUploadSizeExceededException e) {
+        log.warn("업로드 용량 초과: {}", e.getMessage());
+        return status(StorageErrorCode.STORAGE_FILE_TOO_LARGE);
     }
 
     /** 예상 못 한 오류. 스택트레이스는 로그에만 남기고 응답에는 정해진 문구만 보낸다. */

@@ -21,9 +21,32 @@ WAR 하나를 로컬과 EC2 양쪽에서 돌립니다. **빌드 산출물은 동
 | `JWT_ACCESS_EXPIRATION_MS` | 1800000 | 그대로 | 그대로 | 기본값 사용 |
 | `JWT_REFRESH_EXPIRATION_MS` | 1209600000 | 그대로 | 그대로 | 기본값 사용 |
 | `COOKIE_SECURE` | **없음** | `false` | **`true`** | **기동 실패** |
+| `AWS_REGION` | `ap-northeast-2` | 그대로 | 그대로 | 기본값 사용 |
+| `AWS_S3_BUCKET` | **없음** | `teenymoney-media` | 〃 | **기동 실패** |
+| `AWS_S3_PRESIGN_TTL_SECONDS` | 600 | 그대로 | 그대로 | 기본값 사용 |
+| `AWS_ACCESS_KEY_ID` | **없음** | IAM 사용자 키 | **설정하지 않음** | 첫 업로드에서 실패 |
+| `AWS_SECRET_ACCESS_KEY` | **없음** | 〃 | **설정하지 않음** | 〃 |
 
-**실질적으로 다른 것은 네 개뿐입니다**: DB/Redis 접속 지점, `JWT_SECRET`,
-`COOKIE_SECURE`. 나머지는 양쪽 동일합니다.
+**실질적으로 다른 것은 다섯 개뿐입니다**: DB/Redis 접속 지점, `JWT_SECRET`,
+`COOKIE_SECURE`, 그리고 AWS 자격증명. 나머지는 양쪽 동일합니다.
+
+### AWS 자격증명
+
+`AWS_ACCESS_KEY_ID`와 `AWS_SECRET_ACCESS_KEY`는 **로컬에만** 넣습니다. EC2는 인스턴스
+IAM 역할(`teenymoney-ec2-s3`)로 자격증명을 받으므로 서버에 키를 두지 않습니다.
+`DefaultCredentialsProvider`가 환경변수 → 프로파일 → 인스턴스 메타데이터 순으로 찾기
+때문에 코드는 양쪽이 같습니다.
+
+이 두 이름은 AWS SDK가 정한 것이라 바꿀 수 없고, `application.properties`에 적지도
+않습니다. SDK가 OS 환경변수에서 직접 읽습니다. 반면 `AWS_REGION`과 `AWS_S3_BUCKET`은
+우리 코드가 읽는 값이라 `application.properties`에 자리표시자가 있습니다.
+
+자격증명 탐색은 지연 실행이라 값이 없어도 앱은 정상 기동하고 **첫 업로드에서야**
+실패합니다. `JWT_SECRET`처럼 기동 시점에 드러나지 않으므로, 배포 후 프로필 이미지
+업로드를 한 번 실제로 해봐야 확인됩니다.
+
+버킷은 비공개입니다. 퍼블릭 액세스 차단을 풀지 마세요 — 조회 URL은 요청마다 서명해서
+발급하며, 버킷을 공개로 바꾸면 미성년자 사진이 URL만으로 영구 노출됩니다.
 
 ### 필수 보안값
 

@@ -11,7 +11,7 @@
         <result property="phoneNumber" column="phone_number"/>
         <result property="email" column="email"/>
         <result property="password" column="password"/>
-        <result property="profileImageUrl" column="profile_image_url"/>
+        <result property="profileImageKey" column="profile_image_key"/>
         <result property="status" column="status"/>
     </resultMap>
 
@@ -23,7 +23,7 @@
         phone_number,
         email,
         password,
-        profile_image_url,
+        profile_image_key,
         status
     </sql>
 
@@ -68,7 +68,7 @@
             phone_number,
             email,
             password,
-            profile_image_url
+            profile_image_key
             <if test="role == 'PARENT'">
                 , teeny_score
             </if>
@@ -79,11 +79,18 @@
             #{phoneNumber},
             #{email},
             #{password},
-            #{profileImageUrl}
+            #{profileImageKey}
             <if test="role == 'PARENT'">
                 , NULL
             </if>
         )
     </insert>
+
+    <update id="updateProfileImageKey">
+        UPDATE T_MBR_INFO_M
+        SET profile_image_key = #{profileImageKey},
+            updated_at = NOW()
+        WHERE id = #{id}
+    </update>
 
 </mapper>

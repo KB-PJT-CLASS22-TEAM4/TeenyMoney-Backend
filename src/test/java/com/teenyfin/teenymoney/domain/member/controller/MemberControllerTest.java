@@ -3,18 +3,22 @@ package com.teenyfin.teenymoney.domain.member.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.teenyfin.teenymoney.domain.member.dto.response.MemberMeResponseDTO;
+import com.teenyfin.teenymoney.domain.member.dto.response.MemberProfileImageResponseDTO;
 import com.teenyfin.teenymoney.domain.member.service.MemberService;
 import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
 import com.teenyfin.teenymoney.global.security.MemberPrincipal;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
@@ -22,11 +26,15 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 
+@DisplayName("MemberController - 회원 조회와 프로필 이미지 변경 HTTP 계약")
 class MemberControllerTest {
 
     private MemberService memberService;
@@ -52,6 +60,7 @@ class MemberControllerTest {
     }
 
     @Test
+    @DisplayName("GET /members/me -> 토큰의 memberId로 조회하고 회원 정보를 반환한다")
     void getMeUsesAuthenticatedMemberIdAndReturnsMemberInformation() throws Exception {
         when(memberService.getMe(17L)).thenReturn(memberResponse());
 
@@ -59,6 +68,11 @@ class MemberControllerTest {
                 .andReturn().getResponse();
 
         String body = response.getContentAsString(StandardCharsets.UTF_8);
+        System.out.printf("    입력: GET /members/me (토큰의 memberId=17)%n"
+                        + "    기대: 200, 회원 정보 + profileImageUrl에 서명 URL%n"
+                        + "    실제: %d, %s%n%n",
+                response.getStatus(), body);
+
         assertEquals(200, response.getStatus(), body);
         assertTrue(body.contains("\"memberId\":17"), body);
         assertTrue(body.contains("\"role\":\"PARENT\""), body);
@@ -67,8 +81,42 @@ class MemberControllerTest {
         assertTrue(body.contains("\"phoneNumber\":\"01012345678\""), body);
         assertTrue(body.contains("\"birthDate\":\"1990-01-02\""), body);
         assertTrue(body.contains(
-                "\"profileImageUrl\":\"https://example.com/profile.png\""), body);
+                "\"profileImageUrl\":\"https://s3.example.com/signed\""), body);
         verify(memberService).getMe(17L);
+    }
+
+    @Test
+    @DisplayName("PATCH /members/me/profile-image -> 토큰의 memberId로 처리하고 서명 URL을 반환한다")
+    void updateProfileImageUsesAuthenticatedMemberIdAndReturnsSignedUrl() throws Exception {
+        when(memberService.updateProfileImage(eq(17L), any(MultipartFile.class)))
+                .thenReturn(new MemberProfileImageResponseDTO("https://s3.example.com/signed"));
+
+        var file = new MockMultipartFile(
+                "file", "me.png", "image/png", new byte[] {1, 2, 3});
+
+        // multipart(url, ...)의 두 번째 인자는 URI 변수다. 파일은 .file()로 붙여야 한다.
+        // 여기에 파일을 넘기면 파트가 없는 요청이 되어 400 MissingServletRequestPartException이 난다.
+        var result = mockMvc.perform(multipart("/members/me/profile-image")
+                        .file(file)
+                        .with(request -> {
+                            // multipart()는 POST로 만든다. PATCH로 바꿔야 매핑에 걸린다.
+                            request.setMethod("PATCH");
+                            return request;
+                        }))
+                .andReturn();
+        var response = result.getResponse();
+
+        String body = response.getContentAsString(StandardCharsets.UTF_8);
+        System.out.printf("    입력: PATCH /members/me/profile-image (file=me.png, 토큰의 memberId=17)%n"
+                        + "    기대: 200, profileImageUrl에 서명 URL. memberId는 요청이 아니라 토큰에서%n"
+                        + "    실제: %d, %s%n%n",
+                response.getStatus(), body);
+
+        assertEquals(200, response.getStatus(), body);
+        assertTrue(body.contains(
+                "\"profileImageUrl\":\"https://s3.example.com/signed\""), body);
+        // 요청 본문이 아니라 토큰의 memberId로 처리해야 남의 프로필을 못 바꾼다.
+        verify(memberService).updateProfileImage(eq(17L), any(MultipartFile.class));
     }
 
     private MemberMeResponseDTO memberResponse() {
@@ -79,7 +127,8 @@ class MemberControllerTest {
         member.setEmail("user@example.com");
         member.setPhoneNumber("01012345678");
         member.setBirthDate(LocalDate.of(1990, 1, 2));
-        member.setProfileImageUrl("https://example.com/profile.png");
-        return MemberMeResponseDTO.of(member);
+        member.setProfileImageKey("profile/17/9f2c.png");
+        // 서비스가 서명한 URL을 넘긴다. key가 그대로 나가면 안 된다.
+        return MemberMeResponseDTO.of(member, "https://s3.example.com/signed");
     }
 }
