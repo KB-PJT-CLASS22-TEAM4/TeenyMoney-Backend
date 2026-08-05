@@ -1,0 +1,21 @@
+package com.teenyfin.teenymoney.domain.categoryPolicy.dto.request;
+
+import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModelProperty;
+import lombok.Getter;
+
+import javax.validation.constraints.NotNull;
+import javax.validation.constraints.Pattern;
+
+@ApiModel(description = "카테고리 정책 DTO")
+@Getter
+public class CategoryPolicyUpdateRequestDTO {
+
+    @ApiModelProperty(value = "카테고리 정책 ID", example = "1")
+    @NotNull
+    Long id;
+
+    @ApiModelProperty(value = "정책 단계 (ALLOW/WATCH/BLOCK)", example = "ALLOW")
+    @Pattern(regexp = "ALLOW|WATCH|BLOCK")
+    String policy;
+}

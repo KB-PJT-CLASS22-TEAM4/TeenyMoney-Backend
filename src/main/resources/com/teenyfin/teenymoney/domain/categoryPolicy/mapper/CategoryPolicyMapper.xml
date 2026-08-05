@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.teenyfin.teenymoney.domain.categoryPolicy.mapper.CategoryPolicyMapper">
+
+    <resultMap id="categoryPolicyResultMap" type="com.teenyfin.teenymoney.domain.categoryPolicy.vo.CategoryPolicyVO">
+        <id property="id" column="id"/>
+        <result property="merchantCategoryName" column="name"/>
+        <result property="policy" column="policy"/>
+    </resultMap>
+
+    <select id="selectByParentId" resultMap="categoryPolicyResultMap">
+        SELECT p.id, c.name, p.policy
+        FROM T_MCC_POLICY_M p
+        JOIN T_MCC_CTGR_C c
+        ON p.merchant_category_id = c.id
+        WHERE p.parent_id = #{parentId}
+    </select>
+
+    <select id="selectByChildId" resultMap="categoryPolicyResultMap">
+        SELECT p.id, c.name, p.policy
+        FROM T_MCC_POLICY_M p
+        JOIN T_MCC_CTGR_C c
+        ON p.merchant_category_id = c.id
+        WHERE p.child_id = #{childId}
+    </select>
+
+    <insert id="insertDefaultPolicies">
+        INSERT INTO T_MCC_POLICY_M
+        (parent_id, child_id, merchant_category_id, policy, created_at)
+        SELECT
+        #{parentId}, #{childId}, c.id, c.default_policy, NOW()
+        FROM T_MCC_CTGR_C c
+    </insert>
+
+    <update id="updateAllPolicies">
+        UPDATE T_MCC_POLICY_M
+        SET policy = CASE id
+        <foreach collection="categoryPolicyList" item="p">
+            WHEN #{p.id} THEN #{p.policy}
+        </foreach>
+        END,
+        updated_at = NOW()
+        WHERE parent_id = #{parentId}
+        AND id IN
+        <foreach collection="categoryPolicyList" item="p" open="(" separator="," close=")">
+            #{p.id}
+        </foreach>
+    </update>
+
+</mapper>
