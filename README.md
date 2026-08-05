@@ -29,7 +29,7 @@
 - 공개 경로를 제외한 전 요청 인증 강제 (`anyRequest().authenticated()`)
 - 애플리케이션 상태 확인 API
 - 데이터베이스 연결 확인 API
-- OpenAPI 3.0 명세와 Swagger UI
+- springfox 애노테이션 기반 API 명세와 Swagger UI
 - GitHub Actions 테스트 및 WAR 빌드 CI
 
 가족 연결, 지갑, 결제, 금융상품, 퀘스트, 알림 도메인은 구현 예정입니다.
@@ -51,7 +51,7 @@
 | `/api/v1/auth/check-email` | 이메일 중복 확인 — 가입 전이라 토큰이 없다 |
 | `/api/v1/auth/phone-verification/send` | 회원가입 전 휴대폰 인증번호 발송 |
 | `/api/v1/health`, `/api/v1/health/**` | 모니터링이 토큰 없이 호출 |
-| `/swagger-ui/**`, `/api-docs/**` | API 문서 |
+| `/swagger-ui.html`, `/webjars/**`, `/swagger-resources`, `/swagger-resources/**`, `/v2/api-docs` | springfox Swagger UI와 명세 JSON |
 
 유효한 Access Token을 보내면 Redis의 현재 인증 세대와 일치할 때만 인증 정보가
 채워지고 컨트롤러가 `@AuthenticationPrincipal MemberPrincipal`로 받습니다.
@@ -152,7 +152,6 @@ Nginx는 프론트엔드 정적 파일을 제공하고 백엔드 요청을 Tomca
 │   │   └── resources/
 │   │       ├── application.properties
 │   │       ├── mybatis-config.xml
-│   │       ├── openapi/teenymoney-api.yaml
 │   │       ├── swagger-ui/swagger-initializer.js
 │   │       └── com/teenyfin/teenymoney/
 │   └── test/java/com/teenyfin/teenymoney/
@@ -330,8 +329,8 @@ IntelliJ Tomcat으로 실행할 때는 애플리케이션 컨텍스트 경로를
 | --- | --- |
 | 애플리케이션 상태 | `http://localhost:8080/api/v1/health` |
 | 데이터베이스 상태 | `http://localhost:8080/api/v1/health/db` |
-| Swagger UI | `http://localhost:8080/swagger-ui/index.html` |
-| OpenAPI YAML | `http://localhost:8080/api-docs/teenymoney-api.yaml` |
+| Swagger UI | `http://localhost:8080/swagger-ui.html` |
+| OpenAPI JSON | `http://localhost:8080/v2/api-docs` |
 
 ### 개발 통합 서버
 
@@ -340,17 +339,13 @@ IntelliJ Tomcat으로 실행할 때는 애플리케이션 컨텍스트 경로를
 | 서비스 | `https://www.teenymoney.kro.kr` |
 | 애플리케이션 상태 | `https://www.teenymoney.kro.kr/api/v1/health` |
 | 데이터베이스 상태 | `https://www.teenymoney.kro.kr/api/v1/health/db` |
-| Swagger UI | `https://www.teenymoney.kro.kr/swagger-ui/index.html` |
-| OpenAPI YAML | `https://www.teenymoney.kro.kr/api-docs/teenymoney-api.yaml` |
+| Swagger UI | `https://www.teenymoney.kro.kr/swagger-ui.html` |
+| OpenAPI JSON | `https://www.teenymoney.kro.kr/v2/api-docs` |
 
-OpenAPI 원본은 다음 파일입니다.
-
-```text
-src/main/resources/openapi/teenymoney-api.yaml
-```
-
-API를 추가하거나 변경할 때 Controller, DTO, Service, Mapper와 함께 이 파일도
-반드시 갱신합니다. DB를 사용하지 않는 API는 Mapper와 VO가 필요하지 않습니다.
+명세는 springfox가 코드에서 자동 생성합니다. API를 추가하거나 변경할 때
+Controller에 `@Api`, `@ApiOperation`, `@ApiResponses`를, Request/Response DTO에
+`@ApiModel`, `@ApiModelProperty`를 함께 갱신하고 `/swagger-ui.html`에서 확인합니다.
+DB를 사용하지 않는 API는 Mapper와 VO가 필요하지 않습니다.
 
 프론트엔드 연동 기준은 [프론트엔드 개발 문서](docs/FRONTEND_DEV.md)를 참고합니다.
 
@@ -396,7 +391,7 @@ sql/
 
 CI는 다음 항목을 검사합니다.
 
-- 필수 Gradle, OpenAPI, GitHub 템플릿 파일
+- 필수 Gradle, Swagger 초기화, GitHub 템플릿 파일
 - SQL 변경 관리 문서
 - `.idea`, 실제 `.env`, 로컬 설정, 키 및 인증서 파일 커밋 여부
 - DB 접속 정보의 환경변수 사용 여부
@@ -430,7 +425,7 @@ CI는 실제 MySQL, Redis 또는 EC2에 연결하지 않으며 배포도 수행�
 - 초기 저장소 등록 이후 `main`, `dev`에는 직접 push하지 않습니다.
 - Issue 단위로 작업 브랜치를 생성합니다.
 - Pull Request에서 CI와 코드 리뷰를 통과한 뒤 병합합니다.
-- API 변경 시 OpenAPI YAML과 관련 문서를 함께 갱신합니다.
+- API 변경 시 Swagger 애노테이션과 관련 문서를 함께 갱신합니다.
 - 비밀번호, 토큰, SSH 키, 실제 개인정보를 커밋하지 않습니다.
 
 Issue와 Pull Request의 메타데이터는 다음 기준으로 관리합니다.

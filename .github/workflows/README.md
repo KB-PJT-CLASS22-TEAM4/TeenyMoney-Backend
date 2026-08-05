@@ -20,7 +20,7 @@ CI는 다음 경우에 실행됩니다.
 
 - Gradle Wrapper와 빌드 설정 파일 존재 확인
 - `application.properties` 존재 확인
-- OpenAPI 명세와 Swagger 초기화 파일 존재 확인
+- Swagger 초기화 파일 존재 확인
 - SQL 변경 관리 문서 존재 확인
 - Pull Request 및 Issue 템플릿 존재 확인
 - `.idea`, 실제 `.env`, 로컬 설정, 키 및 인증서 파일 커밋 방지

@@ -219,8 +219,8 @@ curl -i https://www.teenymoney.kro.kr/api/v1/health/db
 ```text
 [ ] /api/v1/health          200, data.status = "UP"
 [ ] /api/v1/health/db       200, data.database = 의도한 DB 이름
-[ ] /swagger-ui/index.html  200
-[ ] /api-docs/teenymoney-api.yaml  200
+[ ] /swagger-ui.html        200
+[ ] /v2/api-docs            200
 ```
 
 `/health`가 200인데 `/health/db`가 503이면 **애플리케이션은 떴고 DB만 실패한**
