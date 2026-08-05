@@ -137,4 +137,13 @@ dependencies {
 
 test {
     useJUnitPlatform()
+
+    // 테스트가 무엇을 기대했고 실제로 무엇이 나왔는지 콘솔에 남긴다.
+    // 이게 없으면 @DisplayName도 println도 출력되지 않아 초록불만 보인다.
+    testLogging {
+        events 'passed', 'failed', 'skipped'
+        showStandardStreams = true
+        exceptionFormat = 'full'
+        displayGranularity = 2
+    }
 }
