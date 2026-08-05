@@ -62,7 +62,7 @@ public class WalletController {
             @ApiParam(value = "조회 기간: WEEK(1주일)/MONTH(1개월)/THREE_MONTHS(3개월)/SIX_MONTHS(6개월)")
             @RequestParam(defaultValue = "MONTH") TransactionPeriod period,
 
-            @ApiParam(value = "정렬 방향: DESC(최신순)/ASC(과거순")
+            @ApiParam(value = "정렬 방향: DESC(최신순)/ASC(과거순)")
             @RequestParam(defaultValue = "DESC") TransactionSortOrder sort) {
         List<WalletTransactionResponseDTO> response = walletService.getMyTransactions(principal.memberId(), type, period, sort);
         return ApiResponse.ok(response);
