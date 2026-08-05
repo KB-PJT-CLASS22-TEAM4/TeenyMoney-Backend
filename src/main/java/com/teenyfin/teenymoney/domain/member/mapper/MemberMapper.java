@@ -19,6 +19,8 @@ public interface MemberMapper {
 
     int insert(MemberVO member);
 
+    int updateProfileImageKey(@Param("id") Long id,
+                              @Param("profileImageKey") String profileImageKey);
     Long selectEffectiveAgreementId(
             // [보호자 가입 흐름 9] 요청한 약관 코드·버전이 현재 유효한지 조회한다.
             @Param("code") String code,

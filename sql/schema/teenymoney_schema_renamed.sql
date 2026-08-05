@@ -319,7 +319,7 @@ CREATE TABLE `T_MBR_INFO_M` (
 	`payment_password`	VARCHAR(255)	NULL	COMMENT '결제 비밀번호 (자녀만 사용)',
 	`payment_password_failed_count`	TINYINT	NOT NULL	DEFAULT 0	COMMENT '결제 비밀번호 연속 실패 횟수 (5회시 잠금)',
 	`payment_locked_until`	DATETIME	NULL	COMMENT '결제 잠금 해제 예정 일시',
-	`profile_image_url`	VARCHAR(1024)	NULL	COMMENT '프로필 이미지 URL',
+	`profile_image_key`	VARCHAR(1024)	NULL	COMMENT '프로필 이미지 S3 오브젝트 key (조회 시 presigned URL로 변환)',
 	`teeny_score`	SMALLINT	NULL	DEFAULT 600	COMMENT '티니점수 0~1000 (CHECK), 초기 600 (자녀만 사용)',
 	`customer_key`	VARCHAR(100)	NULL	COMMENT '토스 빌링용 구매자 UUID (부모만 사용)',
 	`fcm_token`	VARCHAR(255)	NULL	COMMENT 'FCM 푸시 토큰, 로그아웃시 NULL',
