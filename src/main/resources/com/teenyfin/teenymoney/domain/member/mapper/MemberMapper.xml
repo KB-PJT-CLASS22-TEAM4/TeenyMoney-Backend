@@ -120,6 +120,16 @@
         )
     </select>
 
+    <!-- 자녀 -> 부모. selectChildrenByParentId의 거울상이지만 balance·teeny_score를 뽑지 않는다.
+     부모도 MEMBER 지갑을 가지므로 지갑을 조인하면 자녀에게 부모 잔액이 노출된다. -->
+    <select id="selectActiveParentByChildId"
+            resultType="com.teenyfin.teenymoney.domain.member.vo.MemberParentVO">
+        SELECT p.id AS parent_id, p.name, p.profile_image_key
+        FROM T_MBR_CONN_R conn
+        JOIN T_MBR_INFO_M p ON p.id = conn.parent_id AND p.status = 'ACTIVE'
+        WHERE conn.child_id = #{childId} AND conn.status = 'ACTIVE'
+    </select>
+
     <!-- [보호자 가입 흐름 14] 동의 주체와 SMS 인증 근거를 약관 이력에 저장한다. -->
     <insert id="insertAgreementHistory">
         INSERT INTO T_MBR_AGRMT_H (

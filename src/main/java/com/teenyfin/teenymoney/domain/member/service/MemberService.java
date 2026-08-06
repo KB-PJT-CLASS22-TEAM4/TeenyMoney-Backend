@@ -3,8 +3,10 @@ package com.teenyfin.teenymoney.domain.member.service;
 import com.teenyfin.teenymoney.domain.auth.exception.AuthErrorCode;
 import com.teenyfin.teenymoney.domain.member.dto.response.MemberChildResponseDTO;
 import com.teenyfin.teenymoney.domain.member.dto.response.MemberMeResponseDTO;
+import com.teenyfin.teenymoney.domain.member.dto.response.MemberParentResponseDTO;
 import com.teenyfin.teenymoney.domain.member.dto.response.MemberProfileImageResponseDTO;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
+import com.teenyfin.teenymoney.domain.member.vo.MemberParentVO;
 import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import com.teenyfin.teenymoney.global.exception.CommonErrorCode;
@@ -84,5 +86,19 @@ public class MemberService {
                 .map(child -> MemberChildResponseDTO.of(
                         child, s3Storage.presignedUrl(child.getProfileImageKey())))
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public MemberParentResponseDTO getParent(MemberPrincipal principal) {
+        if(!"CHILD".equals(principal.role())) {
+            throw new BusinessException(CommonErrorCode.AUTH_FORBIDDEN);
+        }
+
+        MemberParentVO parent = memberMapper.selectActiveParentByChildId(principal.memberId());
+        if(parent == null) {
+            return null;
+        }
+
+        return MemberParentResponseDTO.of(parent, s3Storage.presignedUrl(parent.getProfileImageKey()));
     }
 }

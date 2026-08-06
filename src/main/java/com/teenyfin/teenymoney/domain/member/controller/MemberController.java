@@ -2,6 +2,7 @@ package com.teenyfin.teenymoney.domain.member.controller;
 
 import com.teenyfin.teenymoney.domain.member.dto.response.MemberChildResponseDTO;
 import com.teenyfin.teenymoney.domain.member.dto.response.MemberMeResponseDTO;
+import com.teenyfin.teenymoney.domain.member.dto.response.MemberParentResponseDTO;
 import com.teenyfin.teenymoney.domain.member.dto.response.MemberProfileImageResponseDTO;
 import com.teenyfin.teenymoney.domain.member.service.MemberService;
 import com.teenyfin.teenymoney.global.response.ApiResponse;
@@ -74,5 +75,22 @@ public class MemberController {
     public ApiResponse<List<MemberChildResponseDTO>> getMemberChild(
         @AuthenticationPrincipal MemberPrincipal principal) {
         return ApiResponse.ok(memberService.getChildren(principal));
+    }
+
+    @GetMapping(value = "/me/parent")
+    @ApiOperation(
+            value = "연동된 부모 조회",
+            notes = "인증된 자녀와 ACTIVE 상태로 연동된 부모를 조회합니다. "
+                    + "연동된 부모가 없으면 200과 함께 data가 null입니다. "
+                    + "미연동은 오류가 아니라 연동 유도 화면으로 보낼 정상 상태입니다.",
+            authorizations = {@io.swagger.annotations.Authorization(value = "JWT")})
+    @ApiResponses({
+            @io.swagger.annotations.ApiResponse(code = 200, message = "조회 성공 (미연동이면 data가 null)"),
+            @io.swagger.annotations.ApiResponse(code = 401, message = "인증 토큰 없음 또는 만료"),
+            @io.swagger.annotations.ApiResponse(code = 403, message = "자녀 회원이 아님")
+    })
+    public ApiResponse<MemberParentResponseDTO> getMemberParent(
+            @AuthenticationPrincipal MemberPrincipal principal) {
+        return ApiResponse.ok(memberService.getParent(principal));
     }
 }
