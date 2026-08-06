@@ -268,7 +268,7 @@ class FamilyLinkCodeServiceTest {
                 BusinessException.class,
                 () -> service.linkChild(CHILD_ID, "048291"));
 
-        assertEquals("FAMILY_LINK_CODE_INVALID", e.getErrorCode().getCode());
+        assertEquals("FAMILY_LINK_PARENT_UNAVAILABLE", e.getErrorCode().getCode());
     }
 
     @Test
