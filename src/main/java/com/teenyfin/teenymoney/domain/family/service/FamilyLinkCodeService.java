@@ -8,7 +8,6 @@ import com.teenyfin.teenymoney.global.exception.BusinessException;
 import com.teenyfin.teenymoney.global.exception.CommonErrorCode;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.Clock;
@@ -156,7 +155,10 @@ public class FamilyLinkCodeService {
         );
     }
 
-    @Transactional
+    /**
+     * 코드는 GETDEL 성공 시 소비 완료로 간주한다.
+     * 이후 DB 저장이 실패해도 동시 재발급과 충돌할 수 있으므로 코드를 복원하지 않는다.
+     */
     public void linkChild(Long childId, String code) {
         if (memberMapper.existsActiveConnectionByChildId(childId)) {
             throw new BusinessException(
@@ -189,9 +191,12 @@ public class FamilyLinkCodeService {
                     childId
             );
 
+            // ponytail: 소비된 코드는 저장 실패해도 되살리지 않는다.
+            // 부모가 재발급하면 되고, 복구 쓰기 자체도 실패할 수 있어 값어치가 안 맞는다.
+            // 재발급 안내가 불가능한 경로(DB 장애 → 500)가 늘면 그때 복구 도입.
             if (inserted != 1) {
                 throw new BusinessException(
-                        FamilyErrorCode.FAMILY_LINK_CODE_INVALID
+                        FamilyErrorCode.FAMILY_LINK_PARENT_UNAVAILABLE
                 );
             }
         } catch (DuplicateKeyException exception) {

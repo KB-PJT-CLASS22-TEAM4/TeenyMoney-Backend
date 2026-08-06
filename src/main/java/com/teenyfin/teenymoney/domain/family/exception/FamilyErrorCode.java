@@ -27,6 +27,11 @@ public enum FamilyErrorCode implements ErrorCode {
     FAMILY_LINK_TOO_MANY_ATTEMPTS(
             HttpStatus.TOO_MANY_REQUESTS,
             "연동 코드 입력 횟수를 초과했습니다. 잠시 후 다시 시도해 주세요."
+    ),
+
+    FAMILY_LINK_PARENT_UNAVAILABLE(
+            HttpStatus.CONFLICT,
+            "연동할 수 없는 계정입니다. 부모님께 새 연동 코드를 요청해 주세요."
     );
 
     private final HttpStatus status;

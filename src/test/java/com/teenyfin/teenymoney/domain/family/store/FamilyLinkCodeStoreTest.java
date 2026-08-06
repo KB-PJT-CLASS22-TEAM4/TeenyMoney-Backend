@@ -139,22 +139,17 @@ class FamilyLinkCodeStoreTest {
     }
 
     @Test
-    @DisplayName("첫 코드 입력 시도에만 제한 시간 TTL을 설정한다")
-    void firstConsumeAttemptStartsWindow() {
-        when(valueOperations.increment("family-link:attempts:33")).thenReturn(1L);
-
-        assertEquals(1L, store.incrementConsumeAttempts(33L, TTL));
-
-        verify(redisTemplate).expire("family-link:attempts:33", TTL);
-    }
-
-    @Test
-    @DisplayName("두 번째 이후 코드 입력은 제한 시간 창을 연장하지 않는다")
-    void laterConsumeAttemptDoesNotExtendWindow() {
-        when(valueOperations.increment("family-link:attempts:33")).thenReturn(2L);
+    @DisplayName("코드 입력 시도 증가와 최초 TTL 설정을 Redis 스크립트 한 번으로 처리한다")
+    void consumeAttemptIncrementAndExpiryUseSingleRedisExecution() {
+        when(redisTemplate.execute(
+                any(),
+                eq(List.of("family-link:attempts:33")),
+                eq("600000")))
+                .thenReturn(2L);
 
         assertEquals(2L, store.incrementConsumeAttempts(33L, TTL));
 
-        verify(redisTemplate, never()).expire("family-link:attempts:33", TTL);
+        verify(redisTemplate, never()).expire(any(), any(Duration.class));
+        verify(valueOperations, never()).increment(any());
     }
 }

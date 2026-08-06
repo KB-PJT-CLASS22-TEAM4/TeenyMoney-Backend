@@ -77,6 +77,15 @@ public class FamilyLinkCodeStore {
                     return ARGV[4]
                     """, String.class);
 
+    private static final DefaultRedisScript<Long> INCREMENT_ATTEMPTS_SCRIPT =
+            new DefaultRedisScript<>("""
+                    local attempts = redis.call('INCR', KEYS[1])
+                    if attempts == 1 then
+                        redis.call('PEXPIRE', KEYS[1], ARGV[1])
+                    end
+                    return attempts
+                    """, Long.class);
+
     private final StringRedisTemplate redisTemplate;
 
     public FamilyLinkCodeStore(StringRedisTemplate redisTemplate) {
@@ -176,11 +185,10 @@ public class FamilyLinkCodeStore {
             Duration ttl
     ) {
         String key = ATTEMPTS_PREFIX + childId;
-        Long attempts = redisTemplate.opsForValue().increment(key);
-
-        if (attempts != null && attempts == 1L) {
-            redisTemplate.expire(key, ttl);
-        }
-        return attempts;
+        return redisTemplate.execute(
+                INCREMENT_ATTEMPTS_SCRIPT,
+                List.of(key),
+                String.valueOf(ttl.toMillis())
+        );
     }
 }

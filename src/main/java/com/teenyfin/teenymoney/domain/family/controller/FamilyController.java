@@ -85,6 +85,16 @@ public class FamilyController {
                     @io.swagger.annotations.Authorization(value = "JWT")
             }
     )
+    @ApiResponses({
+            @io.swagger.annotations.ApiResponse(code = 200, message = "가족 연결 성공"),
+            @io.swagger.annotations.ApiResponse(code = 400, message = "만료·사용·형식 오류 코드 또는 유효하지 않은 부모"),
+            @io.swagger.annotations.ApiResponse(code = 401, message = "로그인 필요"),
+            @io.swagger.annotations.ApiResponse(code = 403, message = "자녀 회원이 아님"),
+            @io.swagger.annotations.ApiResponse(code = 409, message = "이미 가족과 연결된 자녀"),
+            @io.swagger.annotations.ApiResponse(code = 429, message = "코드 입력 시도 횟수 초과"),
+            @io.swagger.annotations.ApiResponse(code = 500, message = "예상하지 못한 DB 저장 실패"),
+            @io.swagger.annotations.ApiResponse(code = 503, message = "Redis 저장소 일시 장애")
+    })
     public ApiResponse<Void> linkFamily(
             @AuthenticationPrincipal MemberPrincipal principal,
             @Valid @RequestBody FamilyLinkRequestDTO request) {
