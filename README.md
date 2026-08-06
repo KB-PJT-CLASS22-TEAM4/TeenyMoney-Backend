@@ -477,6 +477,7 @@ Pull Request 제목은 `type(scope): 변경 내용` 형식을 사용합니다. �
 - [로컬 테스트 및 Tomcat 실행](docs/LOCAL_TEST.md)
 - [EC2 배포와 환경 설정](docs/DEPLOY.md)
 - [프론트엔드 연동 및 Swagger](docs/FRONTEND_DEV.md)
+- [가족 연동 코드 API 연동 안내](docs/FRONTEND_FAMILY_LINK_CODE.md)
 - [GitHub Actions 운영](.github/workflows/README.md)
 
 ## 프로젝트 성격

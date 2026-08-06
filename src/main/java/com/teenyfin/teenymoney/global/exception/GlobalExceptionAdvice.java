@@ -9,6 +9,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -52,6 +53,23 @@ public class GlobalExceptionAdvice {
     }
 
     /** 본문 JSON을 파싱하지 못함 (형식 오류, 타입 불일치 등) */
+    /**
+     * @RequestHeader(required = true) 인데 헤더가 없을 때.
+     *
+     * 이 핸들러가 없으면 아래 catch-all에 걸려 500이 나간다. 클라이언트 잘못인데
+     * 서버 장애처럼 보여서, 프론트가 무엇을 빠뜨렸는지 알 수 없다.
+     */
+    @ExceptionHandler(MissingRequestHeaderException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMissingHeader(MissingRequestHeaderException e) {
+        log.warn("필수 헤더 누락: {}", e.getHeaderName());
+        return ResponseEntity
+                .status(CommonErrorCode.COMMON_MISSING_HEADER.getStatus())
+                .body(ApiResponse.error(
+                        CommonErrorCode.COMMON_MISSING_HEADER,
+                        e.getHeaderName() + " 헤더가 필요합니다.",
+                        null));
+    }
+
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiResponse<Void>> handleUnreadable(HttpMessageNotReadableException e) {
         log.warn("본문 파싱 실패: {}", e.getMessage());
