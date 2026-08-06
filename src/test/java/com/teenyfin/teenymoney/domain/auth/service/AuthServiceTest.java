@@ -6,6 +6,7 @@ import com.teenyfin.teenymoney.domain.auth.dto.response.SignupResponseDTO;
 import com.teenyfin.teenymoney.domain.auth.exception.AuthErrorCode;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
+import com.teenyfin.teenymoney.domain.wallet.service.WalletService;
 import com.teenyfin.teenymoney.global.auth.RefreshTokenStore;
 import com.teenyfin.teenymoney.global.auth.LegalGuardianConsentStore;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
@@ -53,6 +54,7 @@ class AuthServiceTest {
     private RefreshTokenStore refreshTokenStore;
     private LegalGuardianConsentStore legalGuardianConsentStore;
     private AuthService authService;
+    private WalletService walletService;
 
     @BeforeEach
     void setUp() {
@@ -62,6 +64,7 @@ class AuthServiceTest {
         jwtProvider = mock(JwtProvider.class);
         refreshTokenStore = mock(RefreshTokenStore.class);
         legalGuardianConsentStore = mock(LegalGuardianConsentStore.class);
+        walletService = mock(WalletService.class);
         authService = new AuthService(
                 memberMapper,
                 passwordEncoder,
@@ -69,7 +72,8 @@ class AuthServiceTest {
                 jwtProvider,
                 refreshTokenStore,
                 legalGuardianConsentStore,
-                CLOCK);
+                CLOCK,
+                walletService);
         when(passwordEncoder.encode("password123")).thenReturn("encoded-password");
         when(memberMapper.selectEffectiveAgreementId(
                 eq("SERVICE_TERMS"), eq("1.0"), any(LocalDateTime.class)))

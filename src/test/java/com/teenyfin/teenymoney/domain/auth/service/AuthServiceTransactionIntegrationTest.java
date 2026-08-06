@@ -3,6 +3,8 @@ package com.teenyfin.teenymoney.domain.auth.service;
 import com.teenyfin.teenymoney.config.RootConfig;
 import com.teenyfin.teenymoney.domain.auth.dto.request.SignupRequestDTO;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
+import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
+import com.teenyfin.teenymoney.domain.wallet.service.WalletService;
 import com.teenyfin.teenymoney.global.auth.RefreshTokenStore;
 import com.teenyfin.teenymoney.global.auth.LegalGuardianConsentStore;
 import com.teenyfin.teenymoney.global.security.jwt.JwtProvider;
@@ -21,6 +23,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 import javax.sql.DataSource;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -54,6 +57,8 @@ public class AuthServiceTransactionIntegrationTest {
 
     // 테스트마다 겹치지 않는 이메일 보관, 삭제
     private String email;
+    // 지갑 생성 검증 테스트에서만 채워짐 - tearDown()에서 지갑을 먼저 지우는 데 씀
+    private Long createdMemberId;
 
     @BeforeEach
     void Setup() {
@@ -98,6 +103,18 @@ public class AuthServiceTransactionIntegrationTest {
          * 테스트가 실패해서 회원 데이터가 남더라도 정리한다.
          * 테스트 클래스에는 @Transactional을 붙이면 안 된다.
          */
+        // 지갑이 생성된 테스트라면, FK(ON DELETE RESTRICT) 때문에 회원보다 지갑을 먼저 지워야 한다.
+        if (jdbcTemplate != null && createdMemberId != null) {
+            jdbcTemplate.update(
+                    "DELETE FROM T_WLT_BASE_M WHERE member_id = ?",
+                    createdMemberId
+            );
+            jdbcTemplate.update(
+                    "DELETE FROM T_MBR_AGRMT_H WHERE member_id = ?",
+                    createdMemberId
+            );
+        }
+
         if (jdbcTemplate != null && email != null) {
             jdbcTemplate.update(
                     "DELETE FROM T_MBR_INFO_M WHERE email = ?",
@@ -131,7 +148,8 @@ public class AuthServiceTransactionIntegrationTest {
          *
          * 1. phoneVerificationService.verify()
          * 2. memberMapper.insert()
-         * 3. phoneVerificationService.consume()
+         * 3. walletService.createWallet()
+         * 4. phoneVerificationService.consume()
          *
          * INSERT 이후 실행되는 consume()에서 RuntimeException을 발생시킨다.
          */
@@ -161,6 +179,26 @@ public class AuthServiceTransactionIntegrationTest {
         );
     }
 
+    @Test
+    void signupShouldCreateMemberWalletWithZeroBalance() {
+        SignupRequestDTO request = signupRequest();
+
+        //when : 이번에 강제로 실패시키는 것 없이 회원가입을 끝까지 실행
+        var response = authService.signup(request);
+        createdMemberId = response.getMemberId();
+
+        // then: 방금 만들어진 memberId로 T_WLT_BASE_M에 MEMBER 타입 지갑이
+        // 실제로 생성됐는지 DB를 직접 조회해서 확인한다.
+        // (queryForMap은 결과가 0건이면 그 자체로 예외를 던지므로,
+        //  지갑이 아예 안 생겼을 때도 이 테스트가 실패로 알려준다.)
+        Map<String, Object> wallet = jdbcTemplate.queryForMap(
+                "SELECT balance, type FROM T_WLT_BASE_M WHERE member_id = ? AND type = 'MEMBER'",
+                createdMemberId
+        );
+        assertEquals("MEMBER", wallet.get("type"));
+        assertEquals(0L, ((Number) wallet.get("balance")).longValue());
+    }
+
     private SignupRequestDTO signupRequest() {
         String unique =
                 UUID.randomUUID().toString().replace("-", "");
@@ -180,8 +218,8 @@ public class AuthServiceTransactionIntegrationTest {
         request.setPasswordConfirm("password123");
         request.setServiceTermsAgreed(true);
         request.setPrivacyAgreed(true);
-        request.setServiceTermsVersion("1.0");
-        request.setPrivacyTermsVersion("1.0");
+        request.setServiceTermsVersion("1");
+        request.setPrivacyTermsVersion("1");
 
         return request;
     }
@@ -217,6 +255,13 @@ public class AuthServiceTransactionIntegrationTest {
         LegalGuardianConsentStore legalGuardianConsentStore() {
             return mock(LegalGuardianConsentStore.class);
         }
+
+        @Bean
+        WalletService walletService(WalletMapper walletMapper, Clock clock) {
+            // 이 테스트는 지갑이 실제로 DB에 생기는지 확인해야 하니, 다른 협력자들처럼
+            // mock으로 두지 않고 RootConfig가 제공하는 진짜 WalletMapper로 진짜 WalletService를 만든다.
+            return new WalletService(walletMapper, clock);
+        }
     }
 
     /*
@@ -235,7 +280,9 @@ public class AuthServiceTransactionIntegrationTest {
                 JwtProvider jwtProvider,
                 RefreshTokenStore refreshTokenStore,
                 LegalGuardianConsentStore legalGuardianConsentStore,
-                Clock clock) {
+                Clock clock,
+                WalletService walletService
+                ) {
 
             return new AuthService(
                     memberMapper,
@@ -244,7 +291,8 @@ public class AuthServiceTransactionIntegrationTest {
                     jwtProvider,
                     refreshTokenStore,
                     legalGuardianConsentStore,
-                    clock
+                    clock,
+                    walletService
             );
         }
     }
