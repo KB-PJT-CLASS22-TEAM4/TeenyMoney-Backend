@@ -27,6 +27,7 @@ public class FamilyLinkCodeStore {
     private static final String PARENT_PREFIX = "family-link:parent:";
     private static final String COOLDOWN_PREFIX = "family-link:cooldown:";
     private static final String IDEMPOTENCY_PREFIX = "family-link:idem:";
+    private static final String ATTEMPTS_PREFIX = "family-link:attempts:";
 
     /**
      * 코드 발급을 통째로 원자화한다. 발급되거나 재사용된 코드를 돌려주고,
@@ -75,6 +76,15 @@ public class FamilyLinkCodeStore {
                     redis.call('SET', KEYS[3], ARGV[4], 'PX', ARGV[2])
                     return ARGV[4]
                     """, String.class);
+
+    private static final DefaultRedisScript<Long> INCREMENT_ATTEMPTS_SCRIPT =
+            new DefaultRedisScript<>("""
+                    local attempts = redis.call('INCR', KEYS[1])
+                    if attempts == 1 then
+                        redis.call('PEXPIRE', KEYS[1], ARGV[1])
+                    end
+                    return attempts
+                    """, Long.class);
 
     private final StringRedisTemplate redisTemplate;
 
@@ -168,5 +178,17 @@ public class FamilyLinkCodeStore {
     /** 멱등 키는 부모별로 격리한다. 다른 회원이 같은 키 값을 보내도 서로 섞이지 않는다. */
     private String idempotencyKey(Long parentId, String idempotencyKey) {
         return IDEMPOTENCY_PREFIX + parentId + ":" + idempotencyKey;
+    }
+
+    public Long incrementConsumeAttempts(
+            Long childId,
+            Duration ttl
+    ) {
+        String key = ATTEMPTS_PREFIX + childId;
+        return redisTemplate.execute(
+                INCREMENT_ATTEMPTS_SCRIPT,
+                List.of(key),
+                String.valueOf(ttl.toMillis())
+        );
     }
 }

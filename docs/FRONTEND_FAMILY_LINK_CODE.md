@@ -12,7 +12,7 @@
 ## 1. 엔드포인트
 
 ```text
-POST /api/v1/families/link-codes
+POST /api/v1/families/make-codes
 ```
 
 | 항목 | 값 |
@@ -25,7 +25,7 @@ POST /api/v1/families/link-codes
 ### 요청
 
 ```http
-POST /api/v1/families/link-codes
+POST /api/v1/families/make-codes
 Authorization: Bearer eyJhbGciOi...
 Idempotency-Key: 8f14e45f-ceea-4d4b-9a2f-1c3d5e7a9b11
 ```
@@ -116,7 +116,7 @@ async function issueLinkCode() {
   const intentKey = crypto.randomUUID();   // 버튼 핸들러 진입 시 1회
 
   return withRetry(3, () =>
-    fetch('/api/v1/families/link-codes', {
+    fetch('/api/v1/families/make-codes', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
@@ -215,8 +215,24 @@ headers: { 'Idempotency-Key': String(memberId) }
 
 ## 6. 자녀 연동 API
 
-**아직 구현되지 않았습니다.** 코드 소비 로직(`consumeCode`)은 서버에 준비되어 있으나
-엔드포인트가 열려 있지 않습니다. 시도 횟수 제한과 함께 별도 이슈로 추가될 예정입니다.
+```text
+POST /api/v1/families/connect-link
+```
 
-그때까지 자녀 연동 화면은 개발을 시작하되 실제 호출은 대기하십시오.
-경로와 요청 형식이 정해지면 이 문서에 추가됩니다.
+| 항목 | 값 |
+|---|---|
+| 인증 | 필수. `Authorization: Bearer <accessToken>` |
+| 권한 | **CHILD 회원만**. PARENT 토큰은 403 |
+| 요청 본문 | `{"code":"048291"}` |
+| 성공 응답 | 200, `data: null` |
+
+코드는 정확히 6자리 숫자 문자열이어야 합니다. 앞자리 0을 보존해야 하므로 숫자로 변환하지 마십시오.
+
+코드는 Redis `GETDEL`로 한 번만 소비됩니다. 같은 코드를 다른 자녀가 다시 입력하면
+`400 FAMILY_LINK_CODE_INVALID`가 반환됩니다. 한 자녀가 이미 ACTIVE 가족 관계를 가지고 있으면
+`409 FAMILY_ALREADY_LINKED`, 10분 안에 잘못된 입력을 5회 초과하면
+`429 FAMILY_LINK_TOO_MANY_ATTEMPTS`가 반환됩니다.
+
+GETDEL 이후 부모·자녀 상태 검증 또는 DB 저장이 실패해도 소비된 코드는 복원하지 않습니다.
+이는 동시 재발급 과정에서 이전 코드가 다시 살아나는 경쟁 조건을 피하기 위한 fail-closed 정책입니다.
+이 경우 부모에게 새 코드를 발급받도록 안내하십시오.

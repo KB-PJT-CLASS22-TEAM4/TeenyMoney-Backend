@@ -11,6 +11,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
@@ -42,7 +43,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  */
 class FamilyControllerTest {
 
-    private static final String PATH = "/families/link-codes";
+    private static final String PATH = "/families/make-codes";
 
     private FamilyLinkCodeService familyLinkCodeService;
     private MockMvc mockMvc;
@@ -100,5 +101,29 @@ class FamilyControllerTest {
         assertTrue(body.contains("\"code\":\"048291\""), body);
 
         verify(familyLinkCodeService).makeCode(17L, "intent-1");
+    }
+
+    @Test
+    @DisplayName("자녀 연동 요청의 6자리 코드를 서비스에 전달한다")
+    void passesLinkCodeToService() throws Exception {
+        var response = mockMvc.perform(post("/families/connect-link")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"048291\"}"))
+                .andReturn().getResponse();
+
+        assertEquals(200, response.getStatus());
+        verify(familyLinkCodeService).linkChild(17L, "048291");
+    }
+
+    @Test
+    @DisplayName("6자리 숫자가 아닌 연동 코드는 400으로 거절한다")
+    void rejectsInvalidLinkCodeFormat() throws Exception {
+        var response = mockMvc.perform(post("/families/connect-link")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"12AB\"}"))
+                .andReturn().getResponse();
+
+        assertEquals(400, response.getStatus());
+        verify(familyLinkCodeService, never()).linkChild(any(), anyString());
     }
 }

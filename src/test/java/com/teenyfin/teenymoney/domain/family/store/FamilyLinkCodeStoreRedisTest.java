@@ -1,6 +1,7 @@
 package com.teenyfin.teenymoney.domain.family.store;
 
 import com.teenyfin.teenymoney.domain.family.service.FamilyLinkCodeService;
+import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -35,6 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 /**
  * 진짜 Redis에 붙어 동시성 계약을 확인한다. Mock으로는 명령 사이의 경쟁을 만들 수 없다.
@@ -53,6 +55,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class FamilyLinkCodeStoreRedisTest {
 
     // 실제 회원 ID와 겹치지 않도록 충분히 큰 값을 쓴다.
+    private static final MemberMapper memberMapper = mock(MemberMapper.class);
     private static final Long PARENT_ID = 99000017L;
     private static final Long OTHER_PARENT_ID = 99000042L;
     private static final Duration TTL = Duration.ofMinutes(10);
@@ -91,7 +94,7 @@ class FamilyLinkCodeStoreRedisTest {
 
         redisTemplate = new StringRedisTemplate(connectionFactory);
         store = new FamilyLinkCodeStore(redisTemplate);
-        service = new FamilyLinkCodeService(store, Clock.system(ZoneId.of("Asia/Seoul")));
+        service = new FamilyLinkCodeService(store, memberMapper, Clock.system(ZoneId.of("Asia/Seoul")));
     }
 
     @AfterAll
