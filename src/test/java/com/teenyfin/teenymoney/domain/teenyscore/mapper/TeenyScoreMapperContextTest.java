@@ -41,7 +41,11 @@ class TeenyScoreMapperContextTest {
                 "selectHistoriesByChildId",
                 "selectMonthlyHistoriesByChildId",
                 "selectAllGrades",
-                "existsActiveConnection")) {
+                "existsActiveConnection",
+                "selectScoreForUpdate",
+                "existsHistoryByEventKey",
+                "updateTeenyScore",
+                "insertScoreHistory")) {
             assertTrue(sqlSessionFactory.getConfiguration()
                     .hasStatement(NAMESPACE + "." + statement));
         }

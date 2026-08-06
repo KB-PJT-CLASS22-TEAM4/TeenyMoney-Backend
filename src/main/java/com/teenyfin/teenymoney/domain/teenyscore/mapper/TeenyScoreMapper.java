@@ -25,4 +25,26 @@ public interface TeenyScoreMapper {
     boolean existsActiveConnection(
             @Param("parentId") Long parentId,
             @Param("childId") Long childId);
+
+    @SuppressWarnings("MybatisXMapperMethodInspection")
+    Integer selectScoreForUpdate(
+            @Param("childId") Long childId);
+
+    boolean existsHistoryByEventKey(
+            @Param("childId") Long childId,
+            @Param("eventKey") String eventKey);
+
+    int updateTeenyScore(
+            @Param("childId") Long childId,
+            @Param("teenyScore") int teenyScore);
+
+    int insertScoreHistory(
+            @Param("childId") Long childId,
+            @Param("amount") int amount,
+            @Param("scoreAfter") int scoreAfter,
+            @Param("eventCode") String eventCode,
+            @Param("eventKey") String eventKey,
+            @Param("description") String description,
+            @Param("referenceType") String referenceType,
+            @Param("referenceId") Long referenceId);
 }
