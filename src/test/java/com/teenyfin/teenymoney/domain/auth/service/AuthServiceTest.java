@@ -64,6 +64,7 @@ class AuthServiceTest {
         jwtProvider = mock(JwtProvider.class);
         refreshTokenStore = mock(RefreshTokenStore.class);
         legalGuardianConsentStore = mock(LegalGuardianConsentStore.class);
+        walletService = mock(WalletService.class);
         authService = new AuthService(
                 memberMapper,
                 passwordEncoder,
