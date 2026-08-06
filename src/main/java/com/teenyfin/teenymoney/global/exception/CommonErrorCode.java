@@ -18,6 +18,7 @@ public enum CommonErrorCode implements ErrorCode {
     COMMON_INVALID_INPUT(HttpStatus.BAD_REQUEST, "요청 값이 올바르지 않습니다."),
     COMMON_INVALID_TYPE(HttpStatus.BAD_REQUEST, "요청 값의 형식이 올바르지 않습니다."),
     COMMON_MALFORMED_JSON(HttpStatus.BAD_REQUEST, "요청 본문을 읽을 수 없습니다."),
+    COMMON_MISSING_HEADER(HttpStatus.BAD_REQUEST, "필수 헤더가 없습니다."),
 
     // --- 401 / 403 (시큐리티 인프라 교차 관심사) ---
     AUTH_UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다."),
