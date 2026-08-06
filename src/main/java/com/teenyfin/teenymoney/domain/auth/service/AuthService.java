@@ -6,6 +6,8 @@ import com.teenyfin.teenymoney.domain.auth.dto.response.SignupResponseDTO;
 import com.teenyfin.teenymoney.domain.auth.exception.AuthErrorCode;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
+import com.teenyfin.teenymoney.domain.wallet.service.WalletService;
+import com.teenyfin.teenymoney.domain.wallet.vo.WalletType;
 import com.teenyfin.teenymoney.global.auth.RefreshTokenStore;
 import com.teenyfin.teenymoney.global.auth.LegalGuardianConsentStore;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
@@ -41,6 +43,7 @@ public class AuthService {
     private final RefreshTokenStore refreshTokenStore;
     private final LegalGuardianConsentStore legalGuardianConsentStore;
     private final Clock clock;
+    private final WalletService walletService;
 
     public AuthService(
             MemberMapper memberMapper,
@@ -49,7 +52,7 @@ public class AuthService {
             JwtProvider jwtProvider,
             RefreshTokenStore refreshTokenStore,
             LegalGuardianConsentStore legalGuardianConsentStore,
-            Clock clock) {
+            Clock clock, WalletService walletService) {
         this.memberMapper = memberMapper;
         this.passwordEncoder = passwordEncoder;
         this.phoneVerificationService = phoneVerificationService;
@@ -57,6 +60,7 @@ public class AuthService {
         this.refreshTokenStore = refreshTokenStore;
         this.legalGuardianConsentStore = legalGuardianConsentStore;
         this.clock = clock;
+        this.walletService = walletService;
     }
 
     @Transactional
@@ -98,6 +102,7 @@ public class AuthService {
         try {
             // [보호자 가입 흐름 12] 회원을 먼저 저장해 보호자·약관 이력에서 사용할 회원 ID를 생성한다.
             memberMapper.insert(member);
+            walletService.createWallet(member.getId(), WalletType.MEMBER);
             if (legalGuardianConsent != null) {
                 // [보호자 가입 흐름 13] 만 14세 미만 가입자의 비회원 법정대리인 인증 정보를 저장한다.
                 memberMapper.insertLegalGuardian(
