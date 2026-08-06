@@ -3,10 +3,13 @@ package com.teenyfin.teenymoney.domain.permission.service;
 import com.teenyfin.teenymoney.domain.categoryPolicy.exception.CategoryPolicyErrorCode;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
+import com.teenyfin.teenymoney.domain.permission.dto.request.PermissionRequestDTO;
 import com.teenyfin.teenymoney.domain.permission.dto.response.PermissionResponseChildDTO;
 import com.teenyfin.teenymoney.domain.permission.dto.response.PermissionResponseDTO;
 import com.teenyfin.teenymoney.domain.permission.dto.response.PermissionResponseWrapperDTO;
+import com.teenyfin.teenymoney.domain.permission.exception.PermissionErrorCode;
 import com.teenyfin.teenymoney.domain.permission.mapper.PermissionMapper;
+import com.teenyfin.teenymoney.domain.permission.vo.PermissionInsertVO;
 import com.teenyfin.teenymoney.domain.permission.vo.PermissionVO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import com.teenyfin.teenymoney.global.storage.S3Storage;
@@ -70,5 +73,37 @@ public class PermissionService {
                 .isExist(true)
                 .permission(permissionResponseDTO)
                 .build();
+    }
+
+    @Transactional
+    public PermissionResponseWrapperDTO createPermission(Long memberId, String role, PermissionRequestDTO permissionRequestDTO) {
+
+        // 자녀가 아닌 경우 오늘만 요청 생성 불가
+        if (!role.equals("CHILD")) {
+            throw new BusinessException(PermissionErrorCode.ONLY_CHILD_CAN_CREATE_PERMISSION);
+        }
+
+        List<PermissionVO> permissionVOList = permissionMapper.selectCreatedTodayByChildId(memberId);
+
+        // 이미 오늘 날짜에 생성된 오늘만 요청이 있을 경우 추가 생성 불가
+        if (!permissionVOList.isEmpty()) {
+            throw new BusinessException(PermissionErrorCode.ALREADY_EXIST_TODAY_PERMISSION);
+        }
+
+        Long parentId = permissionMapper.selectParentIdByChildId(memberId);
+
+        PermissionInsertVO permissionInsertVO = PermissionInsertVO.builder()
+                .parentId(parentId)
+                .childId(memberId)
+                .reason(permissionRequestDTO.getReason())
+                .build();
+
+        // 오늘만 요청 row 삽입
+        permissionMapper.insertPermissionRequest(permissionInsertVO);
+
+        // 오늘만 허용 대상 카테고리 row 삽입
+        permissionMapper.insertPermissionRequestCategories(permissionInsertVO.getId(), permissionRequestDTO.getCategories());
+
+        return getPermission(memberId, role);
     }
 }

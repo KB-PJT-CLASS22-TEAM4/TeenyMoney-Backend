@@ -1,6 +1,6 @@
 package com.teenyfin.teenymoney.domain.permission.controller;
 
-import com.teenyfin.teenymoney.domain.permission.dto.response.PermissionResponseDTO;
+import com.teenyfin.teenymoney.domain.permission.dto.request.PermissionRequestDTO;
 import com.teenyfin.teenymoney.domain.permission.dto.response.PermissionResponseWrapperDTO;
 import com.teenyfin.teenymoney.domain.permission.service.PermissionService;
 import com.teenyfin.teenymoney.global.response.ApiResponse;
@@ -8,9 +8,9 @@ import com.teenyfin.teenymoney.global.security.MemberPrincipal;
 import io.swagger.annotations.ApiOperation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import javax.validation.Valid;
 
 @RestController
 @RequestMapping("/permissions")
@@ -24,5 +24,13 @@ public class PermissionController {
     public ApiResponse<PermissionResponseWrapperDTO> getPermission(
             @AuthenticationPrincipal MemberPrincipal memberPrincipal) {
         return ApiResponse.ok(permissionService.getPermission(memberPrincipal.memberId(), memberPrincipal.role()));
+    }
+
+    @ApiOperation(value = "오늘만 허용 요청", notes = "원하는 카테고리와 사유를 포함해 오늘만 허용을 요청합니다.")
+    @PostMapping
+    public ApiResponse<PermissionResponseWrapperDTO> createPermission(
+            @AuthenticationPrincipal MemberPrincipal memberPrincipal,
+            @RequestBody @Valid PermissionRequestDTO permissionRequestDTO) {
+        return ApiResponse.ok(permissionService.createPermission(memberPrincipal.memberId(), memberPrincipal.role(), permissionRequestDTO));
     }
 }

@@ -6,11 +6,11 @@
 
     <resultMap id="permissionResultMap" type="com.teenyfin.teenymoney.domain.permission.vo.PermissionVO">
         <id property="id" column="id"/>
-        <result property="child_id" column="child_id"/>
-        <result property="category_name" column="category_name"/>
+        <result property="childId" column="child_id"/>
+        <result property="categoryName" column="category_name"/>
         <result property="reason" column="reason"/>
         <result property="status" column="status"/>
-        <result property="created_at" column="created_at"/>
+        <result property="createdAt" column="created_at"/>
     </resultMap>
 
     <select id="selectCreatedTodayByParentId" resultMap="permissionResultMap">
@@ -25,7 +25,7 @@
         JOIN T_TDP_REQCTGR_R rc ON r.id = rc.today_permission_id
         JOIN T_MCC_CTGR_C c ON rc.merchant_category_id = c.id
         WHERE r.parent_id = #{parentId}
-        AND DATE(created_at) = CURDATE()
+        AND DATE(r.created_at) = CURDATE()
     </select>
 
     <select id="selectCreatedTodayByChildId" resultMap="permissionResultMap">
@@ -40,7 +40,33 @@
         JOIN T_TDP_REQCTGR_R rc ON r.id = rc.today_permission_id
         JOIN T_MCC_CTGR_C c ON rc.merchant_category_id = c.id
         WHERE r.child_id = #{childId}
-        AND DATE(created_at) = CURDATE()
+        AND DATE(r.created_at) = CURDATE()
+    </select>
+
+    <insert id="insertPermissionRequest" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO T_TDP_REQ_L (parent_id, child_id, reason, status, expired_at, created_at)
+        VALUES (
+            #{parentId},
+            #{childId},
+            #{reason},
+            'PENDING',
+            DATE_ADD(CURDATE(), INTERVAL 1 DAY),
+            NOW()
+        )
+    </insert>
+
+    <insert id="insertPermissionRequestCategories">
+        INSERT INTO T_TDP_REQCTGR_R (today_permission_id, merchant_category_id, created_at)
+        VALUES
+        <foreach collection="categoryIds" item="categoryId" separator=",">
+            (#{permissionId}, #{categoryId}, NOW())
+        </foreach>
+    </insert>
+
+    <select id="selectParentIdByChildId" resultType="java.lang.Long">
+        SELECT parent_id
+        FROM T_MBR_CONN_R
+        WHERE child_id = #{childId}
     </select>
 
 </mapper>
