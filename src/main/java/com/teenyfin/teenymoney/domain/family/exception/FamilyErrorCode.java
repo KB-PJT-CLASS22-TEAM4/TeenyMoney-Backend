@@ -17,7 +17,17 @@ public enum FamilyErrorCode implements ErrorCode {
     // 헤더는 있는데 값이 비었거나 지나치게 긴 경우. 아예 없는 경우는 COMMON_MISSING_HEADER가 잡는다.
     FAMILY_IDEMPOTENCY_KEY_INVALID(
             HttpStatus.BAD_REQUEST,
-            "Idempotency-Key 값이 올바르지 않습니다. 발급 요청마다 고유한 UUID를 보내주세요.");
+            "Idempotency-Key 값이 올바르지 않습니다. 발급 요청마다 고유한 UUID를 보내주세요."),
+
+    FAMILY_ALREADY_LINKED(
+            HttpStatus.CONFLICT,
+            "이미 가족과 연결된 자녀입니다."
+    ),
+
+    FAMILY_LINK_TOO_MANY_ATTEMPTS(
+            HttpStatus.TOO_MANY_REQUESTS,
+            "연동 코드 입력 횟수를 초과했습니다. 잠시 후 다시 시도해 주세요."
+    );
 
     private final HttpStatus status;
     private final String message;

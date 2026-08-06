@@ -12,7 +12,7 @@
 ## 1. 엔드포인트
 
 ```text
-POST /api/v1/families/link-codes
+POST /api/v1/families/make-codes
 ```
 
 | 항목 | 값 |
@@ -25,7 +25,7 @@ POST /api/v1/families/link-codes
 ### 요청
 
 ```http
-POST /api/v1/families/link-codes
+POST /api/v1/families/make-codes
 Authorization: Bearer eyJhbGciOi...
 Idempotency-Key: 8f14e45f-ceea-4d4b-9a2f-1c3d5e7a9b11
 ```
@@ -116,7 +116,7 @@ async function issueLinkCode() {
   const intentKey = crypto.randomUUID();   // 버튼 핸들러 진입 시 1회
 
   return withRetry(3, () =>
-    fetch('/api/v1/families/link-codes', {
+    fetch('/api/v1/families/make-codes', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${accessToken}`,

@@ -1,5 +1,6 @@
 package com.teenyfin.teenymoney.domain.family.controller;
 
+import com.teenyfin.teenymoney.domain.family.dto.request.FamilyLinkRequestDTO;
 import com.teenyfin.teenymoney.domain.family.dto.response.FamilyLinkCodeResponseDTO;
 import com.teenyfin.teenymoney.domain.family.service.FamilyLinkCodeService;
 import com.teenyfin.teenymoney.global.response.ApiResponse;
@@ -9,10 +10,9 @@ import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiResponses;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import javax.validation.Valid;
 
 @RestController
 @RequestMapping("/families")
@@ -25,7 +25,7 @@ public class FamilyController {
         this.familyLinkCodeService = familyLinkCodeService;
     }
 
-    @PostMapping("/link-codes")
+    @PostMapping("/make-codes")
     @PreAuthorize("hasRole('PARENT')")
     @ApiOperation(
             value = "가족 연동 코드 발급",
@@ -75,4 +75,22 @@ public class FamilyController {
                 familyLinkCodeService.makeCode(principal.memberId(), idempotencyKey)
         );
     }
+
+    @PostMapping("/connect-link")
+    @PreAuthorize("hasRole('CHILD')")
+    @ApiOperation(
+            value = "가족 연동 코드 소비",
+            notes = "자녀가 부모의 6자리 연동 코드를 소비하고 가족 관계를 생성합니다.",
+            authorizations = {
+                    @io.swagger.annotations.Authorization(value = "JWT")
+            }
+    )
+    public ApiResponse<Void> linkFamily(
+            @AuthenticationPrincipal MemberPrincipal principal,
+            @Valid @RequestBody FamilyLinkRequestDTO request) {
+        familyLinkCodeService.linkChild(principal.memberId(), request.getCode());
+        return ApiResponse.ok();
+    }
+
+
 }

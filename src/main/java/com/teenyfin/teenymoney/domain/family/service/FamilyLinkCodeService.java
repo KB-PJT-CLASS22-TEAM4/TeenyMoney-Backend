@@ -3,9 +3,12 @@ package com.teenyfin.teenymoney.domain.family.service;
 import com.teenyfin.teenymoney.domain.family.dto.response.FamilyLinkCodeResponseDTO;
 import com.teenyfin.teenymoney.domain.family.exception.FamilyErrorCode;
 import com.teenyfin.teenymoney.domain.family.store.FamilyLinkCodeStore;
+import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import com.teenyfin.teenymoney.global.exception.CommonErrorCode;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.Clock;
@@ -23,6 +26,10 @@ import java.time.OffsetDateTime;
  */
 @Service
 public class FamilyLinkCodeService {
+
+    private final MemberMapper memberMapper;
+    private static final int MAX_CONSUME_ATTEMPTS = 5;
+    private static final Duration CONSUME_ATTEMPT_WINDOW = Duration.ofMinutes(10);
 
     private static final int CODE_RANGE = 1_000_000;
     private static final int MAX_GENERATION_ATTEMPTS = 10;
@@ -44,9 +51,10 @@ public class FamilyLinkCodeService {
     private final Clock clock;
     private final SecureRandom secureRandom = new SecureRandom();
 
-    public FamilyLinkCodeService(FamilyLinkCodeStore store, Clock clock) {
+    public FamilyLinkCodeService(FamilyLinkCodeStore store, MemberMapper memberMapper, Clock clock) {
         this.store = store;
         this.clock = clock;
+        this.memberMapper = memberMapper;
     }
 
     /**
@@ -147,4 +155,50 @@ public class FamilyLinkCodeService {
                 secureRandom.nextInt(CODE_RANGE)
         );
     }
+
+    @Transactional
+    public void linkChild(Long childId, String code) {
+        if (memberMapper.existsActiveConnectionByChildId(childId)) {
+            throw new BusinessException(
+                    FamilyErrorCode.FAMILY_ALREADY_LINKED
+            );
+        }
+
+        Long attempts = store.incrementConsumeAttempts(
+                childId,
+                CONSUME_ATTEMPT_WINDOW
+        );
+
+        if (attempts == null) {
+            throw new BusinessException(
+                    CommonErrorCode.COMMON_SERVICE_UNAVAILABLE
+            );
+        }
+
+        if (attempts > MAX_CONSUME_ATTEMPTS) {
+            throw new BusinessException(
+                    FamilyErrorCode.FAMILY_LINK_TOO_MANY_ATTEMPTS
+            );
+        }
+
+        Long parentId = consumeCode(code);
+
+        try {
+            int inserted = memberMapper.insertConnection(
+                    parentId,
+                    childId
+            );
+
+            if (inserted != 1) {
+                throw new BusinessException(
+                        FamilyErrorCode.FAMILY_LINK_CODE_INVALID
+                );
+            }
+        } catch (DuplicateKeyException exception) {
+            throw new BusinessException(
+                    FamilyErrorCode.FAMILY_ALREADY_LINKED
+            );
+        }
+    }
+
 }

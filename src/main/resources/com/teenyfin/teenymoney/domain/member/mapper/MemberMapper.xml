@@ -111,6 +111,15 @@
         ORDER BY conn.id
     </select>
 
+    <select id="existsActiveConnectionByChildId" resultType="boolean">
+        SELECT EXISTS (
+        SELECT 1
+        FROM T_MBR_CONN_R
+        WHERE child_id = #{childId}
+        AND status = 'ACTIVE'
+        )
+    </select>
+
     <!-- [보호자 가입 흐름 14] 동의 주체와 SMS 인증 근거를 약관 이력에 저장한다. -->
     <insert id="insertAgreementHistory">
         INSERT INTO T_MBR_AGRMT_H (
@@ -151,6 +160,25 @@
             #{verificationReference},
             #{verifiedAt}
         )
+    </insert>
+    <insert id="insertConnection">
+        INSERT INTO T_MBR_CONN_R (
+        parent_id,
+        child_id,
+        status
+        )
+        SELECT
+        parent_member.id,
+        child_member.id,
+        'ACTIVE'
+        FROM T_MBR_INFO_M parent_member
+        JOIN T_MBR_INFO_M child_member
+        ON child_member.id = #{childId}
+        WHERE parent_member.id = #{parentId}
+        AND parent_member.role = 'PARENT'
+        AND parent_member.status = 'ACTIVE'
+        AND child_member.role = 'CHILD'
+        AND child_member.status = 'ACTIVE'
     </insert>
 
 </mapper>

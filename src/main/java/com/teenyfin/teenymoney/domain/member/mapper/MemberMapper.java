@@ -51,4 +51,13 @@ public interface MemberMapper {
             @Param("verificationMethod") String verificationMethod,
             @Param("verificationReference") String verificationReference,
             @Param("verifiedAt") LocalDateTime verifiedAt);
+
+    // 존재하는지
+    boolean existsActiveConnectionByChildId(@Param("childId") Long childId);
+
+    // 연결 관계 -> 1 성공 0 실패(상태 유효X)
+    int insertConnection(
+            @Param("parentId") Long parentId,
+            @Param("childId") Long childId
+    );
 }
