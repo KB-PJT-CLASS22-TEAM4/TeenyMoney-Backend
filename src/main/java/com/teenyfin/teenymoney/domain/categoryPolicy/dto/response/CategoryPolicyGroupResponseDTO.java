@@ -13,8 +13,8 @@ import java.util.List;
 public class CategoryPolicyGroupResponseDTO {
 
     @ApiModelProperty(value = "정책 단계 (ALLOW/WATCH/BLOCK)", example = "ALLOW")
-    String policy;
+    private String policy;
 
     @ApiModelProperty(value = "카테고리 정책 리스트")
-    List<CategoryPolicyResponseDTO> categoryPolicyList;
+    private List<CategoryPolicyResponseDTO> categoryPolicyList;
 }
