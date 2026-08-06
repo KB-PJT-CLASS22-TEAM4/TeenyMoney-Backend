@@ -33,4 +33,13 @@ public class PermissionController {
             @RequestBody @Valid PermissionRequestDTO permissionRequestDTO) {
         return ApiResponse.ok(permissionService.createPermission(memberPrincipal.memberId(), memberPrincipal.role(), permissionRequestDTO));
     }
+
+    @ApiOperation(value = "오늘만 허용 요청 내용 수정", notes = "아직 수락 혹은 거절되지 않은 오늘만 허용 요청의 카테고리와 사유를 수정합니다.")
+    @PatchMapping("/{permissionId}")
+    public ApiResponse<PermissionResponseWrapperDTO> updatePermission(
+            @AuthenticationPrincipal MemberPrincipal memberPrincipal,
+            @PathVariable Long permissionId,
+            @RequestBody @Valid PermissionRequestDTO permissionRequestDTO) {
+        return ApiResponse.ok(permissionService.updatePermission(memberPrincipal.memberId(), memberPrincipal.role(), permissionId, permissionRequestDTO));
+    }
 }

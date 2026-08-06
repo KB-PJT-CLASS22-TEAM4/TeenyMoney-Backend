@@ -10,8 +10,8 @@ import java.time.LocalDateTime;
 public class PermissionVO {
 
     private Long id;
+    private Long parentId;
     private Long childId;
-    private String categoryName;
     private String reason;
     private String status;
     private LocalDateTime createdAt;
