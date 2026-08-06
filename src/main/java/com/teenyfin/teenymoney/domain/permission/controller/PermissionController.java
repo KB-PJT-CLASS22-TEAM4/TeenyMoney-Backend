@@ -42,4 +42,13 @@ public class PermissionController {
             @RequestBody @Valid PermissionRequestDTO permissionRequestDTO) {
         return ApiResponse.ok(permissionService.updatePermission(memberPrincipal.memberId(), memberPrincipal.role(), permissionId, permissionRequestDTO));
     }
+
+    @ApiOperation(value = "오늘만 허용 요청 취소", notes = "아직 수락 혹은 거절되지 않은 오늘만 허용 요청을 취소합니다.")
+    @DeleteMapping("/{permissionId}")
+    public ApiResponse<Void> deletePermission(
+            @AuthenticationPrincipal MemberPrincipal memberPrincipal,
+            @PathVariable Long permissionId) {
+        permissionService.deletePermission(memberPrincipal.memberId(), memberPrincipal.role(), permissionId);
+        return ApiResponse.ok();
+    }
 }

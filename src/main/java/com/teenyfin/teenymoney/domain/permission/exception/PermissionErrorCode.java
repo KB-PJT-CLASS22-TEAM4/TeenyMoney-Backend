@@ -13,9 +13,9 @@ public enum PermissionErrorCode implements ErrorCode {
     INVALID_PERMISSION_ID(HttpStatus.BAD_REQUEST, "유효하지 않은 아이디입니다."),
     ONLY_CHILD_CAN_CREATE_PERMISSION(HttpStatus.FORBIDDEN, "자녀만 오늘만 허용을 요청할 수 있습니다."),
     ALREADY_EXIST_TODAY_PERMISSION(HttpStatus.FORBIDDEN, "이미 오늘 날짜에 생성한 오늘만 허용 요청이 있습니다."),
-    FORBIDDEN_TO_UPDATE_PERMISSION(HttpStatus.FORBIDDEN, "해당 오늘만 허용 요청에 대한 수정 권한이 없습니다."),
-    ONLY_CAN_UPDATE_PERMISSION_CREATED_TODAY(HttpStatus.FORBIDDEN, "오늘 날짜에 생성한 오늘만 허용 요청만 수정할 수 있습니다."),
-    ONLY_CAN_UPDATE_PENDING_PERMISSION(HttpStatus.FORBIDDEN, "수락 혹은 거절되지 않은 오늘만 허용 요청만 수정할 수 있습니다.");
+    FORBIDDEN_TO_PROCESS_PERMISSION(HttpStatus.FORBIDDEN, "해당 오늘만 허용 요청에 대한 처리 권한이 없습니다."),
+    ONLY_CAN_PROCESS_PERMISSION_CREATED_TODAY(HttpStatus.FORBIDDEN, "오늘 날짜에 생성한 오늘만 허용 요청만 처리할 수 있습니다."),
+    ONLY_CAN_PROCESS_PENDING_PERMISSION(HttpStatus.FORBIDDEN, "수락 혹은 거절되지 않은 오늘만 허용 요청만 처리할 수 있습니다.");
 
     private final HttpStatus status;
     private final String message;
