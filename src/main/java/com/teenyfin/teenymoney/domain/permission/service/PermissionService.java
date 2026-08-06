@@ -110,26 +110,7 @@ public class PermissionService {
     public PermissionResponseWrapperDTO updatePermission(Long memberId, String role, Long permissionId, PermissionRequestDTO permissionRequestDTO) {
 
         PermissionVO permissionVO = permissionMapper.selectById(permissionId);
-
-        // 해당하는 아이디의 오늘만 허용 요청이 없을 경우 예외 처리
-        if (permissionVO == null) {
-            throw new BusinessException(PermissionErrorCode.INVALID_PERMISSION_ID);
-        }
-
-        // 자신이 생성했던 오늘만 허용 요청만 수정 가능
-        if (!Objects.equals(permissionVO.getChildId(), memberId)) {
-            throw new BusinessException(PermissionErrorCode.FORBIDDEN_TO_PROCESS_PERMISSION);
-        }
-
-        // 오늘 날짜에 생성된 오늘만 허용 요청만 수정 가능
-        if (!permissionVO.getCreatedAt().toLocalDate().equals(LocalDate.now())) {
-            throw new BusinessException(PermissionErrorCode.ONLY_CAN_PROCESS_PERMISSION_CREATED_TODAY);
-        }
-
-        // 대기 상태의 오늘만 허용 요청만 수정 가능
-        if (!permissionVO.getStatus().equals("PENDING")) {
-            throw new BusinessException(PermissionErrorCode.ONLY_CAN_PROCESS_PENDING_PERMISSION);
-        }
+        validatePermission(memberId, permissionVO);
 
         // 사유 수정
         permissionMapper.updatePermissionReason(permissionId, permissionRequestDTO.getReason());
@@ -148,6 +129,17 @@ public class PermissionService {
     public void deletePermission(Long memberId, String role, Long permissionId) {
 
         PermissionVO permissionVO = permissionMapper.selectById(permissionId);
+        validatePermission(memberId, permissionVO);
+
+        // 오늘만 허용 대상 카테고리 row 일괄 삭제
+        permissionMapper.deletePermissionCategoriesByPermissionId(permissionId);
+
+        // 오늘만 허용 요청 row 삭제
+        permissionMapper.deletePermissionById(permissionId);
+    }
+
+    // 오늘만 허용 요청 유효성 검사
+    private void validatePermission(Long memberId, PermissionVO permissionVO) {
 
         // 해당하는 아이디의 오늘만 허용 요청이 없을 경우 예외 처리
         if (permissionVO == null) {
@@ -168,11 +160,5 @@ public class PermissionService {
         if (!permissionVO.getStatus().equals("PENDING")) {
             throw new BusinessException(PermissionErrorCode.ONLY_CAN_PROCESS_PENDING_PERMISSION);
         }
-
-        // 오늘만 허용 대상 카테고리 row 일괄 삭제
-        permissionMapper.deletePermissionCategoriesByPermissionId(permissionId);
-
-        // 오늘만 허용 요청 row 삭제
-        permissionMapper.deletePermissionById(permissionId);
     }
 }
