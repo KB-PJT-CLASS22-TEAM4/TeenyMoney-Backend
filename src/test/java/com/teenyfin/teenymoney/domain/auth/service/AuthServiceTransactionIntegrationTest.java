@@ -104,23 +104,23 @@ public class AuthServiceTransactionIntegrationTest {
          * 테스트 클래스에는 @Transactional을 붙이면 안 된다.
          */
         // 지갑이 생성된 테스트라면, FK(ON DELETE RESTRICT) 때문에 회원보다 지갑을 먼저 지워야 한다.
-//        if (jdbcTemplate != null && createdMemberId != null) {
-//            jdbcTemplate.update(
-//                    "DELETE FROM T_WLT_BASE_M WHERE member_id = ?",
-//                    createdMemberId
-//            );
-//            jdbcTemplate.update(
-//                    "DELETE FROM T_MBR_AGRMT_H WHERE member_id = ?",
-//                    createdMemberId
-//            );
-//        }
-//
-//        if (jdbcTemplate != null && email != null) {
-//            jdbcTemplate.update(
-//                    "DELETE FROM T_MBR_INFO_M WHERE email = ?",
-//                    email
-//            );
-//        }
+        if (jdbcTemplate != null && createdMemberId != null) {
+            jdbcTemplate.update(
+                    "DELETE FROM T_WLT_BASE_M WHERE member_id = ?",
+                    createdMemberId
+            );
+            jdbcTemplate.update(
+                    "DELETE FROM T_MBR_AGRMT_H WHERE member_id = ?",
+                    createdMemberId
+            );
+        }
+
+        if (jdbcTemplate != null && email != null) {
+            jdbcTemplate.update(
+                    "DELETE FROM T_MBR_INFO_M WHERE email = ?",
+                    email
+            );
+        }
 
         if (childContext != null) {
             childContext.close();
