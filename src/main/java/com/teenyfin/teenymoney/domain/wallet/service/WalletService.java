@@ -8,8 +8,10 @@ import com.teenyfin.teenymoney.domain.wallet.dto.response.WalletTransactionRespo
 import com.teenyfin.teenymoney.domain.wallet.exception.WalletErrorCode;
 import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
 import com.teenyfin.teenymoney.domain.wallet.vo.WalletTransactionVO;
+import com.teenyfin.teenymoney.domain.wallet.vo.WalletType;
 import com.teenyfin.teenymoney.domain.wallet.vo.WalletVO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -88,4 +90,37 @@ public class WalletService {
         }
         return wallet;
     }
+
+    // 새 지갑을 만들고, 생성된 지갑의 id를 리턴한다.
+    // 호출한 쪽(예: 나중의 AuthService.signup(), 예적금 가입 서비스)이 이 id를
+    // 자기 테이블(T_DPT_ENROLL_M.wallet_id 등)에 저장하는 데 쓴다.
+    @Transactional
+    public Long createWallet(Long memberId, WalletType type) {
+        // MEMBER 타입은 "회원당 지갑 1개"가 원칙이라, 이미 있으면 막는다.
+        // DEPOSIT/SAVING은 가입 건마다 새로 생기는 지갑이라 이 검사를 건너뛴다
+        if (type == WalletType.MEMBER && walletMapper.selectMemberWalletByMemberId(memberId) != null) {
+            throw new BusinessException(WalletErrorCode.WALLET_ALREADY_EXISTS);
+        }
+
+        WalletVO wallet = new WalletVO();
+        wallet.setMemberId(memberId);
+        wallet.setBalance(0L); // 신규 지갑은 항상 0원부터 시작
+        wallet.setType(type.name()); // enum -> DB에 저장할 문자열("MEMBER" 등)로 변환
+
+        try {
+            walletMapper.insertWallet(wallet);
+        } catch (DuplicateKeyException exception) {
+            // 위 if문 체크와 이 INSERT 사이의 아주 짧은 틈에, 다른 요청이 먼저 같은 회원의
+            // MEMBER 지갑을 만들어버린 경우(동시 요청 레이스)를 여기서 잡는다.
+            // DB의 유니크 제약(마이그레이션에서 추가 예정)이 두 번째 INSERT를 막아주고,
+            // 그 신호가 DuplicateKeyException으로 여기까지 올라온다.
+            // 지금은 DB에 그 유니크 제약이 아직 없어서 이 catch가 실제로 걸릴 일은 없지만,
+            // 마이그레이션 추가하면 이 catch가 비로소 의미를 갖게 된다.
+            throw new BusinessException(WalletErrorCode.WALLET_ALREADY_EXISTS);
+        }
+        return wallet.getId();
+
+    }
+
+
 }

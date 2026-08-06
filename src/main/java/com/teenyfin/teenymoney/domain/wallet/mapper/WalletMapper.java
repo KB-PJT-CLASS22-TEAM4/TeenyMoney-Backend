@@ -49,4 +49,9 @@ public interface WalletMapper {
             @Param("refType") String refType,
             @Param("refId") Long refId,
             @Param("description") String description);
+
+    // 새 지갑 1건을 T_WLT_BASE_M에 만든다.
+    // 리턴 타입은 void지만, 실행 후 wallet.getId()에 방금 생성된 PK가 자동으로 채워진다
+    // (XML의 useGeneratedKeys="true" keyProperty="id" 설정 덕분 - MemberMapper.insert()와 같은 방식).
+    void insertWallet(WalletVO wallet);
 }
