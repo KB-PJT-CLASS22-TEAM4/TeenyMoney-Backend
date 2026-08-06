@@ -118,4 +118,52 @@
         )
     </select>
 
+    <select id="selectScoreForUpdate" resultType="java.lang.Integer">
+        SELECT teeny_score
+        FROM T_MBR_INFO_M
+        WHERE id = #{childId}
+          AND role = 'CHILD'
+          AND status = 'ACTIVE'
+        FOR UPDATE
+    </select>
+
+    <select id="existsHistoryByEventKey" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1
+            FROM T_TNY_SCOREHIST_H
+            WHERE child_id = #{childId}
+              AND event_key = #{eventKey}
+        )
+    </select>
+
+    <update id="updateTeenyScore">
+        UPDATE T_MBR_INFO_M
+        SET teeny_score = #{teenyScore}
+        WHERE id = #{childId}
+          AND role = 'CHILD'
+          AND status = 'ACTIVE'
+    </update>
+
+    <insert id="insertScoreHistory">
+        INSERT INTO T_TNY_SCOREHIST_H (
+            child_id,
+            amount,
+            score_after,
+            event_code,
+            event_key,
+            description,
+            reference_type,
+            reference_id
+        ) VALUES (
+            #{childId},
+            #{amount},
+            #{scoreAfter},
+            #{eventCode},
+            #{eventKey},
+            #{description},
+            #{referenceType},
+            #{referenceId}
+        )
+    </insert>
+
 </mapper>

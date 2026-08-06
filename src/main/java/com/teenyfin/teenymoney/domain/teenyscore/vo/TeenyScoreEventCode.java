@@ -1,0 +1,27 @@
+package com.teenyfin.teenymoney.domain.teenyscore.vo;
+
+/** 점수 변동 원인을 이력에 일관된 코드로 저장하기 위한 이벤트 목록이다. */
+public enum TeenyScoreEventCode {
+    // 결제
+    PAYMENT_WATCH_WITHIN_THRESHOLD,
+    PAYMENT_WATCH_OVER_THRESHOLD,
+
+    // 예금
+    DEPOSIT_MATURED,
+    DEPOSIT_EARLY_TERMINATED,
+
+    // 적금 및 예·적금 공통 정책
+    SAVING_FIXED_INSTALLMENT_PAID,
+    SAVING_FIXED_INSTALLMENT_MISSED,
+    SAVING_FIXED_MATURED,
+    SAVING_FREE_MONTHLY_RESULT,
+    SAVING_FREE_MATURED,
+    SAVING_EARLY_TERMINATED,
+    SAVING_CONSECUTIVE_MATURITY_BONUS,
+    SAVING_REPEATED_EARLY_TERMINATION,
+
+    // 대출
+    LOAN_INSTALLMENT_OVERDUE,
+    LOAN_MATURED_REPAID,
+    LOAN_DEFAULTED
+}
