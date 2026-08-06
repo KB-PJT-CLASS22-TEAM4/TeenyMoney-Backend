@@ -31,6 +31,9 @@ public interface PermissionMapper {
     // 오늘만 허용 요청의 사유 수정
     void updatePermissionReason(@Param("permissionId") Long permissionId, @Param("reason") String reason);
 
+    // 오늘만 허용 요청의 상태 수정
+    void updatePermissionStatus(@Param("permissionId") Long permissionId, @Param("status") String status);
+
     // 오늘만 허용 요청 삭제
     void deletePermissionById(@Param("permissionId") Long permissionId);
 

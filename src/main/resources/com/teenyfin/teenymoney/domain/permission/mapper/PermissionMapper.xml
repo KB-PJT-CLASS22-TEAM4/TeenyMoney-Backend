@@ -84,6 +84,12 @@
         WHERE id = #{permissionId}
     </update>
 
+    <update id="updatePermissionStatus">
+        UPDATE T_TDP_REQ_L
+        SET status = #{status}
+        WHERE id = #{permissionId}
+    </update>
+
     <delete id="deletePermissionById">
         DELETE
         FROM T_TDP_REQ_L

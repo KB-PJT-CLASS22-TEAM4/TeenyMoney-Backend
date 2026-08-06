@@ -34,7 +34,7 @@ public class PermissionController {
         return ApiResponse.ok(permissionService.createPermission(memberPrincipal.memberId(), memberPrincipal.role(), permissionRequestDTO));
     }
 
-    @ApiOperation(value = "오늘만 허용 요청 내용 수정", notes = "아직 수락 혹은 거절되지 않은 오늘만 허용 요청의 카테고리와 사유를 수정합니다.")
+    @ApiOperation(value = "오늘만 허용 요청 내용 수정", notes = "아직 승인 혹은 거절되지 않은 오늘만 허용 요청의 카테고리와 사유를 수정합니다.")
     @PatchMapping("/{permissionId}")
     public ApiResponse<PermissionResponseWrapperDTO> updatePermission(
             @AuthenticationPrincipal MemberPrincipal memberPrincipal,
@@ -43,7 +43,23 @@ public class PermissionController {
         return ApiResponse.ok(permissionService.updatePermission(memberPrincipal.memberId(), memberPrincipal.role(), permissionId, permissionRequestDTO));
     }
 
-    @ApiOperation(value = "오늘만 허용 요청 취소", notes = "아직 수락 혹은 거절되지 않은 오늘만 허용 요청을 취소합니다.")
+    @ApiOperation(value = "오늘만 허용 요청 승인", notes = "아직 승인 혹은 거절되지 않은 오늘만 허용 요청을 승인합니다.")
+    @PatchMapping("/{permissionId}/approve")
+    public ApiResponse<PermissionResponseWrapperDTO> approvePermission(
+            @AuthenticationPrincipal MemberPrincipal memberPrincipal,
+            @PathVariable Long permissionId) {
+        return ApiResponse.ok(permissionService.approvePermission(memberPrincipal.memberId(), memberPrincipal.role(), permissionId));
+    }
+
+    @ApiOperation(value = "오늘만 허용 요청 거절", notes = "아직 승인 혹은 거절되지 않은 오늘만 허용 요청을 거절합니다.")
+    @PatchMapping("/{permissionId}/reject")
+    public ApiResponse<PermissionResponseWrapperDTO> rejectPermission(
+            @AuthenticationPrincipal MemberPrincipal memberPrincipal,
+            @PathVariable Long permissionId) {
+        return ApiResponse.ok(permissionService.rejectPermission(memberPrincipal.memberId(), memberPrincipal.role(), permissionId));
+    }
+
+    @ApiOperation(value = "오늘만 허용 요청 취소", notes = "아직 승인 혹은 거절되지 않은 오늘만 허용 요청을 취소합니다.")
     @DeleteMapping("/{permissionId}")
     public ApiResponse<Void> deletePermission(
             @AuthenticationPrincipal MemberPrincipal memberPrincipal,

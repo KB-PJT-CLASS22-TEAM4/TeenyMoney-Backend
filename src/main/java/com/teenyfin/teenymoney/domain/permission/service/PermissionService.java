@@ -76,9 +76,9 @@ public class PermissionService {
     @Transactional
     public PermissionResponseWrapperDTO createPermission(Long memberId, String role, PermissionRequestDTO permissionRequestDTO) {
 
-        // 자녀가 아닌 경우 오늘만 요청 생성 불가
+        // 자녀만 오늘만 요청 생성 가능
         if (!role.equals("CHILD")) {
-            throw new BusinessException(PermissionErrorCode.ONLY_CHILD_CAN_CREATE_PERMISSION);
+            throw new BusinessException(PermissionErrorCode.ONLY_CHILD_CAN_MANAGE_PERMISSION);
         }
 
         PermissionVO permissionVO = permissionMapper.selectCreatedTodayByChildId(memberId);
@@ -109,8 +109,13 @@ public class PermissionService {
     @Transactional
     public PermissionResponseWrapperDTO updatePermission(Long memberId, String role, Long permissionId, PermissionRequestDTO permissionRequestDTO) {
 
+        // 자녀만 오늘만 요청 수정 가능
+        if (!role.equals("CHILD")) {
+            throw new BusinessException(PermissionErrorCode.ONLY_CHILD_CAN_MANAGE_PERMISSION);
+        }
+
         PermissionVO permissionVO = permissionMapper.selectById(permissionId);
-        validatePermission(memberId, permissionVO);
+        validatePermission(memberId, role, permissionVO);
 
         // 사유 수정
         permissionMapper.updatePermissionReason(permissionId, permissionRequestDTO.getReason());
@@ -124,12 +129,53 @@ public class PermissionService {
         return getPermission(memberId, role);
     }
 
+    // 오늘 날짜에 생성한 오늘만 허용 요청 승인
+    @Transactional
+    public PermissionResponseWrapperDTO approvePermission(Long memberId, String role, Long permissionId) {
+
+        // 부모만 오늘만 요청 승인 가능
+        if (!role.equals("PARENT")) {
+            throw new BusinessException(PermissionErrorCode.ONLY_PARENT_CAN_REVIEW_PERMISSION);
+        }
+
+        PermissionVO permissionVO = permissionMapper.selectById(permissionId);
+        validatePermission(memberId, role, permissionVO);
+
+        // 상태 변경
+        permissionMapper.updatePermissionStatus(permissionId, "APPROVED");
+
+        return getPermission(memberId, role);
+    }
+
+    // 오늘 날짜에 생성한 오늘만 허용 요청 거절
+    @Transactional
+    public PermissionResponseWrapperDTO rejectPermission(Long memberId, String role, Long permissionId) {
+
+        // 부모만 오늘만 요청 거절 가능
+        if (!role.equals("PARENT")) {
+            throw new BusinessException(PermissionErrorCode.ONLY_PARENT_CAN_REVIEW_PERMISSION);
+        }
+
+        PermissionVO permissionVO = permissionMapper.selectById(permissionId);
+        validatePermission(memberId, role, permissionVO);
+
+        // 상태 변경
+        permissionMapper.updatePermissionStatus(permissionId, "REJECTED");
+
+        return getPermission(memberId, role);
+    }
+
     // 오늘 날짜에 생성한 오늘만 허용 요청 삭제
     @Transactional
     public void deletePermission(Long memberId, String role, Long permissionId) {
 
+        // 자녀만 오늘만 요청 삭제 가능
+        if (!role.equals("CHILD")) {
+            throw new BusinessException(PermissionErrorCode.ONLY_CHILD_CAN_MANAGE_PERMISSION);
+        }
+
         PermissionVO permissionVO = permissionMapper.selectById(permissionId);
-        validatePermission(memberId, permissionVO);
+        validatePermission(memberId, role, permissionVO);
 
         // 오늘만 허용 대상 카테고리 row 일괄 삭제
         permissionMapper.deletePermissionCategoriesByPermissionId(permissionId);
@@ -138,25 +184,26 @@ public class PermissionService {
         permissionMapper.deletePermissionById(permissionId);
     }
 
-    // 오늘만 허용 요청 유효성 검사
-    private void validatePermission(Long memberId, PermissionVO permissionVO) {
+    // 부모 대상의 오늘만 허용 요청 유효성 검사
+    private void validatePermission(Long memberId, String role, PermissionVO permissionVO) {
 
         // 해당하는 아이디의 오늘만 허용 요청이 없을 경우 예외 처리
         if (permissionVO == null) {
             throw new BusinessException(PermissionErrorCode.INVALID_PERMISSION_ID);
         }
 
-        // 자신이 생성했던 오늘만 허용 요청만 삭제 가능
-        if (!Objects.equals(permissionVO.getChildId(), memberId)) {
+        // 자신이 생성했거나 자신에게 요청된 오늘만 허용 요청만 처리 가능
+        if ((role.equals("CHILD") && !Objects.equals(permissionVO.getChildId(), memberId)) ||
+                (role.equals("PARENT") && !Objects.equals(permissionVO.getParentId(), memberId))) {
             throw new BusinessException(PermissionErrorCode.FORBIDDEN_TO_PROCESS_PERMISSION);
         }
 
-        // 오늘 날짜에 생성된 오늘만 허용 요청만 삭제 가능
+        // 오늘 날짜에 생성된 오늘만 허용 요청만 처리 가능
         if (!permissionVO.getCreatedAt().toLocalDate().equals(LocalDate.now())) {
             throw new BusinessException(PermissionErrorCode.ONLY_CAN_PROCESS_PERMISSION_CREATED_TODAY);
         }
 
-        // 대기 상태의 오늘만 허용 요청만 삭제 가능
+        // 대기 상태의 오늘만 허용 요청만 처리 가능
         if (!permissionVO.getStatus().equals("PENDING")) {
             throw new BusinessException(PermissionErrorCode.ONLY_CAN_PROCESS_PENDING_PERMISSION);
         }
