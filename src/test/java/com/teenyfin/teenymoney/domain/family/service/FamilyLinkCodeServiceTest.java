@@ -1,5 +1,6 @@
 package com.teenyfin.teenymoney.domain.family.service;
 
+import com.teenyfin.teenymoney.domain.categoryPolicy.mapper.CategoryPolicyMapper;
 import com.teenyfin.teenymoney.domain.family.store.FamilyLinkCodeStore;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
@@ -41,16 +42,19 @@ class FamilyLinkCodeServiceTest {
     private static final Instant NOW = Instant.parse("2026-08-06T00:00:00Z");
     private static final String IDEM = "intent-1";
 
+    private CategoryPolicyMapper categoryPolicyMapper;
     private MemberMapper memberMapper;
     private FamilyLinkCodeStore store;
     private FamilyLinkCodeService service;
 
     @BeforeEach
     void setUp() {
+        categoryPolicyMapper = mock(CategoryPolicyMapper.class);
         store = mock(FamilyLinkCodeStore.class);
         memberMapper = mock(MemberMapper.class);
         service = new FamilyLinkCodeService(
                 store,
+                categoryPolicyMapper,
                 memberMapper,
                 Clock.fixed(NOW, ZoneId.of("Asia/Seoul")));
 
@@ -227,6 +231,29 @@ class FamilyLinkCodeServiceTest {
         service.linkChild(CHILD_ID, "048291");
 
         verify(memberMapper).insertConnection(PARENT_ID, CHILD_ID);
+        verify(categoryPolicyMapper)
+                .insertDefaultPolicies(PARENT_ID, CHILD_ID);
+    }
+
+    @Test
+    @DisplayName("기본 정책 생성 실패 시 예외를 그대로 전파한다")
+    void policyInsertFailureIsPropagated() {
+        when(store.incrementConsumeAttempts(eq(CHILD_ID), any()))
+                .thenReturn(1L);
+        when(store.consumeCode("048291"))
+                .thenReturn(PARENT_ID);
+        when(memberMapper.insertConnection(PARENT_ID, CHILD_ID))
+                .thenReturn(1);
+        when(categoryPolicyMapper.insertDefaultPolicies(PARENT_ID, CHILD_ID))
+                .thenThrow(new IllegalStateException("policy insert failed"));
+
+        assertThrows(
+                IllegalStateException.class,
+                () -> service.linkChild(CHILD_ID, "048291")
+        );
+
+        verify(categoryPolicyMapper)
+                .insertDefaultPolicies(PARENT_ID, CHILD_ID);
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.teenyfin.teenymoney.domain.family.service;
 
+import com.teenyfin.teenymoney.domain.categoryPolicy.mapper.CategoryPolicyMapper;
 import com.teenyfin.teenymoney.domain.family.dto.response.FamilyLinkCodeResponseDTO;
 import com.teenyfin.teenymoney.domain.family.exception.FamilyErrorCode;
 import com.teenyfin.teenymoney.domain.family.store.FamilyLinkCodeStore;
@@ -8,6 +9,7 @@ import com.teenyfin.teenymoney.global.exception.BusinessException;
 import com.teenyfin.teenymoney.global.exception.CommonErrorCode;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.Clock;
@@ -26,6 +28,7 @@ import java.time.OffsetDateTime;
 @Service
 public class FamilyLinkCodeService {
 
+    private final CategoryPolicyMapper categoryPolicyMapper;
     private final MemberMapper memberMapper;
     private static final int MAX_CONSUME_ATTEMPTS = 5;
     private static final Duration CONSUME_ATTEMPT_WINDOW = Duration.ofMinutes(10);
@@ -50,7 +53,8 @@ public class FamilyLinkCodeService {
     private final Clock clock;
     private final SecureRandom secureRandom = new SecureRandom();
 
-    public FamilyLinkCodeService(FamilyLinkCodeStore store, MemberMapper memberMapper, Clock clock) {
+    public FamilyLinkCodeService(FamilyLinkCodeStore store, CategoryPolicyMapper categoryPolicyMapper, MemberMapper memberMapper, Clock clock) {
+        this.categoryPolicyMapper = categoryPolicyMapper;
         this.store = store;
         this.clock = clock;
         this.memberMapper = memberMapper;
@@ -159,6 +163,7 @@ public class FamilyLinkCodeService {
      * 코드는 GETDEL 성공 시 소비 완료로 간주한다.
      * 이후 DB 저장이 실패해도 동시 재발급과 충돌할 수 있으므로 코드를 복원하지 않는다.
      */
+    @Transactional
     public void linkChild(Long childId, String code) {
         if (memberMapper.existsActiveConnectionByChildId(childId)) {
             throw new BusinessException(
@@ -186,10 +191,7 @@ public class FamilyLinkCodeService {
         Long parentId = consumeCode(code);
 
         try {
-            int inserted = memberMapper.insertConnection(
-                    parentId,
-                    childId
-            );
+            int inserted = memberMapper.insertConnection(parentId, childId);
 
             // ponytail: 소비된 코드는 저장 실패해도 되살리지 않는다.
             // 부모가 재발급하면 되고, 복구 쓰기 자체도 실패할 수 있어 값어치가 안 맞는다.
@@ -199,11 +201,14 @@ public class FamilyLinkCodeService {
                         FamilyErrorCode.FAMILY_LINK_PARENT_UNAVAILABLE
                 );
             }
+
         } catch (DuplicateKeyException exception) {
             throw new BusinessException(
                     FamilyErrorCode.FAMILY_ALREADY_LINKED
             );
         }
+
+        categoryPolicyMapper.insertDefaultPolicies(parentId, childId);
     }
 
 }
