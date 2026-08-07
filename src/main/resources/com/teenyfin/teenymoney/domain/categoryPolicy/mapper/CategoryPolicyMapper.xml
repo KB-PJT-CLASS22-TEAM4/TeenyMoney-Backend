@@ -42,4 +42,22 @@
         </foreach>
     </update>
 
+    <select id="selectCategoryIdByMerchantCode" resultType="java.lang.Long">
+        SELECT c.id
+        FROM T_MCC_CODE_C m
+        JOIN T_MCC_CTGR_C c
+        ON m.merchant_category_id = c.id
+        WHERE m.id = #{merchantCode}
+    </select>
+
+    <select id="selectByMerchantCodeAndChildId" resultMap="categoryPolicyResultMap">
+        SELECT p.id, c.name, p.policy
+        FROM T_MCC_CODE_C m
+        JOIN T_MCC_CTGR_C c
+        ON m.merchant_category_id = c.id
+        JOIN T_MCC_POLICY_M p
+        ON p.merchant_category_id = c.id
+        WHERE m.id = #{merchantCode} AND p.child_id = #{childId}
+    </select>
+
 </mapper>

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.teenyfin.teenymoney.domain.payment.mapper.PaymentMapper">
+
+    <select id="countRecentTransactions" resultType="int">
+        SELECT COUNT(*)
+        FROM T_PAY_TRAN_L p
+        JOIN T_WLT_BASE_M w ON p.wallet_id = w.id
+        WHERE w.member_id = #{childId}
+        AND p.category_id = #{categoryId}
+        AND p.status = 'SUCCESS'
+        AND p.created_at >= NOW() - INTERVAL 30 DAY
+    </select>
+
+    <select id="sumRecentTransactionAmount" resultType="java.lang.Long">
+        SELECT COALESCE(SUM(p.amount), 0)
+        FROM T_PAY_TRAN_L p
+        JOIN T_WLT_BASE_M w ON p.wallet_id = w.id
+        WHERE w.member_id = #{childId}
+        AND p.category_id = #{categoryId}
+        AND p.status = 'SUCCESS'
+        AND p.created_at >= NOW() - INTERVAL 30 DAY
+    </select>
+
+</mapper>
