@@ -4,9 +4,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.teenyfin.teenymoney.domain.member.dto.response.MemberChildResponseDTO;
 import com.teenyfin.teenymoney.domain.member.dto.response.MemberMeResponseDTO;
+import com.teenyfin.teenymoney.domain.member.dto.response.MemberParentResponseDTO;
 import com.teenyfin.teenymoney.domain.member.dto.response.MemberProfileImageResponseDTO;
 import com.teenyfin.teenymoney.domain.member.service.MemberService;
 import com.teenyfin.teenymoney.domain.member.vo.MemberChildVO;
+import com.teenyfin.teenymoney.domain.member.vo.MemberParentVO;
 import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
 import com.teenyfin.teenymoney.global.security.MemberPrincipal;
 import org.junit.jupiter.api.AfterEach;
@@ -27,6 +29,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -145,6 +148,61 @@ class MemberControllerTest {
                 "\"profileImageUrl\":\"https://s3.example.com/signed\""), body);
         // parentId를 요청으로 받으면 남의 자녀를 조회할 수 있다. 토큰에서만 나와야 한다.
         verify(memberService).getChildren(any(MemberPrincipal.class));
+    }
+
+    @Test
+    @DisplayName("GET /members/me/parent -> 토큰의 principal로 위임하고 부모 정보를 반환한다")
+    void getParentDelegatesWithAuthenticatedPrincipalAndReturnsParent() throws Exception {
+        when(memberService.getParent(any(MemberPrincipal.class)))
+                .thenReturn(parentResponse());
+
+        var response = mockMvc.perform(get("/members/me/parent"))
+                .andReturn().getResponse();
+
+        String body = response.getContentAsString(StandardCharsets.UTF_8);
+        System.out.printf("    입력: GET /members/me/parent (토큰의 principal로 위임)%n"
+                        + "    기대: 200, 부모 정보 + 서명 URL, balance 없음%n"
+                        + "    실제: %d, %s%n%n", response.getStatus(), body);
+
+        assertEquals(200, response.getStatus(), body);
+        assertTrue(body.contains("\"parentId\":1"), body);
+        assertTrue(body.contains("\"name\":\"김부모\""), body);
+        assertTrue(body.contains(
+                "\"profileImageUrl\":\"https://s3.example.com/signed\""), body);
+        // 부모 잔액은 자녀 응답에 절대 실리면 안 된다. VO에 필드가 없으니 통합 리팩터를
+        // 시도해 balance를 되살리면 여기서 걸린다.
+        assertFalse(body.contains("balance"), body);
+        // childId를 요청으로 받으면 남의 부모를 조회할 수 있다. 토큰에서만 나와야 한다.
+        verify(memberService).getParent(any(MemberPrincipal.class));
+    }
+
+    @Test
+    @DisplayName("GET /members/me/parent (미연동) -> 200에 data가 null")
+    void getParentReturnsNullDataWhenChildHasNoParent() throws Exception {
+        when(memberService.getParent(any(MemberPrincipal.class))).thenReturn(null);
+
+        var response = mockMvc.perform(get("/members/me/parent"))
+                .andReturn().getResponse();
+
+        String body = response.getContentAsString(StandardCharsets.UTF_8);
+        System.out.printf("    입력: 아직 연동하지 않은 자녀%n"
+                        + "    기대: 200, success=true, data=null (404 아님)%n"
+                        + "    실제: %d, %s%n%n", response.getStatus(), body);
+
+        assertEquals(200, response.getStatus(), body);
+        assertTrue(body.contains("\"success\":true"), body);
+        // FE가 이 필드로 연동 유도 화면을 분기한다. 전역 Jackson 설정에
+        // @JsonInclude(NON_NULL)이 들어가면 data 자체가 사라지고 여기서 걸린다.
+        assertTrue(body.contains("\"data\":null"), body);
+    }
+
+    private MemberParentResponseDTO parentResponse() {
+        MemberParentVO parent = new MemberParentVO();
+        parent.setParentId(1L);
+        parent.setName("김부모");
+        parent.setProfileImageKey("profile/1/a.png");
+        // 서비스가 서명한 URL을 넘긴다. key가 그대로 나가면 안 된다.
+        return MemberParentResponseDTO.of(parent, "https://s3.example.com/signed");
     }
 
     private MemberChildResponseDTO childResponse() {
