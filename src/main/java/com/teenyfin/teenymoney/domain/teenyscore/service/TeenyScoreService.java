@@ -1,5 +1,6 @@
 package com.teenyfin.teenymoney.domain.teenyscore.service;
 
+import com.teenyfin.teenymoney.domain.family.service.FamilyAccessService;
 import com.teenyfin.teenymoney.domain.teenyscore.dto.response.TeenyScoreGradeResponseDTO;
 import com.teenyfin.teenymoney.domain.teenyscore.dto.response.TeenyScoreHistoryResponseDTO;
 import com.teenyfin.teenymoney.domain.teenyscore.dto.response.TeenyScoreMonthlyHistoryResponseDTO;
@@ -19,15 +20,19 @@ import java.util.List;
 public class TeenyScoreService {
 
     private final TeenyScoreMapper teenyScoreMapper;
+    private final FamilyAccessService familyAccessService;
 
-    public TeenyScoreService(TeenyScoreMapper teenyScoreMapper) {
+    public TeenyScoreService(
+            TeenyScoreMapper teenyScoreMapper,
+            FamilyAccessService familyAccessService) {
         this.teenyScoreMapper = teenyScoreMapper;
+        this.familyAccessService = familyAccessService;
     }
 
     public TeenyScoreResponseDTO getTeenyScore(
             MemberPrincipal principal,
             Long childId) {
-        validateAccess(principal, childId);
+        familyAccessService.requireChildAccess(principal, childId);
         TeenyScoreVO teenyScore = findTeenyScore(childId);
         return TeenyScoreResponseDTO.of(teenyScore);
     }
@@ -47,7 +52,7 @@ public class TeenyScoreService {
             MemberPrincipal principal,
             Long childId) {
 
-        validateAccess(principal, childId);
+        familyAccessService.requireChildAccess(principal, childId);
         findTeenyScore(childId);
 
         return teenyScoreMapper.selectMonthlyHistoriesByChildId(childId)
@@ -81,38 +86,10 @@ public class TeenyScoreService {
         return teenyScore;
     }
 
-    private void validateAccess(
-            MemberPrincipal principal,
-            Long childId) {
-        if (principal == null) {
-            throw new BusinessException(CommonErrorCode.AUTH_FORBIDDEN);
-        }
-
-        if ("CHILD".equals(principal.role())) {
-            if (!principal.memberId().equals(childId)) {
-                throw new BusinessException(CommonErrorCode.AUTH_FORBIDDEN);
-            }
-            return;
-        }
-
-        if ("PARENT".equals(principal.role())
-                && hasActiveConnection(principal, childId)) {
-            return;
-        }
-
-        throw new BusinessException(CommonErrorCode.AUTH_FORBIDDEN);
-    }
-
     private void validateChild(MemberPrincipal principal) {
         if (principal == null || !"CHILD".equals(principal.role())) {
             throw new BusinessException(CommonErrorCode.AUTH_FORBIDDEN);
         }
     }
 
-    private boolean hasActiveConnection(
-            MemberPrincipal principal,
-            Long childId) {
-        return teenyScoreMapper.existsActiveConnection(
-                principal.memberId(), childId);
-    }
 }

@@ -41,7 +41,6 @@ class TeenyScoreMapperContextTest {
                 "selectHistoriesByChildId",
                 "selectMonthlyHistoriesByChildId",
                 "selectAllGrades",
-                "existsActiveConnection",
                 "selectScoreForUpdate",
                 "existsHistoryByEventKey",
                 "updateTeenyScore",

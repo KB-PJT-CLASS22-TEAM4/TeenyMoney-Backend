@@ -15,5 +15,7 @@ public class TeenyScoreGradeVO {
     private Integer minScore;
     private Integer maxScore;
     private BigDecimal bonusRate;
+    private BigDecimal loanRate;
+    private Integer monthlyOverrideLimit;
     private String color;
 }

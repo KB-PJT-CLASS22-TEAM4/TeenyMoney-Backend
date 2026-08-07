@@ -42,6 +42,8 @@ class TeenyScoreMapperTest {
         assertEquals(610, score.getTeenyScore());
         assertEquals("양호", score.getGradeName());
         assertEquals(new BigDecimal("0.20"), score.getBonusRate());
+        assertEquals(new BigDecimal("3.50"), score.getLoanRate());
+        assertEquals(3, score.getMonthlyOverrideLimit());
     }
 
     @Test
@@ -68,6 +70,7 @@ class TeenyScoreMapperTest {
         List<TeenyScoreGradeVO> grades = teenyScoreMapper.selectAllGrades();
 
         assertFalse(grades.isEmpty());
+        assertNotNull(grades.get(0).getMonthlyOverrideLimit());
         for (int index = 0; index < grades.size() - 1; index++) {
             assertTrue(grades.get(index).getMinScore()
                     > grades.get(index + 1).getMinScore());
@@ -84,9 +87,4 @@ class TeenyScoreMapperTest {
         assertEquals(610, histories.get(0).getTeenyScore());
     }
 
-    @Test
-    void existsActiveConnectionReturnsRelationshipStatus() {
-        assertTrue(teenyScoreMapper.existsActiveConnection(1L, 2L));
-        assertFalse(teenyScoreMapper.existsActiveConnection(1L, Long.MAX_VALUE));
-    }
 }
