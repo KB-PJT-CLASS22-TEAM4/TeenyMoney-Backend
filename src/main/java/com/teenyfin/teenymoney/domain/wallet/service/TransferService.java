@@ -1,0 +1,141 @@
+package com.teenyfin.teenymoney.domain.wallet.service;
+
+import com.teenyfin.teenymoney.domain.wallet.exception.WalletErrorCode;
+import com.teenyfin.teenymoney.domain.wallet.mapper.TransferMapper;
+import com.teenyfin.teenymoney.domain.wallet.vo.TransferType;
+import com.teenyfin.teenymoney.domain.wallet.vo.TransferVO;
+import com.teenyfin.teenymoney.global.exception.BusinessException;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
+import com.teenyfin.teenymoney.global.exception.CommonErrorCode;
+
+
+// 레이어2: T_WLT_TRF_L(송금 시도 기록) 전담. 실제 잔액 이동(잠금+debit/credit)은 TransferExecutor에,
+// 실패 기록은 TransferFailureRecorder에 위임하고, 이 클래스는 그 둘을 오케스트레이션만 한다.
+@Service
+public class TransferService {
+
+    private final TransferMapper transferMapper;
+    private final TransferExecutor transferExecutor;
+    private final TransferFailureRecorder transferFailureRecorder;
+
+    public TransferService(TransferMapper transferMapper, TransferExecutor transferExecutor, TransferFailureRecorder transferFailureRecorder) {
+        this.transferMapper = transferMapper;
+        this.transferExecutor = transferExecutor;
+        this.transferFailureRecorder = transferFailureRecorder;
+    }
+
+    // 같은 idempotencyKey로 이미 존재하는 행(existing)이, 지금 들어온 요청의 내용과
+    // 실제로 같은지 확인한다. 다르면 "이 키는 이미 다른 내용으로 쓰였다"는 뜻이므로 예외를 던진다.
+    private void ensureMatchesRequestOrThrow(
+            TransferVO existing, Long fromWalletId, Long toWalletId, Long amount, TransferType type) {
+        if (!existing.getFromWalletId().equals(fromWalletId)
+                || !existing.getToWalletId().equals(toWalletId)
+                || !existing.getAmount().equals(amount)
+                || !existing.getType().equals(type.name())) {
+            throw new BusinessException(WalletErrorCode.IDEMPOTENCY_KEY_CONFLICT);
+        }
+    }
+
+    // 1단계: 송금을 "PENDING" 상태로 접수만 해둔다. 잔액은 아직 안 건드린다.
+    @Transactional
+    public TransferVO createPendingTransfer(Long fromWalletId, Long toWalletId, Long amount, TransferType type, String idempotencyKey) {
+        if (amount == null || amount <= 0) {
+            throw new BusinessException(WalletErrorCode.INVALID_TRANSFER_AMOUNT);
+        }
+
+        if (fromWalletId == null || toWalletId == null) {
+            throw new BusinessException(WalletErrorCode.INVALID_WALLET_ID);
+        }
+
+        // type이 null이면 바로 아래 type.name() 호출에서 NullPointerException이 난다.
+        // 다른 필수값들과 같은 이유로, 여기서 명확한 400으로 먼저 막는다.
+        if (type == null) {
+            throw new BusinessException(WalletErrorCode.INVALID_TRANSFER_TYPE);
+        }
+
+        // idempotencyKey가 null이면 selectByIdempotencyKey(null)이 아무것도 못 찾아서
+        // 그대로 통과되고, insertTransfer()에서 idempotency_key NOT NULL 제약에 걸려
+        // 원시 SQL 예외로 나가버린다. 마찬가지로 여기서 미리 막는다.
+        if (idempotencyKey == null) {
+            throw new BusinessException(WalletErrorCode.INVALID_IDEMPOTENCY_KEY);
+        }
+
+        if (fromWalletId.equals(toWalletId)) {
+            throw new BusinessException(WalletErrorCode.TRANSFER_SAME_WALLET);
+        }
+
+        TransferVO existing = transferMapper.selectByIdempotencyKey(idempotencyKey);
+        if (existing != null) {
+            ensureMatchesRequestOrThrow(existing, fromWalletId, toWalletId, amount, type);
+            return existing;
+        }
+
+        TransferVO transfer = new TransferVO();
+        transfer.setFromWalletId(fromWalletId);
+        transfer.setToWalletId(toWalletId);
+        transfer.setAmount(amount);
+        transfer.setType(type.name());
+        transfer.setIdempotencyKey(idempotencyKey);
+
+        try {
+            transferMapper.insertTransfer(transfer);
+        } catch (DuplicateKeyException e) {
+            TransferVO winner = transferMapper.selectByIdempotencyKey(idempotencyKey);
+            if (winner == null) {
+                // UNIQUE 제약 위반은 났는데(=이 키를 가진 행이 존재한다는 뜻) 방금 이 SELECT엔
+                // 아직 안 보이는 경우 - 경쟁 트랜잭션이 아직 커밋 전이라 격리수준 때문에 못 볼
+                // 수 있다. 실제로 존재는 하므로, "이 키는 이미 사용 중"이라는 뜻으로 던진다.
+                throw new BusinessException(WalletErrorCode.IDEMPOTENCY_KEY_CONFLICT);
+            }
+            ensureMatchesRequestOrThrow(winner, fromWalletId, toWalletId, amount, type);
+
+            return winner;
+        } catch (DataIntegrityViolationException e) {
+            // idempotency_key UNIQUE 위반(DuplicateKeyException)이 아닌 다른 무결성 제약 위반이면,
+            // 여기까지 오는 값 중 amount/type은 이미 위에서 다 검증했으니 남은 유력한 원인은
+            // from/toWalletId가 실제로 존재하지 않는 지갑이라 FK_T_WLT_BASE_M_TO_T_WLT_TRF_L_1/_2에
+            // 걸린 경우다. DuplicateKeyException은 DataIntegrityViolationException의 하위 타입이라
+            // catch 순서가 중요하다 - 반드시 더 구체적인 DuplicateKeyException을 먼저 잡아야 한다.
+            throw new BusinessException(WalletErrorCode.WALLET_NOT_FOUND);
+        }
+
+        transfer.setStatus("PENDING");
+        return transfer;
+    }
+
+    // 2단계: 실제로 잔액을 옮긴다. 잠금+이동은 TransferExecutor(별도 빈)에게 통째로 맡긴다.
+    // 이 메서드 자체는 절대 @Transactional을 붙이면 안 된다 - 붙이면 transferExecutor.lockAndMove()
+    // 호출과 markFailed() 호출이 다시 같은 하나의 트랜잭션 흐름 안에 놓이면서, 롤백이 안 끝난
+    // 채로 markFailed()가 실행돼 예전의 데드락 문제가 그대로 재현된다. 이 메서드가 트랜잭션이
+    // 없어야, transferExecutor.lockAndMove()의 트랜잭션이 "완전히 끝난 뒤에"(성공이든 실패든)
+    // 아래 코드가 실행된다는 게 보장된다.
+
+    // NOT_SUPPORTED: "이 메서드는 절대 트랜잭션 안에서 실행되면 안 된다"를 코드로 강제한다.
+    // 나중에 누군가 이 메서드(혹은 이걸 부르는 상위 메서드)에 실수로 @Transactional을 붙이더라도,
+    // 스프링이 그 바깥 트랜잭션을 이 메서드가 실행되는 동안 잠깐 미뤄두기 때문에,
+    // transferExecutor.lockAndMove()의 락과 markFailed()가 다시 얽히는 데드락이 재현되지 않는다.
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public TransferVO executeTransfer(Long transferId) {
+        try {
+            return transferExecutor.lockAndMove(transferId);
+        } catch (BusinessException e) {
+            // TRANSFER_NOT_FOUND는 애초에 존재하지 않는 행을 가리키는 상황이라,
+            // 그 행에 FAILED를 기록하려는 시도 자체가 의미가 없다 - 그냥 건너뛴다.
+            if (e.getErrorCode() != WalletErrorCode.TRANSFER_NOT_FOUND) {
+                // 이 시점엔 transferExecutor.lockAndMove()의 트랜잭션이 이미 완전히 롤백되고
+                // 락도 풀린 뒤이므로, markFailed()의 REQUIRES_NEW가 같은 행을 잠글 때
+                // 더 이상 아무와도 충돌하지 않는다.
+                transferFailureRecorder.markFailed(transferId, e.getErrorCode().getCode());
+            }
+            throw e;
+        } catch (RuntimeException e) {
+            // BusinessException이 아닌 예상 못한 예외가 lockAndMove() 도중 발생하면 여기로 떨어진다.
+            transferFailureRecorder.markFailed(transferId, CommonErrorCode.COMMON_INTERNAL_ERROR.getCode());
+            throw e;
+        }
+    }
+}

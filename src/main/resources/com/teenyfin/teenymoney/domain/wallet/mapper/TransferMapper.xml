@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.teenyfin.teenymoney.domain.wallet.mapper.TransferMapper">
+
+
+    <resultMap id="transferResultMap" type="com.teenyfin.teenymoney.domain.wallet.vo.TransferVO">
+        <id property="id" column="id"/>
+        <result property="fromWalletId" column="from_wallet_id"/>
+        <result property="toWalletId" column="to_wallet_id"/>
+        <result property="idempotencyKey" column="idempotency_key"/>
+        <result property="amount" column="amount"/>
+        <result property="type" column="type"/>
+        <result property="status" column="status"/>
+        <result property="failureReason" column="failure_reason"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <!-- idempotency_key는 UQ_WLT_TRF_L_IDEMPOTENCY_KEY로 UNIQUE 제약이 걸려있어서
+          한 키당 최대 1건만 존재한다 - 그래서 List가 아니라 단건 조회로 충분하다.
+          없으면 MyBatis가 null을 리턴한다(예외 아님). -->
+    <!--멱등성 키로 송금 기록 찾기-->
+    <select id="selectByIdempotencyKey" resultMap="transferResultMap">
+        SELECT id, from_wallet_id, to_wallet_id, idempotency_key, amount, type, status, failure_reason, created_at, updated_at
+        FROM T_WLT_TRF_L
+        WHERE idempotency_key = #{idempotencyKey}
+    </select>
+
+    <!-- 새 송금 행을 PENDING 상태로 만들면서 송금 기록 생성한다.
+      status/created_at 컬럼을 INSERT 목록에서 뺀 이유: 둘 다 DB에 DEFAULT가 걸려있어서
+      (status DEFAULT 'PENDING', created_at DEFAULT CURRENT_TIMESTAMP) INSERT 시점에
+      DB가 알아서 채워준다 - insertWalletHistory에서 created_at을 뺀 것과 같은 이유.
+      useGeneratedKeys="true" keyProperty="id": INSERT 직후 DB가 만든 auto_increment id를
+      파라미터로 넘긴 TransferVO 객체의 id 필드에 MyBatis가 자동으로 다시 채워 넣어준다. -->
+    <insert id="insertTransfer" parameterType="com.teenyfin.teenymoney.domain.wallet.vo.TransferVO"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO T_WLT_TRF_L (from_wallet_id, to_wallet_id, idempotency_key, amount, type)
+        VALUES (#{fromWalletId}, #{toWalletId}, #{idempotencyKey}, #{amount}, #{type})
+    </insert>
+
+    <!-- 상태 변경 시점을 남기려고 updated_at도 같이 NOW()로 갱신한다. (updateBalance가 잔액 바뀔 때 updated_at을 같이 찍는 것과 같은 이유). -->
+    <update id="updateStatus">
+        UPDATE T_WLT_TRF_L
+        SET status = #{status}, failure_reason = #{failureReason}, updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+
+
+    <!-- 송금 행을 FAILED로 표시한다. 이미 COMPLETED로 확정된 행은 절대 덮어쓰지 않는다 -
+               WHERE 조건에 status <> 'COMPLETED'를 걸어서, 이 UPDATE가 실행되는 시점에 이미
+               다른 흐름이 이 송금을 성공시켜놨다면 이 UPDATE는 조용히 0건 영향으로 끝난다. -->
+    <update id="markFailed">
+        UPDATE T_WLT_TRF_L
+        SET status = 'FAILED', failure_reason = #{failureReason}, updated_at = NOW()
+        WHERE id = #{id} AND status &lt;&gt; 'COMPLETED'
+    </update>
+
+    <!-- 송금 행을 잠근 채로 조회한다. WalletMapper.xml의 selectWalletForUpdate와 완전히 같은 이유:
+              이 SELECT가 실행된 순간부터 트랜잭션이 끝날 때까지, 다른 트랜잭션이 이 행을 동시에 못 읽고 대기한다. -->
+    <select id="selectForUpdate" resultMap="transferResultMap">
+        SELECT id, from_wallet_id, to_wallet_id, idempotency_key, amount, type, status, failure_reason, created_at, updated_at
+        FROM T_WLT_TRF_L
+        WHERE id = #{id}
+        FOR UPDATE
+    </select>
+
+
+
+
+
+
+
+</mapper>

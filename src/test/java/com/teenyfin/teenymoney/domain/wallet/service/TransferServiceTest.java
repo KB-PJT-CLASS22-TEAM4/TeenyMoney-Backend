@@ -3,7 +3,10 @@ package com.teenyfin.teenymoney.domain.wallet.service;
 
 import com.teenyfin.teenymoney.config.RootConfig;
 import com.teenyfin.teenymoney.domain.wallet.exception.WalletErrorCode;
+import com.teenyfin.teenymoney.domain.wallet.mapper.TransferMapper;
 import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
+import com.teenyfin.teenymoney.domain.wallet.vo.TransferType;
+import com.teenyfin.teenymoney.domain.wallet.vo.TransferVO;
 import com.teenyfin.teenymoney.domain.wallet.vo.WalletVO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import org.junit.jupiter.api.AfterEach;
@@ -55,7 +58,9 @@ public class TransferServiceTest {
     @BeforeEach
     void setUp() {
         WalletLedgerService walletLedgerService = new WalletLedgerService(walletMapper);
-        transferService = new TransferService(transferMapper, walletLedgerService);
+        TransferExecutor transferExecutor = new TransferExecutor(transferMapper, walletLedgerService);
+        TransferFailureRecorder transferFailureRecorder = new TransferFailureRecorder(transferMapper);
+        transferService = new TransferService(transferMapper, transferExecutor, transferFailureRecorder);
 
         //테스트 전용 지갑 생성
         fromWalletId = insertWallet(2L, 100000L);
@@ -141,7 +146,7 @@ public class TransferServiceTest {
         TransferVO pending = transferService.createPendingTransfer(
                 smaller, larger, 10000L, TransferType.TRANSFER, newIdempotencyKey());
 
-        TransferVO result = transferService.executeTransfer(pending);
+        TransferVO result = transferService.executeTransfer(pending.getId());
         System.out.println("[EXECUTE] status=" + result.getStatus());
         assertEquals("COMPLETED", result.getStatus());
 
@@ -167,7 +172,7 @@ public class TransferServiceTest {
         TransferVO pending = transferService.createPendingTransfer(
                 larger, smaller, 5000L, TransferType.TRANSFER, newIdempotencyKey());
 
-        TransferVO result = transferService.executeTransfer(pending);
+        TransferVO result = transferService.executeTransfer(pending.getId());
         System.out.println("[EXECUTE] status=" + result.getStatus());
         assertEquals("COMPLETED", result.getStatus());
 
@@ -186,7 +191,7 @@ public class TransferServiceTest {
         TransferVO pending = transferService.createPendingTransfer(fromWalletId, toWalletId, 999_999_999L, TransferType.TRANSFER, newIdempotencyKey());
 
         // when & then: executeTransfer() 자체는 예외를 그대로 다시 던진다
-        BusinessException exception = assertThrows(BusinessException.class, () -> transferService.executeTransfer(pending));
+        BusinessException exception = assertThrows(BusinessException.class, () -> transferService.executeTransfer(pending.getId()));
         assertEquals(WalletErrorCode.INSUFFICIENT_BALANCE, exception.getErrorCode());
         System.out.println("[EXCEPTION] " + exception.getErrorCode());
 
@@ -206,7 +211,7 @@ public class TransferServiceTest {
     void executeTransferDoesNotReprocessWhenAlreadyCompleted() {
         // given: 정상적으로 한번 완료된 송금
         TransferVO pending = transferService.createPendingTransfer(fromWalletId, toWalletId, 10000L, TransferType.TRANSFER, newIdempotencyKey());
-        TransferVO completed = transferService.executeTransfer(pending);
+        TransferVO completed = transferService.executeTransfer(pending.getId());
         assertEquals("COMPLETED", completed.getStatus());
 
         WalletVO fromAfterFirst = walletMapper.selectWalletForUpdate(fromWalletId);
@@ -214,7 +219,7 @@ public class TransferServiceTest {
         System.out.println("[FIRST] from=" + fromAfterFirst.getBalance() + ", to=" + toAfterFirst.getBalance());
 
         // when: 이미 COMPLETED된 같은 TransferVO로 executeTransfer()를 또 호출
-        TransferVO result = transferService.executeTransfer(completed);
+        TransferVO result = transferService.executeTransfer(completed.getId());
         System.out.println("[SECOND CALL] status=" + result.getStatus());
 
         // then: 상태는 그대로 COMPLETED, 잔액도 한 번 더 안 바뀌어야 한다 (재처리 안 됨)

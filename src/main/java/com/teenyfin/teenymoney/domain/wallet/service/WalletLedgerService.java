@@ -61,7 +61,7 @@ public class WalletLedgerService {
         walletMapper.updateBalance(walletId, newBalance);
 
         // 5단계: 원장에 CREDIT 한 줄 기입. refType.name()으로 enum을 문자열("CHARGE" 등)로 바꿔서 넘긴다.
-        // description은 credit()이 따로 안 받으니 지금은 null로 넘긴다 (컬럼이 NULL 허용이라 문제없음).
+
         walletMapper.insertWalletHistory(walletId, "CREDIT", amount, newBalance, refType.name(), refId, desc);
     }
 
@@ -84,7 +84,6 @@ public class WalletLedgerService {
 
         // 5단계: 지갑 잔액 갱신
         walletMapper.updateBalance(walletId, newBalance);
-
         // 6단계: 원장에 DEBIT 한 줄 기입
         walletMapper.insertWalletHistory(walletId, "DEBIT", amount, newBalance, refType.name(), refId, desc);
     }

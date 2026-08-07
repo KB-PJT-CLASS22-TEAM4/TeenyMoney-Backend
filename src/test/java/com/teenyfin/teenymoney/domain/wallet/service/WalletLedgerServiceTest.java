@@ -48,9 +48,9 @@ class WalletLedgerServiceTest {
 
         // then: 원장에도 CREDIT 방향으로, 갱신된 잔액(13000)과 함께,
         // CHARGE/99L이라는 참조 정보로 정확히 한 줄 기입 요청이 갔는지 확인.
-        // description은 credit()이 따로 안 받는 값이라 null이 넘어가는 게 맞다 — 그래서 여기서도 null로 명시 검증.
+
         verify(walletMapper).insertWalletHistory(
-                5L, "CREDIT", 3000L, 13000L, "CHARGE", 99L, null);
+                5L, "CREDIT", 3000L, 13000L, "CHARGE", 99L, "테스트");
         System.out.println("[LEDGER] direction=CREDIT, amount=3000, balanceAfter=13000, refType=CHARGE, refId=99");
     }
 
@@ -75,7 +75,7 @@ class WalletLedgerServiceTest {
         // then: 원장에도 DEBIT 방향으로, 갱신된 잔액(6000)과 함께,
         // TRANSFER/77L이라는 참조 정보로 정확히 한 줄 기입 요청이 갔는지 확인.
         verify(walletMapper).insertWalletHistory(
-                5L, "DEBIT", 4000L, 6000L, "TRANSFER", 77L, null);
+                5L, "DEBIT", 4000L, 6000L, "TRANSFER", 77L, "테스트");
         System.out.println("[LEDGER] direction=DEBIT, amount=4000, balanceAfter=6000, refType=TRANSFER, refId=77");
 
     }
