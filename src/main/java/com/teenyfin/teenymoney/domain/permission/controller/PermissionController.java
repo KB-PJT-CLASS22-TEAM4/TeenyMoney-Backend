@@ -5,13 +5,16 @@ import com.teenyfin.teenymoney.domain.permission.dto.response.PermissionResponse
 import com.teenyfin.teenymoney.domain.permission.service.PermissionService;
 import com.teenyfin.teenymoney.global.response.ApiResponse;
 import com.teenyfin.teenymoney.global.security.MemberPrincipal;
+import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
 
+@Api(tags = "오늘만 허용 요청")
 @RestController
 @RequestMapping("/permissions")
 @RequiredArgsConstructor
@@ -30,7 +33,7 @@ public class PermissionController {
     @PostMapping
     public ApiResponse<PermissionResponseWrapperDTO> createPermission(
             @AuthenticationPrincipal MemberPrincipal memberPrincipal,
-            @RequestBody @Valid PermissionRequestDTO permissionRequestDTO) {
+            @ApiParam(value = "오늘만 허용을 요청할 카테고리 ID와 요청 사유", required = true) @RequestBody @Valid PermissionRequestDTO permissionRequestDTO) {
         return ApiResponse.ok(permissionService.createPermission(memberPrincipal.memberId(), memberPrincipal.role(), permissionRequestDTO));
     }
 
@@ -39,7 +42,7 @@ public class PermissionController {
     public ApiResponse<PermissionResponseWrapperDTO> updatePermission(
             @AuthenticationPrincipal MemberPrincipal memberPrincipal,
             @PathVariable Long permissionId,
-            @RequestBody @Valid PermissionRequestDTO permissionRequestDTO) {
+            @ApiParam(value = "오늘만 허용을 요청할 카테고리 ID와 요청 사유", required = true) @RequestBody @Valid PermissionRequestDTO permissionRequestDTO) {
         return ApiResponse.ok(permissionService.updatePermission(memberPrincipal.memberId(), memberPrincipal.role(), permissionId, permissionRequestDTO));
     }
 
