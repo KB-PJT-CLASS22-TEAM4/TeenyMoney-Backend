@@ -22,7 +22,7 @@ WAR 하나를 로컬과 EC2 양쪽에서 돌립니다. **빌드 산출물은 동
 | `JWT_REFRESH_EXPIRATION_MS` | 1209600000 | 그대로 | 그대로 | 기본값 사용 |
 | `COOKIE_SECURE` | **없음** | `false` | **`true`** | **기동 실패** |
 | `AWS_REGION` | `ap-northeast-2` | 그대로 | 그대로 | 기본값 사용 |
-| `AWS_S3_BUCKET` | **없음** | `teenymoney-media` | 〃 | **기동 실패** |
+| `AWS_S3_BUCKET` | **없음** | `teenymoney-media-kb22` | 〃 | **기동 실패** |
 | `AWS_S3_PRESIGN_TTL_SECONDS` | 600 | 그대로 | 그대로 | 기본값 사용 |
 | `AWS_ACCESS_KEY_ID` | **없음** | IAM 사용자 키 | **설정하지 않음** | 첫 업로드에서 실패 |
 | `AWS_SECRET_ACCESS_KEY` | **없음** | 〃 | **설정하지 않음** | 〃 |
