@@ -42,10 +42,4 @@
         </foreach>
     </update>
 
-    <select id="selectParentIdByChildId" resultType="java.lang.Long">
-        SELECT parent_id
-        FROM T_MBR_CONN_R
-        WHERE child_id = #{childId}
-    </select>
-
 </mapper>

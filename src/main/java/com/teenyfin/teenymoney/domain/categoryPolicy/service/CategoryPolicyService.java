@@ -6,6 +6,7 @@ import com.teenyfin.teenymoney.domain.categoryPolicy.dto.response.CategoryPolicy
 import com.teenyfin.teenymoney.domain.categoryPolicy.exception.CategoryPolicyErrorCode;
 import com.teenyfin.teenymoney.domain.categoryPolicy.mapper.CategoryPolicyMapper;
 import com.teenyfin.teenymoney.domain.categoryPolicy.vo.CategoryPolicyVO;
+import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -22,6 +23,7 @@ import java.util.stream.Collectors;
 public class CategoryPolicyService {
 
     private final CategoryPolicyMapper categoryPolicyMapper;
+    private final MemberMapper memberMapper;
 
     private static final List<String> POLICY_ORDER = List.of("ALLOW", "WATCH", "BLOCK");
 
@@ -54,7 +56,7 @@ public class CategoryPolicyService {
             childId = memberId;
         } else if (childId == null) {   // 부모의 경우 childId 값은 필수
             throw new BusinessException(CategoryPolicyErrorCode.CHILD_ID_REQUIRED);
-        } else if (!Objects.equals(categoryPolicyMapper.selectParentIdByChildId(childId), memberId)) {  // 해당 자녀와 연결된 부모인지 확인
+        } else if (!Objects.equals(memberMapper.selectActiveParentByChildId(childId).getParentId(), memberId)) {  // 해당 자녀와 연결된 부모인지 확인
             throw new BusinessException(CategoryPolicyErrorCode.FORBIDDEN_TO_CHILD);
         }
 
@@ -79,7 +81,7 @@ public class CategoryPolicyService {
         }
 
         // 해당 자녀와 연결된 부모인지 검증
-        if (!Objects.equals(categoryPolicyMapper.selectParentIdByChildId(childId), memberId)) {
+        if (!Objects.equals(memberMapper.selectActiveParentByChildId(childId).getParentId(), memberId)) {
             throw new BusinessException(CategoryPolicyErrorCode.FORBIDDEN_TO_CHILD);
         }
 
