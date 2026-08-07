@@ -3,9 +3,11 @@ package com.teenyfin.teenymoney.domain.member.service;
 import com.teenyfin.teenymoney.domain.auth.exception.AuthErrorCode;
 import com.teenyfin.teenymoney.domain.member.dto.response.MemberChildResponseDTO;
 import com.teenyfin.teenymoney.domain.member.dto.response.MemberMeResponseDTO;
+import com.teenyfin.teenymoney.domain.member.dto.response.MemberParentResponseDTO;
 import com.teenyfin.teenymoney.domain.member.dto.response.MemberProfileImageResponseDTO;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.domain.member.vo.MemberChildVO;
+import com.teenyfin.teenymoney.domain.member.vo.MemberParentVO;
 import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import com.teenyfin.teenymoney.global.exception.CommonErrorCode;
@@ -307,5 +309,66 @@ class MemberServiceTest {
                         + "    실제: size=%d%n%n", children.size());
 
         assertThat(children).isEmpty();
+    }
+
+    // --- getParent --------------------------------------------------------------
+
+    private MemberParentVO parentVO(long id, String name, String key) {
+        MemberParentVO parent = new MemberParentVO();
+        parent.setParentId(id);
+        parent.setName(name);
+        parent.setProfileImageKey(key);
+        return parent;
+    }
+
+    @Test
+    @DisplayName("자녀가 조회 -> 부모 정보에 key가 아니라 서명된 URL이 담긴다")
+    void getParentSignsParentProfileKey() {
+        when(memberMapper.selectActiveParentByChildId(2L))
+                .thenReturn(parentVO(1L, "김부모", "profile/1/a.png"));
+        when(s3Storage.presignedUrl("profile/1/a.png"))
+                .thenReturn("https://s3.example.com/signed-1");
+
+        MemberParentResponseDTO parent =
+                memberService.getParent(new MemberPrincipal(2L, "CHILD"));
+
+        System.out.printf("    입력: 부모 1과 연동된 자녀 2가 조회%n"
+                        + "    기대: parentId=1, key가 아니라 서명 URL%n"
+                        + "    실제: parentId=%d, %s%n%n",
+                parent.getParentId(), parent.getProfileImageUrl());
+
+        assertThat(parent.getParentId()).isEqualTo(1L);
+        assertThat(parent.getName()).isEqualTo("김부모");
+        assertThat(parent.getProfileImageUrl()).isEqualTo("https://s3.example.com/signed-1");
+        // key가 그대로 새어나가면 브라우저가 403을 받는다.
+        assertThat(parent.getProfileImageUrl()).isNotEqualTo("profile/1/a.png");
+    }
+
+    @Test
+    @DisplayName("연동된 부모가 없는 자녀 -> 예외가 아니라 null")
+    void getParentReturnsNullWhenChildHasNoParent() {
+        when(memberMapper.selectActiveParentByChildId(2L)).thenReturn(null);
+
+        MemberParentResponseDTO parent =
+                memberService.getParent(new MemberPrincipal(2L, "CHILD"));
+
+        System.out.printf("    입력: 아직 연동하지 않은 자녀%n"
+                        + "    기대: null (연동 유도 화면으로 보낼 정상 상태)%n"
+                        + "    실제: %s%n%n", parent);
+
+        assertThat(parent).isNull();
+        // 부모가 없으면 서명할 key도 없다. 불필요한 S3 호출이 나가면 안 된다.
+        verifyNoInteractions(s3Storage);
+    }
+
+    @Test
+    @DisplayName("부모가 조회 -> 쿼리를 던지기 전에 AUTH_FORBIDDEN으로 거부")
+    void getParentRejectsParentRoleBeforeQuerying() {
+        expectRejected("role = PARENT인 토큰으로 부모 조회 요청",
+                CommonErrorCode.AUTH_FORBIDDEN,
+                () -> memberService.getParent(new MemberPrincipal(17L, "PARENT")));
+
+        // 역할 확인이 조회보다 먼저여야 한다.
+        verifyNoInteractions(memberMapper);
     }
 }

@@ -2,6 +2,7 @@ package com.teenyfin.teenymoney.domain.member.mapper;
 
 import com.teenyfin.teenymoney.config.RootConfig;
 import com.teenyfin.teenymoney.domain.member.vo.MemberChildVO;
+import com.teenyfin.teenymoney.domain.member.vo.MemberParentVO;
 import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -229,6 +230,77 @@ class MemberMapperTest {
 
         assertTrue(memberMapper.selectChildrenByParentId(parent.getId()).isEmpty());
         assertEquals(1, memberMapper.selectChildrenByParentId(otherParent.getId()).size());
+    }
+
+    // --- selectActiveParentByChildId ---------------------------------------------
+
+    @Test
+    void selectActiveParentByChildIdReturnsLinkedParent() {
+        MemberVO parent = newMember("PARENT");
+        memberMapper.insert(parent);
+        MemberVO child = newMember("CHILD");
+        memberMapper.insert(child);
+        link(parent.getId(), child.getId(), "ACTIVE");
+        // 부모도 MEMBER 지갑을 갖는다. VO에 balance 필드가 없으므로 이 돈은 조회 경로에 오르지 않는다.
+        wallet(parent.getId(), 509000L, "MEMBER");
+
+        MemberParentVO found = memberMapper.selectActiveParentByChildId(child.getId());
+
+        assertNotNull(found);
+        // p.id AS parent_id 별칭이 빠지면 여기서 바로 걸린다.
+        assertEquals(parent.getId(), found.getParentId());
+        assertEquals(parent.getName(), found.getName());
+    }
+
+    @Test
+    void selectActiveParentByChildIdReturnsNullWhenNoActiveLinkOrParentInactive() {
+        MemberVO unlinked = newMember("CHILD");
+        memberMapper.insert(unlinked);
+        assertNull(memberMapper.selectActiveParentByChildId(unlinked.getId()),
+                "연동한 적 없는 자녀는 null이어야 한다");
+
+        MemberVO parent = newMember("PARENT");
+        memberMapper.insert(parent);
+        MemberVO released = newMember("CHILD");
+        memberMapper.insert(released);
+        link(parent.getId(), released.getId(), "INACTIVE");
+        assertNull(memberMapper.selectActiveParentByChildId(released.getId()),
+                "연동 해제된 관계는 null이어야 한다");
+
+        MemberVO goneParent = newMember("PARENT");
+        memberMapper.insert(goneParent);
+        MemberVO orphan = newMember("CHILD");
+        memberMapper.insert(orphan);
+        link(goneParent.getId(), orphan.getId(), "ACTIVE");
+        jdbcTemplate.update(
+                "UPDATE T_MBR_INFO_M SET status = 'INACTIVE' WHERE id = ?", goneParent.getId());
+        assertNull(memberMapper.selectActiveParentByChildId(orphan.getId()),
+                "부모 계정이 비활성이면 null이어야 한다");
+    }
+
+    /**
+     * INACTIVE 행은 UQ_MBR_CONN_R_ACTIVE_CHILD의 대상이 아니라 자녀당 여러 개 쌓일 수 있다.
+     * conn.status 조건이 빠지면 다중 행이 되어 TooManyResultsException이 난다.
+     */
+    @Test
+    void selectActiveParentByChildIdIgnoresMultipleInactiveLinks() {
+        MemberVO first = newMember("PARENT");
+        memberMapper.insert(first);
+        MemberVO second = newMember("PARENT");
+        memberMapper.insert(second);
+        MemberVO current = newMember("PARENT");
+        memberMapper.insert(current);
+        MemberVO child = newMember("CHILD");
+        memberMapper.insert(child);
+
+        link(first.getId(), child.getId(), "INACTIVE");
+        link(second.getId(), child.getId(), "INACTIVE");
+        link(current.getId(), child.getId(), "ACTIVE");
+
+        MemberParentVO found = memberMapper.selectActiveParentByChildId(child.getId());
+
+        assertNotNull(found);
+        assertEquals(current.getId(), found.getParentId());
     }
 
     private void link(Long parentId, Long childId, String status) {
