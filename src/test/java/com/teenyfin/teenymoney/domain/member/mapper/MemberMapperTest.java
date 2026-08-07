@@ -85,13 +85,15 @@ class MemberMapperTest {
     }
 
     @Test
-    @DisplayName("profileImageKey를 넣고 조회 -> 실제 profile_image_key 컬럼을 왕복한다 (#55)")
-    void profileImageKeyRoundTripsThroughRealColumn() {
+    @DisplayName("updateProfileImageKey 호출 -> 실제 컬럼이 갱신되고 조회로 왕복한다 (#55)")
+    void updateProfileImageKeyWritesToRealColumn() {
         // 컬럼명을 profile_image_url -> profile_image_key로 바꿨다(V002).
         // 매퍼 XML과 실제 DB 컬럼이 어긋나면 여기서 SQL 오류나 null로 드러난다.
-        MemberVO member = newMember("PARENT");
-        member.setProfileImageKey("profile/test/9f2c.png");
+        // insert는 이 컬럼을 넣지 않으므로(V007, DEFAULT를 살리기 위해) update가 유일한 쓰기 경로다.
+        MemberVO member = newMember("CHILD");
         memberMapper.insert(member);
+
+        int updated = memberMapper.updateProfileImageKey(member.getId(), "profile/99/new.png");
 
         MemberVO loaded = memberMapper.selectById(member.getId());
         // 매퍼를 거치지 않고 컬럼을 직접 읽어 이름 자체를 못 박는다.
@@ -99,48 +101,31 @@ class MemberMapperTest {
                 "SELECT profile_image_key FROM T_MBR_INFO_M WHERE id = ?",
                 String.class, member.getId());
 
-        System.out.printf("    입력: insert 시 profileImageKey = profile/test/9f2c.png%n"
-                        + "    기대: 조회·직접읽기 모두 같은 값%n"
-                        + "    실제: selectById=%s, 컬럼 직접읽기=%s%n%n",
-                loaded.getProfileImageKey(), rawColumn);
-
-        assertEquals("profile/test/9f2c.png", loaded.getProfileImageKey());
-        assertEquals("profile/test/9f2c.png", rawColumn);
-    }
-
-    @Test
-    @DisplayName("updateProfileImageKey 호출 -> 실제 컬럼이 갱신된다 (#55)")
-    void updateProfileImageKeyWritesToRealColumn() {
-        MemberVO member = newMember("CHILD");
-        memberMapper.insert(member);
-
-        int updated = memberMapper.updateProfileImageKey(member.getId(), "profile/99/new.png");
-
-        String rawColumn = jdbcTemplate.queryForObject(
-                "SELECT profile_image_key FROM T_MBR_INFO_M WHERE id = ?",
-                String.class, member.getId());
-
         System.out.printf("    입력: updateProfileImageKey(%d, profile/99/new.png)%n"
-                        + "    기대: 1행 갱신, 컬럼 값이 profile/99/new.png%n"
-                        + "    실제: %d행 갱신, 컬럼=%s%n%n",
-                member.getId(), updated, rawColumn);
+                        + "    기대: 1행 갱신, 조회·직접읽기 모두 profile/99/new.png%n"
+                        + "    실제: %d행 갱신, selectById=%s, 컬럼 직접읽기=%s%n%n",
+                member.getId(), updated, loaded.getProfileImageKey(), rawColumn);
 
         assertEquals(1, updated);
+        assertEquals("profile/99/new.png", loaded.getProfileImageKey());
         assertEquals("profile/99/new.png", rawColumn);
     }
 
     @Test
-    @DisplayName("프로필 이미지 없이 가입 -> profile_image_key가 null이다")
-    void memberWithoutProfileImageHasNullKey() {
+    @DisplayName("프로필 이미지 없이 가입 -> 기본 프로필 이미지 key가 들어간다 (V007)")
+    void memberWithoutProfileImageGetsDefaultKey() {
+        // insert가 profile_image_key 컬럼을 넣지 않아야 DB DEFAULT가 적용된다.
+        // 매퍼가 #{profileImageKey}로 명시적 NULL을 보내면 NOT NULL 제약에 걸려 여기서 터진다.
         MemberVO member = newMember("CHILD");
         memberMapper.insert(member);
 
         MemberVO loaded = memberMapper.selectById(member.getId());
 
         System.out.printf("    입력: profileImageKey 없이 insert (대다수 회원)%n"
-                        + "    기대: null%n    실제: %s%n%n", loaded.getProfileImageKey());
+                        + "    기대: teenymoney_profile.png%n    실제: %s%n%n",
+                loaded.getProfileImageKey());
 
-        assertNull(loaded.getProfileImageKey());
+        assertEquals("teenymoney_profile.png", loaded.getProfileImageKey());
     }
 
     private MemberVO newMember(String role) {
