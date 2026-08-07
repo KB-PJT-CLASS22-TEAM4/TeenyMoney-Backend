@@ -5,6 +5,7 @@ import com.teenyfin.teenymoney.domain.categoryPolicy.dto.response.CategoryPolicy
 import com.teenyfin.teenymoney.domain.categoryPolicy.mapper.CategoryPolicyMapper;
 import com.teenyfin.teenymoney.domain.categoryPolicy.vo.CategoryPolicyVO;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
+import com.teenyfin.teenymoney.domain.member.vo.MemberParentVO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -22,7 +23,14 @@ class CategoryPolicyServiceTest {
 
     private final CategoryPolicyMapper categoryPolicyMapper = Mockito.mock(CategoryPolicyMapper.class);
     private final MemberMapper memberMapper = Mockito.mock(MemberMapper.class);
-    private final CategoryPolicyService categoryPolicyService = new CategoryPolicyService(categoryPolicyMapper, memberMapper);
+    private final CategoryPolicyService categoryPolicyService =
+            new CategoryPolicyService(categoryPolicyMapper, memberMapper);
+
+    private MemberParentVO createParentVO(Long parentId) {
+        MemberParentVO vo = new MemberParentVO();
+        vo.setParentId(parentId);
+        return vo;
+    }
 
     @Test
     void 자녀가_조회하면_본인_아이디로_selectByChildId를_호출한다() {
@@ -59,7 +67,7 @@ class CategoryPolicyServiceTest {
                 .policy("ALLOW")
                 .build();
 
-        given(memberMapper.selectActiveParentByChildId(childId).getParentId()).willReturn(parentId);
+        given(memberMapper.selectActiveParentByChildId(childId)).willReturn(createParentVO(parentId));
         given(categoryPolicyMapper.selectByChildId(childId)).willReturn(List.of(vo));
 
         // when
@@ -91,7 +99,7 @@ class CategoryPolicyServiceTest {
         Long childId = 2L;
         String role = "PARENT";
 
-        given(memberMapper.selectActiveParentByChildId(childId).getParentId()).willReturn(999L); // 다른 부모의 자녀
+        given(memberMapper.selectActiveParentByChildId(childId)).willReturn(createParentVO(999L)); // 다른 부모의 자녀
 
         // when & then
         assertThatThrownBy(() -> categoryPolicyService.getCategoryPolicy(parentId, role, childId))
