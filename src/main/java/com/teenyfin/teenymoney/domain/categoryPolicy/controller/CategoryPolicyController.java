@@ -27,22 +27,25 @@ public class CategoryPolicyController {
     @ApiOperation(value = "단계 별 카테고리 정책 조회", notes = "허용, 주의, 차단 단계로 설정된 카테고리들을 묶어 반환합니다.")
     @GetMapping("/groups")
     public ApiResponse<List<CategoryPolicyGroupResponseDTO>> getCategoryPolicyGroup(
-            @AuthenticationPrincipal MemberPrincipal memberPrincipal) {
-        return ApiResponse.ok(categoryPolicyService.getCategoryPolicyGroup(memberPrincipal.memberId(), memberPrincipal.role()));
+            @AuthenticationPrincipal MemberPrincipal memberPrincipal,
+            @RequestParam(required = false) Long childId) {
+        return ApiResponse.ok(categoryPolicyService.getCategoryPolicyGroup(memberPrincipal.memberId(), memberPrincipal.role(), childId));
     }
 
     @ApiOperation(value = "전체 카테고리 정책 조회", notes = "모든 카테고리의 정보(ID, 카테고리 이름, 정책 단계)를 반환합니다.")
     @GetMapping
     public ApiResponse<List<CategoryPolicyResponseDTO>> getCategoryPolicy(
-            @AuthenticationPrincipal MemberPrincipal memberPrincipal) {
-        return ApiResponse.ok(categoryPolicyService.getCategoryPolicy(memberPrincipal.memberId(), memberPrincipal.role()));
+            @AuthenticationPrincipal MemberPrincipal memberPrincipal,
+            @RequestParam(required = false) Long childId) {
+        return ApiResponse.ok(categoryPolicyService.getCategoryPolicy(memberPrincipal.memberId(), memberPrincipal.role(), childId));
     }
 
     @ApiOperation(value = "전체 카테고리 정책 단계 수정", notes = "모든 카테고리의 정책 단계를 동시에 수정합니다.")
     @PatchMapping
     public ApiResponse<List<CategoryPolicyResponseDTO>> modifyCategoryPolicy(
             @AuthenticationPrincipal MemberPrincipal memberPrincipal,
+            @RequestParam Long childId,
             @ApiParam(value = "전체 카테고리에 대한 ID와 변경 후 정책 단계", required = true) @RequestBody @Valid CategoryPolicyUpdateRequestListDTO categoryPolicyUpdateRequestDTOList) {
-        return ApiResponse.ok(categoryPolicyService.updateCategoryPolicy(memberPrincipal.memberId(), memberPrincipal.role(), categoryPolicyUpdateRequestDTOList.getCategoryPolicyList()));
+        return ApiResponse.ok(categoryPolicyService.updateCategoryPolicy(memberPrincipal.memberId(), memberPrincipal.role(), childId, categoryPolicyUpdateRequestDTOList.getCategoryPolicyList()));
     }
 }

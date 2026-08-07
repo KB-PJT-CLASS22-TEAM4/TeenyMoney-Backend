@@ -10,14 +10,6 @@
         <result property="policy" column="policy"/>
     </resultMap>
 
-    <select id="selectByParentId" resultMap="categoryPolicyResultMap">
-        SELECT p.id, c.name, p.policy
-        FROM T_MCC_POLICY_M p
-        JOIN T_MCC_CTGR_C c
-        ON p.merchant_category_id = c.id
-        WHERE p.parent_id = #{parentId}
-    </select>
-
     <select id="selectByChildId" resultMap="categoryPolicyResultMap">
         SELECT p.id, c.name, p.policy
         FROM T_MCC_POLICY_M p
@@ -43,10 +35,17 @@
         END,
         updated_at = NOW()
         WHERE parent_id = #{parentId}
+        AND child_id = #{childId}
         AND id IN
         <foreach collection="categoryPolicyList" item="p" open="(" separator="," close=")">
             #{p.id}
         </foreach>
     </update>
+
+    <select id="selectParentIdByChildId" resultType="java.lang.Long">
+        SELECT parent_id
+        FROM T_MBR_CONN_R
+        WHERE child_id = #{childId}
+    </select>
 
 </mapper>
