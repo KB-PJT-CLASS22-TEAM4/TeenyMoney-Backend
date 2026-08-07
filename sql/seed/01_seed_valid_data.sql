@@ -1,43 +1,18 @@
 -- ============================================================
 -- 정상 시드 데이터 (렌네이밍된 테이블명 기준)
--- teenymoney_schema_renamed.sql 적용 후 실행
+--
+-- 실행 순서:
+--   1. schema/teenymoney_schema_renamed.sql
+--   2. migration/V001 ~ V006 전부, 번호 순서대로
+--   3. seed/01_seed_valid_data.sql (이 파일)
+--
+-- 세 단계 모두 에러 없이 끝나야 한다. 하나라도 실패하면 제약조건이나 순서에 버그가 있는 것이다.
+--
 -- 전부 성공해야 정상 (하나라도 실패하면 제약조건에 버그가 있는 것)
+--
+-- 약관 원본(T_MBR_AGRMT_M)은 V001 이 직접 INSERT 하므로 여기서 다시 넣지 않는다.
+-- 넣으면 UQ_MBR_AGRMT_M_CODE_VERSION 에 걸린다.
 -- ============================================================
-
--- 필수 약관 원본 데이터. 운영 반영 전 법무 검토가 필요한 개발용 초안이다.
-INSERT INTO `T_MBR_AGRMT_M` (
-    `code`, `version`, `title`, `content`, `is_required`, `effective_at`
-) VALUES
-(
-    'SERVICE_TERMS',
-    '1.0',
-    '서비스 이용약관',
-    CONCAT(
-        '[개발용 초안]', CHAR(10),
-        '제1조(목적) 본 약관은 티니머니 서비스 이용에 필요한 기본 조건을 정합니다.', CHAR(10),
-        '제2조(계정) 이용자는 정확한 정보를 제공하고 자신의 계정과 인증수단을 안전하게 관리해야 합니다.', CHAR(10),
-        '제3조(이용자 의무) 이용자는 타인의 권리를 침해하거나 서비스를 부정한 목적으로 이용해서는 안 됩니다.', CHAR(10),
-        '제4조(서비스 변경) 회사는 안정적인 운영을 위해 서비스의 일부를 변경하거나 중단할 수 있으며 중요한 변경은 사전에 알립니다.', CHAR(10),
-        '제5조(책임) 회사와 이용자는 각자의 귀책사유로 발생한 손해에 대해 관련 법령에 따라 책임을 부담합니다.'
-    ),
-    TRUE,
-    '2026-08-04 00:00:00'
-),
-(
-    'PRIVACY',
-    '1.0',
-    '개인정보 수집·이용 동의',
-    CONCAT(
-        '[개발용 초안]', CHAR(10),
-        '1. 수집 항목: 이름, 생년월일, 휴대폰 번호, 이메일, 비밀번호 해시, 약관 동의 이력', CHAR(10),
-        '2. 이용 목적: 회원 식별과 인증, 계정 관리, 서비스 제공, 부정 이용 방지 및 고객 문의 처리', CHAR(10),
-        '3. 보유 기간: 회원 탈퇴 시까지 보유하며, 관계 법령에 별도 보존 의무가 있는 경우 해당 기간 동안 보관합니다.', CHAR(10),
-        '4. 동의 거부: 이용자는 개인정보 수집·이용 동의를 거부할 수 있으나 필수 정보 동의를 거부하면 회원가입이 제한됩니다.', CHAR(10),
-        '5. 만 14세 미만 이용자는 법정대리인의 확인과 동의가 필요합니다.'
-    ),
-    TRUE,
-    '2026-08-04 00:00:00'
-);
 
 -- T_MBR_INFO_M: 부모 1, 자녀 2 (부모 1명 고정 구조)
 --
@@ -84,6 +59,46 @@ INSERT INTO `T_MBR_CONN_R` (`id`, `parent_id`, `child_id`, `status`)
 VALUES
 (1, 1, 2, 'ACTIVE'),
 (2, 1, 3, 'ACTIVE');
+
+-- [V001] T_MBR_LEGAL_GUARDIAN_M: 만 14세 미만 자녀의 법정대리인 인증 근거
+--
+-- 두 자녀 모두 만 14세 미만이다(2013-05-20 → 13세, 2015-09-02 → 10세, 2026-08-06 기준).
+-- 가입 흐름상 이 나이대는 legalGuardianConsentToken 없이는 가입 자체가 불가능하므로,
+-- 이 행이 없는 자녀 회원은 서버가 만들 수 없는 상태다. 만 14세 이상 케이스가 필요하면
+-- 자녀를 추가하고 이 표에서 빼는 게 아니라 생년월일을 14년 전보다 이르게 잡아야 한다.
+--
+-- 이 테이블은 '비회원' 법정대리인용이라 회원 1(김부모)과 별개다. 컬럼에 member FK 가 없고
+-- 이름·번호를 직접 들고 있는 이유가 그것이다. 번호를 회원 1과 같게 두면 회원인 부모가
+-- 비회원 대리인으로도 등록된 모순된 데이터가 된다.
+INSERT INTO `T_MBR_LEGAL_GUARDIAN_M`
+	(`id`, `child_member_id`, `name`, `phone_number`, `relationship`, `verification_method`, `verification_reference`, `verified_at`)
+VALUES
+(1, 2, '김보호', '01044444444', 'MOTHER', 'SMS_TEST', 'lg-verify-child-2', '2026-06-01 10:00:00'),
+(2, 3, '김보호', '01044444444', 'MOTHER', 'SMS_TEST', 'lg-verify-child-3', '2026-06-01 10:05:00');
+
+-- [V001] T_MBR_AGRMT_H: 회원별 필수 약관 동의 이력
+--
+-- agreement_id 를 1, 2 로 박지 않고 code+version 으로 찾는 이유는 T_MBR_AGRMT_M 의 id 가
+-- V001 의 AUTO_INCREMENT 채번 결과라서다. 약관이 추가되거나 재실행되면 번호가 밀린다.
+--
+-- actor_type 은 부모가 SELF, 만 14세 미만 자녀는 LEGAL_GUARDIAN 이다. 자녀 행의
+-- actor_member_id 가 NULL 인 것은 오류가 아니라 위 표의 비회원 대리인이 동의했다는 뜻이고,
+-- 그 근거는 verification_reference 로 T_MBR_LEGAL_GUARDIAN_M 과 이어진다.
+INSERT INTO `T_MBR_AGRMT_H`
+	(`id`, `member_id`, `agreement_id`, `status`, `actor_type`, `actor_member_id`, `verification_method`, `verification_reference`, `created_at`)
+VALUES
+(1, 1, (SELECT `id` FROM `T_MBR_AGRMT_M` WHERE `code` = 'SERVICE_TERMS' AND `version` = '1.0'),
+ 'AGREED', 'SELF', 1, NULL, NULL, '2026-06-01 09:00:00'),
+(2, 1, (SELECT `id` FROM `T_MBR_AGRMT_M` WHERE `code` = 'PRIVACY' AND `version` = '1.0'),
+ 'AGREED', 'SELF', 1, NULL, NULL, '2026-06-01 09:00:00'),
+(3, 2, (SELECT `id` FROM `T_MBR_AGRMT_M` WHERE `code` = 'SERVICE_TERMS' AND `version` = '1.0'),
+ 'AGREED', 'LEGAL_GUARDIAN', NULL, 'SMS_TEST', 'lg-verify-child-2', '2026-06-01 10:00:00'),
+(4, 2, (SELECT `id` FROM `T_MBR_AGRMT_M` WHERE `code` = 'PRIVACY' AND `version` = '1.0'),
+ 'AGREED', 'LEGAL_GUARDIAN', NULL, 'SMS_TEST', 'lg-verify-child-2', '2026-06-01 10:00:00'),
+(5, 3, (SELECT `id` FROM `T_MBR_AGRMT_M` WHERE `code` = 'SERVICE_TERMS' AND `version` = '1.0'),
+ 'AGREED', 'LEGAL_GUARDIAN', NULL, 'SMS_TEST', 'lg-verify-child-3', '2026-06-01 10:05:00'),
+(6, 3, (SELECT `id` FROM `T_MBR_AGRMT_M` WHERE `code` = 'PRIVACY' AND `version` = '1.0'),
+ 'AGREED', 'LEGAL_GUARDIAN', NULL, 'SMS_TEST', 'lg-verify-child-3', '2026-06-01 10:05:00');
 
 -- T_TNY_GRADE_A: 참조용 상수 테이블
 INSERT INTO `T_TNY_GRADE_A` (`grade_id`, `grade_name`, `min_score`, `max_score`, `bonus_rate`, `monthly_override_limit`, `color`)
@@ -3391,10 +3406,17 @@ JOIN `T_MCC_CTGR_C` ctgr ON ctgr.`name` = src.category;
 
 -- 아래 기능 데이터는 위 MCC 기준 데이터를 사용한다.
 -- T_MCC_POLICY_M: 자녀 2에게 PC방·노래방 커스텀 정책 (부모 1명 고정 -> child_id+category만 UNIQUE)
-INSERT INTO `T_MCC_POLICY_M` (`id`, `parent_id`, `child_id`, `merchant_category_id`, `policy`)
-VALUES (1, 1, 2,
-        (SELECT `id` FROM `T_MCC_CTGR_C` WHERE `name` = 'PC방·노래방'),
-        'BLOCK');
+--
+-- 2번째 행(편의점 WATCH, 기준 3회)은 원래 V003 에 들어 있던 행이다. 특정 회원 아이디를
+-- 가정한 시드 데이터라 마이그레이션에서 이쪽으로 옮겼다.
+-- watch_threshold_count 는 V003 이 추가한 컬럼이라 마이그레이션을 건너뛰면 이 문장이 깨진다.
+--
+-- 편의점은 default_policy 가 ALLOW 라, 커스텀 WATCH 가 기본정책을 덮어쓰는지 확인할 수 있다.
+-- (PC방·노래방은 기본이 이미 WATCH 라 BLOCK 으로 덮는 방향만 검증된다)
+INSERT INTO `T_MCC_POLICY_M` (`id`, `parent_id`, `child_id`, `merchant_category_id`, `policy`, `watch_threshold_count`)
+VALUES
+(1, 1, 2, (SELECT `id` FROM `T_MCC_CTGR_C` WHERE `name` = 'PC방·노래방'), 'BLOCK', NULL),
+(2, 1, 2, (SELECT `id` FROM `T_MCC_CTGR_C` WHERE `name` = '편의점'), 'WATCH', 3);
 
 -- T_WLT_BASE_M: 회원 지갑 3개(부모1 + 자녀2) + 자녀2의 예금/적금 전용 지갑 2개
 -- (member_id UNIQUE가 아니라 INDEX로 수정되어 있어서 한 회원이 지갑 여러 개 가져도 정상 통과)
@@ -3499,11 +3521,16 @@ VALUES (1, 1, 2, 1, 8000, 8000, 1000, 1000, 'PAID', '2026-07-25 09:00:00');
 INSERT INTO `T_WLT_CHARGE_L` (`id`, `wallet_id`, `payment_method_id`, `idempotency_key`, `amount`, `status`, `order_id`, `payment_key`, `created_at`)
 VALUES (1, 2, 1, UUID(), 50000, 'SUCCESS', 'charge-order-0001', 'toss-payment-key-charge-0001', '2026-07-28 20:00:00');
 
--- T_PAY_TRAN_L: 자녀2 QR결제 성공 건 (편의점 카테고리, default_policy ALLOW 라 applied_policy 도 ALLOW)
+-- T_PAY_TRAN_L: 자녀2 QR결제 성공 건 (편의점 카테고리)
+--
+-- applied_policy 가 WATCH 인 이유: 편의점의 default_policy 는 ALLOW 지만, 위 T_MCC_POLICY_M 에
+-- 자녀2 전용 WATCH 정책이 있고 커스텀 정책이 기본정책을 덮는다(스키마 주석: "이 행이 없으면
+-- category.default_policy 적용"). 여기에 ALLOW 를 남겨두면 정책 판정 로직이 커스텀 정책을
+-- 무시해도 시드 값과 일치해 테스트가 통과한다. WATCH 는 관찰이지 차단이 아니므로 결제는 SUCCESS 다.
 INSERT INTO `T_PAY_TRAN_L` (`id`, `wallet_id`, `category_id`, `idempotency_key`, `applied_policy`, `amount`, `status`, `order_id`, `payment_key`, `created_at`)
 VALUES (1, 2,
         (SELECT `id` FROM `T_MCC_CTGR_C` WHERE `name` = '편의점'),
-        UUID(), 'ALLOW', 3500, 'SUCCESS', 'order-0001', 'toss-payment-key-0001', '2026-07-30 18:00:00');
+        UUID(), 'WATCH', 3500, 'SUCCESS', 'order-0001', 'toss-payment-key-0001', '2026-07-30 18:00:00');
 
 -- ============================================================
 -- T_WLT_HIST_H: 위의 모든 이체/충전/결제를 양쪽 지갑에 빠짐없이 반영한 원장
@@ -3554,8 +3581,14 @@ VALUES (1, 1, 'https://cdn.test.com/quest/1.jpg', '깨끗하게 치웠어요!', 
 -- 승인되지 않은 퀘스트에 보상 점수가 이미 지급된 상태로 두면, 퀘스트 승인 로직을 이 시드로
 -- 테스트할 때 점수가 두 번 올라가는 것을 정상으로 착각하게 된다. 퀘스트 1은 '승인 대기' 케이스로 남긴다.
 -- score_after 610 은 T_MBR_INFO_M 의 자녀2 teeny_score 와 반드시 같아야 한다.
-INSERT INTO `T_TNY_SCOREHIST_H` (`id`, `child_id`, `amount`, `score_after`, `description`, `reference_type`, `reference_id`, `created_at`)
-VALUES (1, 2, 10, 610, '적금납입성공', 'SAVING_ENROLLMENT', 1, '2026-06-25 09:00:00');
+--
+-- [V004] event_code / event_key 는 NOT NULL 이므로 생략할 수 없다.
+-- description('적금납입성공')은 화면 문구라 바뀔 수 있고, event_code 는 조회·정책 판정에 쓰는
+-- 고정 식별값이다. event_key 는 V004 주석의 형식(가입번호:회차)을 따라 적금 가입 1번의
+-- 1회차 납입을 가리키며, UQ_TNY_SCOREHIST_H_CHILD_EVENT_KEY 가 자녀별 중복 반영을 막는다.
+-- 여기에 'LEGACY' 를 쓰면 안 된다. LEGACY 는 V004 가 원인을 알 수 없는 과거 행을 채운 값이다.
+INSERT INTO `T_TNY_SCOREHIST_H` (`id`, `child_id`, `amount`, `score_after`, `event_code`, `event_key`, `description`, `reference_type`, `reference_id`, `created_at`)
+VALUES (1, 2, 10, 610, 'SAVING_FIXED_INSTALLMENT_PAID', 'SAVING_FIXED_PAID:1:1', '적금납입성공', 'SAVING_ENROLLMENT', 1, '2026-06-25 09:00:00');
 
 -- T_TDP_REQ_L + T_TDP_REQCTGR_R
 --
@@ -3662,4 +3695,22 @@ UNION ALL
  FROM `T_SVG_PAYHIST_H` p
  JOIN `T_SVG_ENROLL_M` e ON e.id = p.saving_enrollment_id
  WHERE p.status = 'MISSED'
-   AND DATE_ADD(e.start_date, INTERVAL (p.installment_no - 1) MONTH) > CURDATE());
+   AND DATE_ADD(e.start_date, INTERVAL (p.installment_no - 1) MONTH) > CURDATE())
+UNION ALL
+-- 필수 약관에 동의하지 않은 회원은 가입 자체가 거절되므로 존재할 수 없다.
+(SELECT '필수 약관 동의 이력이 없는 회원',
+        CONCAT('member ', m.id, ' → ', a.code, ' ', a.version)
+ FROM `T_MBR_INFO_M` m
+ CROSS JOIN `T_MBR_AGRMT_M` a
+ WHERE a.is_required = TRUE
+   AND NOT EXISTS (SELECT 1 FROM `T_MBR_AGRMT_H` h
+                   WHERE h.member_id = m.id AND h.agreement_id = a.id AND h.status = 'AGREED'))
+UNION ALL
+-- 만 14세 미만은 법정대리인 인증 없이 가입할 수 없다(가입 흐름 13).
+-- 동의 주체가 LEGAL_GUARDIAN 인데 근거 행이 없는 경우도 같이 잡는다.
+(SELECT '만 14세 미만인데 법정대리인 인증 근거가 없음',
+        CONCAT('member ', m.id, ' (', m.name, ', ', m.birth_date, ')')
+ FROM `T_MBR_INFO_M` m
+ WHERE m.role = 'CHILD'
+   AND DATE_ADD(m.birth_date, INTERVAL 14 YEAR) > CURDATE()
+   AND NOT EXISTS (SELECT 1 FROM `T_MBR_LEGAL_GUARDIAN_M` g WHERE g.child_member_id = m.id));
