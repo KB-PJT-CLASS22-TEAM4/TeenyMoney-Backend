@@ -1,5 +1,6 @@
 package com.teenyfin.teenymoney.domain.teenyscore.service;
 
+import com.teenyfin.teenymoney.domain.family.service.FamilyAccessService;
 import com.teenyfin.teenymoney.domain.teenyscore.dto.response.TeenyScoreGradeResponseDTO;
 import com.teenyfin.teenymoney.domain.teenyscore.dto.response.TeenyScoreHistoryResponseDTO;
 import com.teenyfin.teenymoney.domain.teenyscore.dto.response.TeenyScoreMonthlyHistoryResponseDTO;
@@ -24,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -36,12 +38,15 @@ class TeenyScoreServiceTest {
             new MemberPrincipal(1L, "PARENT");
 
     private TeenyScoreMapper teenyScoreMapper;
+    private FamilyAccessService familyAccessService;
     private TeenyScoreService teenyScoreService;
 
     @BeforeEach
     void setUp() {
         teenyScoreMapper = mock(TeenyScoreMapper.class);
-        teenyScoreService = new TeenyScoreService(teenyScoreMapper);
+        familyAccessService = mock(FamilyAccessService.class);
+        teenyScoreService = new TeenyScoreService(
+                teenyScoreMapper, familyAccessService);
     }
 
     @Test
@@ -59,6 +64,8 @@ class TeenyScoreServiceTest {
         assertEquals(600, response.getMinScore());
         assertEquals(799, response.getMaxScore());
         assertEquals(new BigDecimal("0.20"), response.getBonusRate());
+        assertEquals(new BigDecimal("3.50"), response.getLoanRate());
+        assertEquals(3, response.getMonthlyOverrideLimit());
         assertEquals("#4CAF50", response.getColor());
     }
 
@@ -137,6 +144,8 @@ class TeenyScoreServiceTest {
         assertEquals(4L, grades.get(0).getGradeId());
         assertEquals("양호", grades.get(0).getGradeName());
         assertEquals(new BigDecimal("0.20"), grades.get(0).getBonusRate());
+        assertEquals(new BigDecimal("3.50"), grades.get(0).getLoanRate());
+        assertEquals(3, grades.get(0).getMonthlyOverrideLimit());
     }
 
     @Test
@@ -154,6 +163,9 @@ class TeenyScoreServiceTest {
 
     @Test
     void childCannotReadAnotherChildScore() {
+        doThrow(new BusinessException(CommonErrorCode.AUTH_FORBIDDEN))
+                .when(familyAccessService).requireChildAccess(CHILD, 3L);
+
         BusinessException exception = assertThrows(
                 BusinessException.class,
                 () -> teenyScoreService.getTeenyScore(CHILD, 3L));
@@ -164,8 +176,6 @@ class TeenyScoreServiceTest {
 
     @Test
     void connectedParentCanReadChildScore() {
-        when(teenyScoreMapper.existsActiveConnection(1L, 2L))
-                .thenReturn(true);
         when(teenyScoreMapper.selectTeenyScoreByChildId(2L))
                 .thenReturn(teenyScore());
 
@@ -173,13 +183,13 @@ class TeenyScoreServiceTest {
                 teenyScoreService.getTeenyScore(PARENT, 2L);
 
         assertEquals(2L, response.getChildId());
-        verify(teenyScoreMapper).existsActiveConnection(1L, 2L);
+        verify(familyAccessService).requireChildAccess(PARENT, 2L);
     }
 
     @Test
     void unconnectedParentCannotReadMonthlyHistory() {
-        when(teenyScoreMapper.existsActiveConnection(1L, 3L))
-                .thenReturn(false);
+        doThrow(new BusinessException(CommonErrorCode.AUTH_FORBIDDEN))
+                .when(familyAccessService).requireChildAccess(PARENT, 3L);
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
@@ -217,8 +227,6 @@ class TeenyScoreServiceTest {
 
     @Test
     void connectedParentCanReadMonthlyHistory() {
-        when(teenyScoreMapper.existsActiveConnection(1L, 2L))
-                .thenReturn(true);
         when(teenyScoreMapper.selectTeenyScoreByChildId(2L))
                 .thenReturn(teenyScore());
         when(teenyScoreMapper.selectMonthlyHistoriesByChildId(2L))
@@ -230,6 +238,7 @@ class TeenyScoreServiceTest {
         assertEquals(1, histories.size());
         assertEquals("2026-06", histories.get(0).getYearMonth());
         assertEquals(610, histories.get(0).getTeenyScore());
+        verify(familyAccessService).requireChildAccess(PARENT, 2L);
     }
 
     private TeenyScoreVO teenyScore() {
@@ -241,6 +250,8 @@ class TeenyScoreServiceTest {
         teenyScore.setMinScore(600);
         teenyScore.setMaxScore(799);
         teenyScore.setBonusRate(new BigDecimal("0.20"));
+        teenyScore.setLoanRate(new BigDecimal("3.50"));
+        teenyScore.setMonthlyOverrideLimit(3);
         teenyScore.setColor("#4CAF50");
         return teenyScore;
     }
@@ -272,6 +283,8 @@ class TeenyScoreServiceTest {
         grade.setMinScore(600);
         grade.setMaxScore(799);
         grade.setBonusRate(new BigDecimal("0.20"));
+        grade.setLoanRate(new BigDecimal("3.50"));
+        grade.setMonthlyOverrideLimit(3);
         grade.setColor("#4CAF50");
         return grade;
     }

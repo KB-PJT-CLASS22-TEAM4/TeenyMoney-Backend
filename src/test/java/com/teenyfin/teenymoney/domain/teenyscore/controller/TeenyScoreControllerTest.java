@@ -83,6 +83,8 @@ class TeenyScoreControllerTest {
         assertTrue(body.contains("\"teenyScore\":610"), body);
         assertTrue(body.contains("\"gradeName\":\"양호\""), body);
         assertTrue(body.contains("\"bonusRate\":0.20"), body);
+        assertTrue(body.contains("\"loanRate\":3.50"), body);
+        assertTrue(body.contains("\"monthlyOverrideLimit\":3"), body);
 
         verify(teenyScoreService).getTeenyScore(CHILD, 2L);
     }
@@ -139,6 +141,8 @@ class TeenyScoreControllerTest {
         assertTrue(body.contains("\"data\":[{"), body);
         assertTrue(body.contains("\"gradeId\":4"), body);
         assertTrue(body.contains("\"gradeName\":\"양호\""), body);
+        assertTrue(body.contains("\"loanRate\":3.50"), body);
+        assertTrue(body.contains("\"monthlyOverrideLimit\":3"), body);
 
         verify(teenyScoreService).getGrades();
     }
@@ -152,6 +156,8 @@ class TeenyScoreControllerTest {
         score.setMinScore(600);
         score.setMaxScore(799);
         score.setBonusRate(new BigDecimal("0.20"));
+        score.setLoanRate(new BigDecimal("3.50"));
+        score.setMonthlyOverrideLimit(3);
         score.setColor("#4CAF50");
         return score;
     }
@@ -187,6 +193,8 @@ class TeenyScoreControllerTest {
         grade.setMinScore(600);
         grade.setMaxScore(799);
         grade.setBonusRate(new BigDecimal("0.20"));
+        grade.setLoanRate(new BigDecimal("3.50"));
+        grade.setMonthlyOverrideLimit(3);
         grade.setColor("#4CAF50");
         return grade;
     }

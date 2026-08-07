@@ -22,10 +22,6 @@ public interface TeenyScoreMapper {
 
     List<TeenyScoreGradeVO> selectAllGrades();
 
-    boolean existsActiveConnection(
-            @Param("parentId") Long parentId,
-            @Param("childId") Long childId);
-
     @SuppressWarnings("MybatisXMapperMethodInspection")
     Integer selectScoreForUpdate(
             @Param("childId") Long childId);

@@ -14,6 +14,8 @@
         <result property="minScore" column="min_score"/>
         <result property="maxScore" column="max_score"/>
         <result property="bonusRate" column="bonus_rate"/>
+        <result property="loanRate" column="loan_rate"/>
+        <result property="monthlyOverrideLimit" column="monthly_override_limit"/>
         <result property="color" column="color"/>
     </resultMap>
 
@@ -33,6 +35,8 @@
         <result property="minScore" column="min_score"/>
         <result property="maxScore" column="max_score"/>
         <result property="bonusRate" column="bonus_rate"/>
+        <result property="loanRate" column="loan_rate"/>
+        <result property="monthlyOverrideLimit" column="monthly_override_limit"/>
         <result property="color" column="color"/>
     </resultMap>
 
@@ -52,6 +56,8 @@
             grade.min_score,
             grade.max_score,
             grade.bonus_rate,
+            grade.loan_rate,
+            grade.monthly_override_limit,
             grade.color
         FROM T_MBR_INFO_M member
         INNER JOIN T_TNY_GRADE_A grade
@@ -103,19 +109,11 @@
             min_score,
             max_score,
             bonus_rate,
+            loan_rate,
+            monthly_override_limit,
             color
         FROM T_TNY_GRADE_A
         ORDER BY min_score DESC
-    </select>
-
-    <select id="existsActiveConnection" resultType="boolean">
-        SELECT EXISTS (
-            SELECT 1
-            FROM T_MBR_CONN_R
-            WHERE parent_id = #{parentId}
-              AND child_id = #{childId}
-              AND status = 'ACTIVE'
-        )
     </select>
 
     <select id="selectScoreForUpdate" resultType="java.lang.Integer">
