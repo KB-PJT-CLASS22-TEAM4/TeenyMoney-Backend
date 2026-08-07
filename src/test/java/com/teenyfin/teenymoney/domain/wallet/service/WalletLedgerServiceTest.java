@@ -39,7 +39,7 @@ class WalletLedgerServiceTest {
 
         // when: 3000원을 CHARGE(충전) 참조로 입금(credit) 실행.
         // refId=99L은 "이 3000원이 어느 charge 시도에서 온 건지"를 가리키는 T_WLT_CHARGE_L.id라고 가정.
-        walletLedgerService.credit(5L, 3000L, ReferenceType.CHARGE, 99L);
+        walletLedgerService.credit(5L, 3000L, ReferenceType.CHARGE, 99L, "테스트");
 
         // then: 10000 + 3000 = 13000으로 잔액이 갱신 요청됐는지 확인.
         // verify()는 "이 메서드가 정확히 이 인자로 호출됐는지"를 사후에 검사하는 Mockito 문법.
@@ -48,9 +48,9 @@ class WalletLedgerServiceTest {
 
         // then: 원장에도 CREDIT 방향으로, 갱신된 잔액(13000)과 함께,
         // CHARGE/99L이라는 참조 정보로 정확히 한 줄 기입 요청이 갔는지 확인.
-        // description은 credit()이 따로 안 받는 값이라 null이 넘어가는 게 맞다 — 그래서 여기서도 null로 명시 검증.
+
         verify(walletMapper).insertWalletHistory(
-                5L, "CREDIT", 3000L, 13000L, "CHARGE", 99L, null);
+                5L, "CREDIT", 3000L, 13000L, "CHARGE", 99L, "테스트");
         System.out.println("[LEDGER] direction=CREDIT, amount=3000, balanceAfter=13000, refType=CHARGE, refId=99");
     }
 
@@ -66,7 +66,7 @@ class WalletLedgerServiceTest {
 
         // when: 4000원을 TRANSFER(송금) 참조로 출금(debit) 실행.
         // refId=77L은 "이 4000원이 어느 송금 시도에서 나간 건지"를 가리키는 T_WLT_TRF_L.id라고 가정.
-        walletLedgerService.debit(5L, 4000L, ReferenceType.TRANSFER, 77L);
+        walletLedgerService.debit(5L, 4000L, ReferenceType.TRANSFER, 77L, "테스트");
 
         // then: 10000 - 4000 = 6000으로 잔액이 갱신 요청됐는지 확인.
         verify(walletMapper).updateBalance(5L, 6000L);
@@ -75,7 +75,7 @@ class WalletLedgerServiceTest {
         // then: 원장에도 DEBIT 방향으로, 갱신된 잔액(6000)과 함께,
         // TRANSFER/77L이라는 참조 정보로 정확히 한 줄 기입 요청이 갔는지 확인.
         verify(walletMapper).insertWalletHistory(
-                5L, "DEBIT", 4000L, 6000L, "TRANSFER", 77L, null);
+                5L, "DEBIT", 4000L, 6000L, "TRANSFER", 77L, "테스트");
         System.out.println("[LEDGER] direction=DEBIT, amount=4000, balanceAfter=6000, refType=TRANSFER, refId=77");
 
     }
@@ -92,7 +92,7 @@ class WalletLedgerServiceTest {
         // when & then: 5000원을 출금하려 하면 잔액 부족 예외가 터져야 한다.
         // assertThrows: 람다(() -> ...) 안의 코드를 실행해보고, 지정한 예외 타입이 안 던져지면
         // assertThrows 자체가 테스트 실패로 처리된다. 반환값은 실제로 던져진 예외 객체.
-        BusinessException exception = assertThrows(BusinessException.class, () -> walletLedgerService.debit(5L, 5000L, ReferenceType.TRANSFER, 77L));
+        BusinessException exception = assertThrows(BusinessException.class, () -> walletLedgerService.debit(5L, 5000L, ReferenceType.TRANSFER, 77L, "테스트"));
 
         // 그냥 아무 BusinessException이나 던져진 걸로는 부족하고, 정확히 INSUFFICIENT_BALANCE 코드인지까지 확인.
         assertEquals(WalletErrorCode.INSUFFICIENT_BALANCE, exception.getErrorCode());
@@ -115,7 +115,7 @@ class WalletLedgerServiceTest {
         // 먼저 일어나니까, 지갑 정보는 아예 쓰이지도 않는다.
 
         // when & then: 0원을 입금하려 하면 잘못된 금액 예외가 터져야 한다.
-        BusinessException exception = assertThrows(BusinessException.class, () -> walletLedgerService.credit(5L, 0L, ReferenceType.CHARGE, 99L));
+        BusinessException exception = assertThrows(BusinessException.class, () -> walletLedgerService.credit(5L, 0L, ReferenceType.CHARGE, 99L, "테스트"));
 
         assertEquals(WalletErrorCode.INVALID_TRANSFER_AMOUNT, exception.getErrorCode());
         System.out.println("[EXCEPTION] " + exception.getErrorCode() + " - " + exception.getMessage());
@@ -139,7 +139,7 @@ class WalletLedgerServiceTest {
 
         // when & then: 존재하지 않는 지갑으로 출금을 시도하면 WALLET_NOT_FOUND 예외가 터져야 한다.
         BusinessException exception = assertThrows(BusinessException.class,
-                () -> walletLedgerService.debit(5L, 1000L, ReferenceType.TRANSFER, 77L));
+                () -> walletLedgerService.debit(5L, 1000L, ReferenceType.TRANSFER, 77L, "테스트"));
 
         assertEquals(WalletErrorCode.WALLET_NOT_FOUND, exception.getErrorCode());
         System.out.println("[EXCEPTION] " + exception.getErrorCode() + " - " + exception.getMessage());

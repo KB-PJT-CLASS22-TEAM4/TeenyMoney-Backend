@@ -43,7 +43,7 @@ public class WalletLedgerService {
     // 전부 롤백된다 (예: 잔액은 바뀌었는데 원장은 안 남는 반쪽짜리 상태 방지).
 
     @Transactional
-    public void credit(Long walletId, Long amount, ReferenceType refType, Long refId) {
+    public void credit(Long walletId, Long amount, ReferenceType refType, Long refId, String desc) {
         // 1단계: amount가 0 이하면 여기서 바로 막는다.
         // DB의 CHECK 제약(amount는 항상 양수)까지 안 가고 서비스 레벨에서 먼저 걸러내는 이유는 "왜 실패했는지" 명확한 응답(400 + 메시지)을 주기 위해서다.
         validateAmount(amount);
@@ -61,12 +61,12 @@ public class WalletLedgerService {
         walletMapper.updateBalance(walletId, newBalance);
 
         // 5단계: 원장에 CREDIT 한 줄 기입. refType.name()으로 enum을 문자열("CHARGE" 등)로 바꿔서 넘긴다.
-        // description은 credit()이 따로 안 받으니 지금은 null로 넘긴다 (컬럼이 NULL 허용이라 문제없음).
-        walletMapper.insertWalletHistory(walletId, "CREDIT", amount, newBalance, refType.name(), refId, null);
+
+        walletMapper.insertWalletHistory(walletId, "CREDIT", amount, newBalance, refType.name(), refId, desc);
     }
 
     @Transactional
-    public void debit(Long walletId, Long amount, ReferenceType refType, Long refId) {
+    public void debit(Long walletId, Long amount, ReferenceType refType, Long refId, String desc) {
         // 1단계: amount 유효성 검증 (credit과 동일)
         validateAmount(amount);
 
@@ -84,9 +84,8 @@ public class WalletLedgerService {
 
         // 5단계: 지갑 잔액 갱신
         walletMapper.updateBalance(walletId, newBalance);
-
         // 6단계: 원장에 DEBIT 한 줄 기입
-        walletMapper.insertWalletHistory(walletId, "DEBIT", amount, newBalance, refType.name(), refId, null);
+        walletMapper.insertWalletHistory(walletId, "DEBIT", amount, newBalance, refType.name(), refId, desc);
     }
 
 
