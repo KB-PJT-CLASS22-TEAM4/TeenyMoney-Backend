@@ -61,14 +61,16 @@
             parameterType="com.teenyfin.teenymoney.domain.member.vo.MemberVO"
             useGeneratedKeys="true"
             keyProperty="id">
+        <!-- profile_image_key를 넣지 않는다. 컬럼 DEFAULT(기본 프로필 이미지 key)가
+             적용되게 하려면 컬럼 자체가 빠져야 한다. #{profileImageKey}로 명시적 NULL을
+             보내면 DEFAULT를 덮어써서 NOT NULL 제약에 걸린다. (V007) -->
         INSERT INTO T_MBR_INFO_M (
             role,
             name,
             birth_date,
             phone_number,
             email,
-            password,
-            profile_image_key
+            password
             <if test="role == 'PARENT'">
                 , teeny_score
             </if>
@@ -78,8 +80,7 @@
             #{birthDate},
             #{phoneNumber},
             #{email},
-            #{password},
-            #{profileImageKey}
+            #{password}
             <if test="role == 'PARENT'">
                 , NULL
             </if>
