@@ -5,6 +5,7 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.web.multipart.MultipartResolver;
 import org.springframework.web.multipart.support.StandardServletMultipartResolver;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.method.HandlerTypePredicate;
@@ -27,6 +28,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  */
 @EnableWebMvc
 @EnableMethodSecurity
+@EnableScheduling
 @EnableTransactionManagement   // 없으면 @Transactional이 조용히 무시된다
 @ComponentScan(basePackages = {"com.teenyfin.teenymoney.domain",
                                 "com.teenyfin.teenymoney.global"})

@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC
+        "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.teenyfin.teenymoney.domain.financialproduct.mapper.FinancialProductMapper">
+
+    <resultMap id="depositProductResultMap"
+               type="com.teenyfin.teenymoney.domain.financialproduct.vo.DepositProductVO">
+        <id property="id" column="id"/>
+        <result property="financialCompanyCode" column="fin_co_no"/>
+        <result property="financialProductCode" column="fin_prdt_cd"/>
+        <result property="financialCompanyName" column="kor_co_nm"/>
+        <result property="name" column="name"/>
+        <result property="rate1m" column="rate_1m"/>
+        <result property="rate3m" column="rate_3m"/>
+        <result property="rate6m" column="rate_6m"/>
+        <result property="rate12m" column="rate_12m"/>
+        <result property="earlyTerminationRate" column="early_termination_rate"/>
+        <result property="minAmount" column="min_amount"/>
+        <result property="maxAmount" column="max_amount"/>
+        <result property="minTeenyScore" column="min_teeny_score"/>
+        <result property="description" column="description"/>
+        <result property="active" column="is_active"/>
+    </resultMap>
+
+    <resultMap id="savingProductResultMap"
+               type="com.teenyfin.teenymoney.domain.financialproduct.vo.SavingProductVO">
+        <id property="id" column="id"/>
+        <result property="financialCompanyCode" column="fin_co_no"/>
+        <result property="financialProductCode" column="fin_prdt_cd"/>
+        <result property="financialCompanyName" column="kor_co_nm"/>
+        <result property="name" column="name"/>
+        <result property="savingsType" column="savings_type"/>
+        <result property="interestCalculationType" column="interest_calculation_type"/>
+        <result property="rate1m" column="rate_1m"/>
+        <result property="rate3m" column="rate_3m"/>
+        <result property="rate6m" column="rate_6m"/>
+        <result property="rate12m" column="rate_12m"/>
+        <result property="earlyTerminationRate" column="early_termination_rate"/>
+        <result property="minMonthAmount" column="min_month_amount"/>
+        <result property="maxMonthAmount" column="max_month_amount"/>
+        <result property="minTeenyScore" column="min_teeny_score"/>
+        <result property="description" column="description"/>
+        <result property="active" column="is_active"/>
+    </resultMap>
+
+    <resultMap id="loanProductResultMap"
+               type="com.teenyfin.teenymoney.domain.financialproduct.vo.LoanProductVO">
+        <id property="id" column="id"/>
+        <result property="name" column="name"/>
+        <result property="baseRate" column="base_rate"/>
+        <result property="lateFeeRate" column="late_fee_rate"/>
+        <result property="repaymentType" column="repayment_type"/>
+        <result property="minAmount" column="min_amount"/>
+        <result property="maxAmount" column="max_amount"/>
+        <result property="minTeenyScore" column="min_teeny_score"/>
+        <result property="description" column="description"/>
+        <result property="active" column="is_active"/>
+    </resultMap>
+
+    <resultMap id="benefitResultMap"
+               type="com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductBenefitVO">
+        <id property="childId" column="child_id"/>
+        <result property="teenyScore" column="teeny_score"/>
+        <result property="gradeId" column="grade_id"/>
+        <result property="gradeName" column="grade_name"/>
+        <result property="bonusRate" column="bonus_rate"/>
+        <result property="loanRate" column="loan_rate"/>
+    </resultMap>
+
+    <select id="selectActiveDepositProducts" resultMap="depositProductResultMap">
+        SELECT * FROM T_DPT_PROD_M
+        WHERE is_active = TRUE
+          AND fin_co_no IS NOT NULL
+          AND fin_prdt_cd IS NOT NULL
+        ORDER BY id
+    </select>
+
+    <select id="selectActiveSavingProducts" resultMap="savingProductResultMap">
+        SELECT * FROM T_SVG_PROD_M
+        WHERE is_active = TRUE
+          AND fin_co_no IS NOT NULL
+          AND fin_prdt_cd IS NOT NULL
+        ORDER BY id
+    </select>
+
+    <select id="selectActiveLoanProducts" resultMap="loanProductResultMap">
+        SELECT * FROM T_LON_PROD_M
+        WHERE is_active = TRUE
+        ORDER BY min_teeny_score, id
+    </select>
+
+    <select id="selectActiveDepositProductById" resultMap="depositProductResultMap">
+        SELECT * FROM T_DPT_PROD_M
+        WHERE id = #{id}
+          AND is_active = TRUE
+          AND fin_co_no IS NOT NULL
+          AND fin_prdt_cd IS NOT NULL
+    </select>
+
+    <select id="selectActiveSavingProductById" resultMap="savingProductResultMap">
+        SELECT * FROM T_SVG_PROD_M
+        WHERE id = #{id}
+          AND is_active = TRUE
+          AND fin_co_no IS NOT NULL
+          AND fin_prdt_cd IS NOT NULL
+    </select>
+
+    <select id="selectActiveLoanProductById" resultMap="loanProductResultMap">
+        SELECT * FROM T_LON_PROD_M
+        WHERE id = #{id}
+          AND is_active = TRUE
+    </select>
+
+    <select id="selectBenefitByChildId" resultMap="benefitResultMap">
+        SELECT member.id AS child_id,
+               member.teeny_score,
+               grade.grade_id,
+               grade.grade_name,
+               grade.bonus_rate,
+               grade.loan_rate
+        FROM T_MBR_INFO_M member
+        INNER JOIN T_TNY_GRADE_A grade
+                ON member.teeny_score BETWEEN grade.min_score AND grade.max_score
+        WHERE member.id = #{childId}
+          AND member.role = 'CHILD'
+          AND member.status = 'ACTIVE'
+    </select>
+
+    <insert id="upsertDepositProduct">
+        INSERT INTO T_DPT_PROD_M (
+            fin_co_no, fin_prdt_cd, kor_co_nm, name,
+            rate_1m, rate_3m, rate_6m, rate_12m,
+            early_termination_rate, min_amount, max_amount,
+            min_teeny_score, description, is_active
+        ) VALUES (
+            #{financialCompanyCode}, #{financialProductCode},
+            #{financialCompanyName}, #{name},
+            #{rate1m}, #{rate3m}, #{rate6m}, #{rate12m},
+            #{earlyTerminationRate}, #{minAmount}, #{maxAmount},
+            #{minTeenyScore}, #{description}, #{active}
+        )
+        ON DUPLICATE KEY UPDATE
+            kor_co_nm = VALUES(kor_co_nm),
+            name = VALUES(name),
+            rate_1m = VALUES(rate_1m),
+            rate_3m = VALUES(rate_3m),
+            rate_6m = VALUES(rate_6m),
+            rate_12m = VALUES(rate_12m),
+            updated_at = CURRENT_TIMESTAMP
+    </insert>
+
+    <insert id="upsertSavingProduct">
+        INSERT INTO T_SVG_PROD_M (
+            fin_co_no, fin_prdt_cd, kor_co_nm, name,
+            savings_type, interest_calculation_type,
+            rate_1m, rate_3m, rate_6m, rate_12m,
+            early_termination_rate, min_month_amount, max_month_amount,
+            min_teeny_score, description, is_active
+        ) VALUES (
+            #{financialCompanyCode}, #{financialProductCode},
+            #{financialCompanyName}, #{name},
+            #{savingsType}, #{interestCalculationType},
+            #{rate1m}, #{rate3m}, #{rate6m}, #{rate12m},
+            #{earlyTerminationRate}, #{minMonthAmount}, #{maxMonthAmount},
+            #{minTeenyScore}, #{description}, #{active}
+        )
+        ON DUPLICATE KEY UPDATE
+            kor_co_nm = VALUES(kor_co_nm),
+            name = VALUES(name),
+            savings_type = VALUES(savings_type),
+            interest_calculation_type = VALUES(interest_calculation_type),
+            rate_1m = VALUES(rate_1m),
+            rate_3m = VALUES(rate_3m),
+            rate_6m = VALUES(rate_6m),
+            rate_12m = VALUES(rate_12m),
+            updated_at = CURRENT_TIMESTAMP
+    </insert>
+
+</mapper>
