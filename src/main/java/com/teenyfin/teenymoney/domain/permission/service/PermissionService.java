@@ -88,7 +88,7 @@ public class PermissionService {
             throw new BusinessException(PermissionErrorCode.ALREADY_EXIST_TODAY_PERMISSION);
         }
 
-        Long parentId = permissionMapper.selectParentIdByChildId(memberId);
+        Long parentId = memberMapper.selectActiveParentByChildId(memberId).getParentId();
 
         PermissionInsertVO permissionInsertVO = PermissionInsertVO.builder()
                 .parentId(parentId)

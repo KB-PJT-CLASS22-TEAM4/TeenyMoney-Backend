@@ -39,7 +39,4 @@ public interface PermissionMapper {
 
     // 오늘만 허용 대상 카테고리 삭제
     void deletePermissionCategoriesByPermissionId(@Param("permissionId") Long permissionId);
-
-    // (임시) 자녀 아이디로 연결된 부모 아이디 조회
-    Long selectParentIdByChildId(@Param("childId") Long childId);
 }

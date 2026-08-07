@@ -1,6 +1,7 @@
 package com.teenyfin.teenymoney.domain.permission.service;
 
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
+import com.teenyfin.teenymoney.domain.member.vo.MemberParentVO;
 import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
 import com.teenyfin.teenymoney.domain.permission.dto.request.PermissionRequestDTO;
 import com.teenyfin.teenymoney.domain.permission.dto.response.PermissionResponseWrapperDTO;
@@ -78,7 +79,7 @@ class PermissionServiceCreateTest {
         assertThatThrownBy(() -> permissionService.createPermission(childId, "CHILD", requestDTO))
                 .isInstanceOf(BusinessException.class);
 
-        verify(permissionMapper, never()).selectParentIdByChildId(any());
+        verify(memberMapper, never()).selectActiveParentByChildId(any());
         verify(permissionMapper, never()).insertPermission(any());
         verify(permissionMapper, never()).insertPermissionCategories(any(), any());
     }
@@ -97,8 +98,6 @@ class PermissionServiceCreateTest {
                 .reason(reason)
                 .build();
 
-        // 1) 생성 전 중복 체크: 없음 → null
-        // 2) getPermission 내부 재조회: 방금 생성된 것
         PermissionVO afterInsert = PermissionVO.builder()
                 .id(generatedId)
                 .childId(childId)
@@ -111,9 +110,11 @@ class PermissionServiceCreateTest {
                 .willReturn(null)
                 .willReturn(afterInsert);
 
-        given(permissionMapper.selectParentIdByChildId(childId)).willReturn(parentId);
+        // 여기 수정: MemberParentVO 객체를 만들어서 리턴하도록
+        MemberParentVO parentVO = new MemberParentVO();
+        parentVO.setParentId(parentId);
+        given(memberMapper.selectActiveParentByChildId(childId)).willReturn(parentVO);
 
-        // insertPermission 호출 시, MyBatis useGeneratedKeys처럼 id를 채워주는 것처럼 흉내
         ArgumentCaptor<PermissionInsertVO> captor = ArgumentCaptor.forClass(PermissionInsertVO.class);
         Mockito.doAnswer(invocation -> {
             PermissionInsertVO vo = invocation.getArgument(0);
