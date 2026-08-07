@@ -55,5 +55,7 @@ bin/
 ### Mac OS ###
 .DS_Store
 
+.smarttomcat
+
 ### AI 클로드 로컬 설정 ###
 CLAUDE.md

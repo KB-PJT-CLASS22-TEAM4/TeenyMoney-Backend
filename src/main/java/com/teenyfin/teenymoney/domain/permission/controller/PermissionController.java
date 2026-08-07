@@ -1,0 +1,73 @@
+package com.teenyfin.teenymoney.domain.permission.controller;
+
+import com.teenyfin.teenymoney.domain.permission.dto.request.PermissionRequestDTO;
+import com.teenyfin.teenymoney.domain.permission.dto.response.PermissionResponseWrapperDTO;
+import com.teenyfin.teenymoney.domain.permission.service.PermissionService;
+import com.teenyfin.teenymoney.global.response.ApiResponse;
+import com.teenyfin.teenymoney.global.security.MemberPrincipal;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
+
+import javax.validation.Valid;
+
+@Api(tags = "오늘만 허용 요청")
+@RestController
+@RequestMapping("/permissions")
+@RequiredArgsConstructor
+public class PermissionController {
+
+    private final PermissionService permissionService;
+
+    @ApiOperation(value = "오늘만 허용 요청 조회", notes = "오늘 날짜에 생성된 오늘만 허용 요청을 조회합니다.")
+    @GetMapping
+    public ApiResponse<PermissionResponseWrapperDTO> getPermission(
+            @AuthenticationPrincipal MemberPrincipal memberPrincipal) {
+        return ApiResponse.ok(permissionService.getPermission(memberPrincipal.memberId(), memberPrincipal.role()));
+    }
+
+    @ApiOperation(value = "오늘만 허용 요청", notes = "원하는 카테고리와 사유를 포함해 오늘만 허용을 요청합니다.")
+    @PostMapping
+    public ApiResponse<PermissionResponseWrapperDTO> createPermission(
+            @AuthenticationPrincipal MemberPrincipal memberPrincipal,
+            @ApiParam(value = "오늘만 허용을 요청할 카테고리 ID와 요청 사유", required = true) @RequestBody @Valid PermissionRequestDTO permissionRequestDTO) {
+        return ApiResponse.ok(permissionService.createPermission(memberPrincipal.memberId(), memberPrincipal.role(), permissionRequestDTO));
+    }
+
+    @ApiOperation(value = "오늘만 허용 요청 내용 수정", notes = "아직 승인 혹은 거절되지 않은 오늘만 허용 요청의 카테고리와 사유를 수정합니다.")
+    @PatchMapping("/{permissionId}")
+    public ApiResponse<PermissionResponseWrapperDTO> updatePermission(
+            @AuthenticationPrincipal MemberPrincipal memberPrincipal,
+            @PathVariable Long permissionId,
+            @ApiParam(value = "오늘만 허용을 요청할 카테고리 ID와 요청 사유", required = true) @RequestBody @Valid PermissionRequestDTO permissionRequestDTO) {
+        return ApiResponse.ok(permissionService.updatePermission(memberPrincipal.memberId(), memberPrincipal.role(), permissionId, permissionRequestDTO));
+    }
+
+    @ApiOperation(value = "오늘만 허용 요청 승인", notes = "아직 승인 혹은 거절되지 않은 오늘만 허용 요청을 승인합니다.")
+    @PatchMapping("/{permissionId}/approve")
+    public ApiResponse<PermissionResponseWrapperDTO> approvePermission(
+            @AuthenticationPrincipal MemberPrincipal memberPrincipal,
+            @PathVariable Long permissionId) {
+        return ApiResponse.ok(permissionService.approvePermission(memberPrincipal.memberId(), memberPrincipal.role(), permissionId));
+    }
+
+    @ApiOperation(value = "오늘만 허용 요청 거절", notes = "아직 승인 혹은 거절되지 않은 오늘만 허용 요청을 거절합니다.")
+    @PatchMapping("/{permissionId}/reject")
+    public ApiResponse<PermissionResponseWrapperDTO> rejectPermission(
+            @AuthenticationPrincipal MemberPrincipal memberPrincipal,
+            @PathVariable Long permissionId) {
+        return ApiResponse.ok(permissionService.rejectPermission(memberPrincipal.memberId(), memberPrincipal.role(), permissionId));
+    }
+
+    @ApiOperation(value = "오늘만 허용 요청 취소", notes = "아직 승인 혹은 거절되지 않은 오늘만 허용 요청을 취소합니다.")
+    @DeleteMapping("/{permissionId}")
+    public ApiResponse<Void> deletePermission(
+            @AuthenticationPrincipal MemberPrincipal memberPrincipal,
+            @PathVariable Long permissionId) {
+        permissionService.deletePermission(memberPrincipal.memberId(), memberPrincipal.role(), permissionId);
+        return ApiResponse.ok();
+    }
+}

@@ -13,9 +13,9 @@ public class CategoryPolicyUpdateRequestDTO {
 
     @ApiModelProperty(value = "카테고리 정책 ID", example = "1")
     @NotNull
-    Long id;
+    private Long id;
 
     @ApiModelProperty(value = "정책 단계 (ALLOW/WATCH/BLOCK)", example = "ALLOW")
     @Pattern(regexp = "ALLOW|WATCH|BLOCK")
-    String policy;
+    private String policy;
 }

@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.teenyfin.teenymoney.domain.permission.mapper.PermissionMapper">
+
+    <resultMap id="permissionResultMap" type="com.teenyfin.teenymoney.domain.permission.vo.PermissionVO">
+        <id property="id" column="id"/>
+        <result property="parentId" column="parent_id"/>
+        <result property="childId" column="child_id"/>
+        <result property="reason" column="reason"/>
+        <result property="status" column="status"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <select id="selectById" resultMap="permissionResultMap">
+        SELECT
+        id,
+        parent_id,
+        child_id,
+        reason,
+        status,
+        created_at
+        FROM T_TDP_REQ_L
+        WHERE id = #{permissionId}
+    </select>
+
+    <select id="selectCreatedTodayByParentId" resultMap="permissionResultMap">
+        SELECT
+        id,
+        parent_id,
+        child_id,
+        reason,
+        status,
+        created_at
+        FROM T_TDP_REQ_L
+        WHERE parent_id = #{parentId}
+        AND DATE(created_at) = CURDATE()
+    </select>
+
+    <select id="selectCreatedTodayByChildId" resultMap="permissionResultMap">
+        SELECT
+        id,
+        parent_id,
+        child_id,
+        reason,
+        status,
+        created_at
+        FROM T_TDP_REQ_L
+        WHERE child_id = #{childId}
+        AND DATE(created_at) = CURDATE()
+    </select>
+
+    <select id="selectPermissionCategoriesByPermissionId" resultType="java.lang.String">
+        SELECT c.name
+        FROM T_TDP_REQCTGR_R rc
+        JOIN T_MCC_CTGR_C c ON rc.merchant_category_id = c.id
+        WHERE rc.today_permission_id = #{permissionId}
+    </select>
+
+    <insert id="insertPermission" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO T_TDP_REQ_L (parent_id, child_id, reason, status, expired_at, created_at)
+        VALUES (
+            #{parentId},
+            #{childId},
+            #{reason},
+            'PENDING',
+            DATE_ADD(CURDATE(), INTERVAL 1 DAY),
+            NOW()
+        )
+    </insert>
+
+    <insert id="insertPermissionCategories">
+        INSERT INTO T_TDP_REQCTGR_R (today_permission_id, merchant_category_id, created_at)
+        VALUES
+        <foreach collection="categoryIds" item="categoryId" separator=",">
+            (#{permissionId}, #{categoryId}, NOW())
+        </foreach>
+    </insert>
+
+    <update id="updatePermissionReason">
+        UPDATE T_TDP_REQ_L
+        SET reason = #{reason}
+        WHERE id = #{permissionId}
+    </update>
+
+    <update id="updatePermissionStatus">
+        UPDATE T_TDP_REQ_L
+        SET status = #{status}
+        WHERE id = #{permissionId}
+    </update>
+
+    <delete id="deletePermissionById">
+        DELETE
+        FROM T_TDP_REQ_L
+        WHERE id = #{permissionId}
+    </delete>
+
+    <delete id="deletePermissionCategoriesByPermissionId">
+        DELETE
+        FROM T_TDP_REQCTGR_R
+        WHERE today_permission_id = #{permissionId}
+    </delete>
+
+</mapper>
