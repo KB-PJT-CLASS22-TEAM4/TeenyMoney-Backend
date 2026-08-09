@@ -31,16 +31,18 @@ import java.util.Arrays;
  *   JwtAuthenticationFilter  매 요청 인증          (Task 2)
  *   Rest*EntryPoint/Handler  401/403 JSON 응답     (Task 3)
  *
- * 보안 빈은 반드시 여기 @Bean으로 등록한다. @Component로 두면 ServletConfig가
- * global 패키지를 자식 컨텍스트로 스캔해 빈을 만들고, 필터체인(루트)이 그걸 못 봐서
- * 필터가 체인에 안 붙는다. 예외도 로그도 없이 인증이 통째로 동작하지 않는다.
+ * 보안 빈은 여기 @Bean으로 등록한다. 필터체인은 루트 컨텍스트에 있어야 하고
+ * (DelegatingFilterProxy가 루트에서만 springSecurityFilterChain을 찾는다),
+ * @Bean으로 두면 스캔 설정이 어떻게 바뀌든 이 빈들이 루트에 있는 것이 보장된다.
  *
  * 인가 규칙은 '공개 경로 화이트리스트 + 나머지 전부 인증'이다. 화이트리스트에는
  * 토큰을 아직 못 받았거나 받을 수 없는 상태에서 호출해야 하는 경로만 넣는다.
  * 여기를 잠그면 로그인 자체가 불가능해진다.
  *
- * @EnableMethodSecurity는 여기가 아니라 ServletConfig(자식 컨텍스트)에 있다.
- * @PreAuthorize를 붙일 컨트롤러가 그쪽에 살기 때문이다. 자세한 이유는 ServletConfig 주석 참고.
+ * @EnableMethodSecurity는 여기가 아니라 ServletConfig와 RootConfig에 있다. 이 애노테이션은
+ * '자기가 속한 컨텍스트의 빈'에만 프록시를 걸기 때문에, @PreAuthorize가 붙는 쪽에 있어야 한다.
+ * 지금 @PreAuthorize는 컨트롤러(자식)에만 있어서 실제로 일하는 것은 ServletConfig 쪽이다.
+ * RootConfig 쪽은 서비스에 @PreAuthorize를 붙이는 날을 대비한 안전장치다.
  */
 @Configuration
 @EnableWebSecurity
