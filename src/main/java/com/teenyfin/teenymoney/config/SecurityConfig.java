@@ -25,11 +25,11 @@ import java.util.Arrays;
 /**
  * Spring Security 설정 (루트 컨텍스트).
  *
- * Task 1~3에서 만든 조각들을 여기서 처음 조립한다. 그 전까지는 클래스만 존재하고
- * 실제 요청에는 아무 영향이 없었다.
- *   JwtProvider              토큰 발급·검증        (Task 1)
- *   JwtAuthenticationFilter  매 요청 인증          (Task 2)
- *   Rest*EntryPoint/Handler  401/403 JSON 응답     (Task 3)
+ * 인증 파이프라인의 조각들이 여기서 하나로 조립된다. 이 파일에 등록되지 않은 조각은
+ * 클래스만 존재할 뿐 실제 요청에 아무 영향이 없다.
+ *   JwtProvider              토큰 발급·검증
+ *   JwtAuthenticationFilter  매 요청 인증
+ *   Rest*EntryPoint/Handler  401/403 JSON 응답
  *
  * 보안 빈은 여기 @Bean으로 등록한다. 필터체인은 루트 컨텍스트에 있어야 하고
  * (DelegatingFilterProxy가 루트에서만 springSecurityFilterChain을 찾는다),
@@ -53,12 +53,12 @@ public class SecurityConfig {
      * ServletConfig가 @RestController에 /api/v1 접두사를 붙이므로 여기도 전체 경로로 적는다.
      */
     private static final String[] PUBLIC_ENDPOINTS = {
-            "/api/v1/auth/signup",    // 회원가입 — 토큰이 있을 수 없다 (하위3)
-            "/api/v1/auth/login",     // 로그인 — 토큰을 받으러 오는 곳 (하위3)
-            "/api/v1/auth/reissue",   // 재발급 — Access가 만료된 상태로 온다 (하위4)
+            "/api/v1/auth/signup",    // 회원가입 — 토큰이 있을 수 없다
+            "/api/v1/auth/login",     // 로그인 — 토큰을 받으러 오는 곳
+            "/api/v1/auth/reissue",   // 재발급 — Access가 만료된 상태로 온다
             "/api/v1/auth/logout",
             "/api/v1/auth/csrf",
-            "/api/v1/auth/check-email", // 이메일 중복 확인 - 가입 전이라 토큰이 없다 (하위3)
+            "/api/v1/auth/check-email", // 이메일 중복 확인 - 가입 전이라 토큰이 없다
             "/api/v1/auth/phone-verification/send",
             "/api/v1/auth/legal-guardian-verification/send", // [보호자 가입 흐름 1] 가입 전 SMS 발송 API
             "/api/v1/auth/legal-guardian-verification/confirm", // [보호자 가입 흐름 3] 가입 전 동의 토큰 발급 API
@@ -129,7 +129,7 @@ public class SecurityConfig {
     }
 
     /**
-     * 비밀번호 해시. 회원가입/로그인(하위3)이 쓴다.
+     * 비밀번호 해시. 회원가입/로그인이 쓴다.
      * BCrypt 해시는 60자이므로 T_MBR_INFO_M.password VARCHAR(255)에 들어간다.
      */
     @Bean
@@ -142,7 +142,14 @@ public class SecurityConfig {
             HttpSecurity http,
             JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
         http
-                // REST API는 브라우저 폼 기반이 아니라 토큰으로 인증하므로 CSRF 토큰이 불필요하다.
+                // CSRF는 csrfMatcher()가 고른 세 경로에만 건다. 나머지 API는 Authorization
+                // 헤더로 인증하므로 브라우저가 자동으로 실어보낼 게 없어 CSRF가 성립하지 않는다.
+                //   reissue·logout : Refresh Token 쿠키를 '읽어서' 동작한다. 쿠키는 타 사이트
+                //                    요청에도 자동으로 붙으므로 여기가 CSRF의 본진이다.
+                //   login          : 쿠키를 읽지 않고 발급만 한다. 막으려는 건 로그인 CSRF다 —
+                //                    피해자를 공격자 계정으로 강제 로그인시켜 이후 활동을 그쪽에 쌓는 공격.
+                // withHttpOnlyFalse는 FE가 JS로 토큰을 읽어 헤더에 다시 실어야 하기 때문이다.
+                // (GET /api/v1/auth/csrf 가 그 토큰을 내려준다.)
                 .csrf(csrf -> csrf
                         .csrfTokenRepository(
                                 CookieCsrfTokenRepository.withHttpOnlyFalse())

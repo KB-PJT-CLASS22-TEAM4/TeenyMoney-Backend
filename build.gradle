@@ -81,8 +81,8 @@ dependencies {
     implementation 'javax.inject:javax.inject:1'
 
     // Spring Security
-    // 빈은 RootConfig에 등록하고 WebConfig에 DelegatingFilterProxy를 붙인다.
-    // ServletConfig(자식 컨텍스트)에 두면 필터 등록 시점이 어긋난다.
+    // 빈은 SecurityConfig(루트 컨텍스트)에 등록하고 WebConfig에 DelegatingFilterProxy를 붙인다.
+    // ServletConfig(자식 컨텍스트)에 두면 DelegatingFilterProxy가 필터체인을 찾지 못한다.
     implementation "org.springframework.security:spring-security-web:${springSecurityVersion}"
     implementation "org.springframework.security:spring-security-config:${springSecurityVersion}"
 
