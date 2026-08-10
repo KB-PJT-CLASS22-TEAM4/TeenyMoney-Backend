@@ -1,5 +1,7 @@
 package com.teenyfin.teenymoney.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.teenyfin.teenymoney.domain.payment.service.PaymentInfoStore;
 import com.teenyfin.teenymoney.global.auth.RefreshTokenStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -46,5 +48,12 @@ public class RedisConfig {
             StringRedisTemplate stringRedisTemplate,
             @Value("${jwt.refresh-expiration}") long refreshExpirationMs) {
         return new RefreshTokenStore(stringRedisTemplate, refreshExpirationMs);
+    }
+
+    @Bean
+    public PaymentInfoStore paymentInfoStore(
+            StringRedisTemplate stringRedisTemplate,
+            ObjectMapper objectMapper) {
+        return new PaymentInfoStore(stringRedisTemplate, objectMapper);
     }
 }
