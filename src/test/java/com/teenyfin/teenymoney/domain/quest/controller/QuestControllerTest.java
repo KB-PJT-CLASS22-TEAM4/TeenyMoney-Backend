@@ -35,6 +35,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -142,6 +143,7 @@ class QuestControllerTest {
         String body = response.getContentAsString(StandardCharsets.UTF_8);
         assertEquals(200, response.getStatus(), body);
         assertTrue(body.contains("\"questId\":55"), body);
+        assertFalse(body.contains("\"acceptedAt\""), body);
 
         verify(creationService).update(
                 eq(new MemberPrincipal(1L, "PARENT")), eq(55L), any(QuestUpdateRequestDTO.class));

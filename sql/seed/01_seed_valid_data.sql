@@ -3569,9 +3569,9 @@ VALUES
 -- T_QST_BASE_M: 부모1이 자녀2에게 퀘스트 생성
 INSERT INTO `T_QST_BASE_M`
 	(`id`, `parent_id`, `child_id`, `creation_request_key`, `title`, `content`, `deadline`,
-	 `is_teeny_score`, `verification_requirement`, `reward_amount`, `status`, `accepted_at`)
+	 `is_teeny_score`, `verification_requirement`, `reward_amount`, `status`)
 VALUES (1, 1, 2, '00000000-0000-0000-0000-000000000001', '방 청소하기', '방과 책상을 깨끗하게 정리해 주세요.',
-	'2026-08-05 23:59:59', TRUE, 'PHOTO_REQUIRED', 1000, 'IN_PROGRESS', '2026-08-01 09:00:00');
+	'2026-08-05 23:59:59', TRUE, 'PHOTO_REQUIRED', 1000, 'IN_PROGRESS');
 
 -- T_QST_VERIFY_L: 자녀2가 인증 제출
 INSERT INTO `T_QST_VERIFY_L` (`id`, `quest_id`, `attempt_no`, `image_key`, `content`, `status`)

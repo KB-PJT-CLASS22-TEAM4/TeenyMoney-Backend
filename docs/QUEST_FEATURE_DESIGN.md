@@ -671,7 +671,6 @@ PENDING --기한 후 최종 실패 선택--> FAILED
 - 부모가 점수를 입력하지 않으므로 `reward_teeny_score` 제거
 - 티니점수 대상 여부인 `is_teeny_score` 유지
 - `verification_requirement` 추가
-- `accepted_at` 추가
 - `decline_reason_code` 추가
 - `decline_reason_detail` 추가
 - `completed_at`을 종료 상태 전반에 맞는 `ended_at`으로 변경
@@ -807,7 +806,7 @@ is_teeny_score, reward_amount, reward_teeny_score,
 status, remaining_count, created_at, updated_at, completed_at
 ```
 
-현재 허용 상태는 `AVAILABLE`, `IN_PROGRESS`, `PENDING`, `COMPLETED`, `FAILED`뿐이다. 목표 설계에 필요한 `EXPIRED`, `DECLINED`와 인증 방식, 수락 시각, 거절 사유는 아직 없다.
+현재 허용 상태는 `AVAILABLE`, `IN_PROGRESS`, `PENDING`, `COMPLETED`, `FAILED`뿐이다. 목표 설계에 필요한 `EXPIRED`, `DECLINED`와 인증 방식, 거절 사유는 아직 없다.
 
 현재 `T_QST_VERIFY_L` 필드:
 
@@ -1061,7 +1060,7 @@ TeenyMoney-Backend/docs/QUEST_FEATURE_DESIGN.md를 전체 기준으로 읽어라
 
 - 목록은 기본 20건이며 `items`, `nextCursor`를 반환한다. 별도 `hasNext`는 두지 않는다.
 - 목록 항목은 `questId`, 자녀 ID·이름·프로필 이미지, `title`, `deadline`, `rewardAmount`, `teenyScoreEnabled`, `verificationRequirement`, `status`, `remainingCount`, `endedAt`을 포함한다.
-- 상세는 목록 필드에 본문, 생성 시각, 수락 시각, 종료 시각, 자녀 거절 사유·상세 설명, 최신 인증 1건을 추가한다.
+- 상세는 목록 필드에 본문, 생성 시각, 종료 시각, 자녀 거절 사유·상세 설명, 최신 인증 1건을 추가한다.
 - 최신 인증은 인증 ID, 시도 번호, 인증 글, 이미지 임시 주소, 이미지 보관 기간 만료 여부, 인증 상태, 반려 사유, 제출 시각, 검토 시각을 포함한다.
 - 첫 버전에는 과거 인증 전체 목록, 서버가 계산한 버튼 목록, S3 객체 키, 부모 전용 집계, 목록 본문과 목록 인증 이미지를 반환하지 않는다.
 
@@ -1132,7 +1131,8 @@ S3는 테스트마다 실제 업로드하지 않는다. 서비스 테스트에�
 ### 23.1 구현 범위
 
 - DB 확장 스크립트는 기존 마지막 번호 `V011` 다음인 `V012__extend_quest_domain.sql`로 작성한다.
-- `T_QST_BASE_M`에 생성 요청 식별 키, 인증 방식, 수락 시각, 자녀 거절 사유와 종료 시각을 반영하고 상태를 7개로 확장한다.
+- `T_QST_BASE_M`에 생성 요청 식별 키, 인증 방식, 자녀 거절 사유와 종료 시각을 반영하고 상태를 7개로 확장한다.
+- 수락 여부는 `IN_PROGRESS` 상태로 충분하고 화면이나 업무 규칙에서 정확한 수락 시각을 사용하지 않으므로 `accepted_at`은 저장하지 않는다.
 - `T_QST_VERIFY_L`은 S3 URL 대신 객체 키를 저장하고 퀘스트별 시도 번호를 가진다.
 - 부모 생성은 자녀마다 독립된 퀘스트 행을 한 작업 안에서 만들며 생성된 ID를 요청 자녀 순서대로 반환한다.
 - 생성 요청 식별 키는 `POST /quests`에서만 `X-Creation-Request-Key` UUID 헤더로 받는다. 같은 키와 같은 내용의 다시 보내기는 기존 ID를 반환하고, 다른 내용이면 `409`로 응답한다.
@@ -1161,3 +1161,15 @@ S3는 테스트마다 실제 업로드하지 않는다. 서비스 테스트에�
 - MyBatis 컨텍스트에서 모든 퀘스트 SQL 등록과 부모·자녀 범위 조건, 탭별 정렬을 확인했다.
 - 2026-08-10 기준 전체 `./gradlew test`와 `./gradlew war`가 성공했고 `build/libs/ROOT.war` 생성을 확인했다.
 - 실제 MySQL에 `V012`를 적용하는 검증은 DB 접속 환경에서 별도로 실행해야 한다.
+
+## 24. #102 코드 주석 기준 — 확정
+
+- 주석은 모든 줄을 풀이하지 않고, 처음 읽는 사람이 처리 흐름과 설계 이유를 놓치기 쉬운 부분에만 작성한다.
+- 생성 서비스에는 입력값 정리, 부모 행 잠금, 같은 생성 요청 확인, 가족 연결 검증, 자녀별 행 생성 순서를 설명한다.
+- 수정·삭제에는 부모 소유 범위 조회, 행 잠금, `AVAILABLE` 상태와 서버 마감 시각 재확인 이유를 설명한다.
+- 조회 서비스에는 부모·자녀 역할별 SQL 선택, 21건 조회 후 20건 반환, 탭을 포함한 커서, 인증 이미지 90일 판단을 설명한다.
+- 매퍼 SQL에는 권한 범위를 SQL 조건에 직접 넣는 이유와 탭별 커서 비교·정렬 방향을 설명한다.
+- 컨트롤러에는 공통 조회 API와 부모 전용 명령 API의 경계를 설명한다.
+- DTO의 단순 필드, getter, builder와 코드만으로 의미가 분명한 조건문에는 중복 주석을 달지 않는다.
+- 주석은 쉬운 한국어를 사용하고 코드가 무엇을 하는지보다 왜 필요한지를 우선 설명한다.
+- 주석 추가 과정에서는 실행 로직, API 계약, SQL, 테스트 결과를 변경하지 않는다.

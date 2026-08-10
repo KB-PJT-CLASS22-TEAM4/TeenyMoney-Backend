@@ -23,7 +23,6 @@ public class QuestDetailResponseDTO {
     private final QuestStatus status;
     private final Integer remainingCount;
     private final LocalDateTime createdAt;
-    private final LocalDateTime acceptedAt;
     private final LocalDateTime endedAt;
     private final String declineReasonCode;
     private final String declineReasonDetail;
@@ -44,7 +43,6 @@ public class QuestDetailResponseDTO {
         this.status = quest.getStatus();
         this.remainingCount = quest.getRemainingCount();
         this.createdAt = quest.getCreatedAt();
-        this.acceptedAt = quest.getAcceptedAt();
         this.endedAt = quest.getEndedAt();
         this.declineReasonCode = quest.getDeclineReasonCode();
         this.declineReasonDetail = quest.getDeclineReasonDetail();

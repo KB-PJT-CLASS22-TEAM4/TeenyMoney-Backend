@@ -12,8 +12,7 @@ ALTER TABLE `T_QST_BASE_M`
     ADD COLUMN `verification_requirement` VARCHAR(30) NOT NULL DEFAULT 'FREE'
         COMMENT '인증 방식: FREE/PHOTO_REQUIRED/TEXT_REQUIRED/ANY_REQUIRED' AFTER `is_teeny_score`,
     DROP COLUMN `reward_teeny_score`,
-    ADD COLUMN `accepted_at` DATETIME NULL COMMENT '자녀 수락 일시' AFTER `remaining_count`,
-    ADD COLUMN `decline_reason_code` VARCHAR(30) NULL COMMENT '자녀 거절 사유 코드' AFTER `accepted_at`,
+    ADD COLUMN `decline_reason_code` VARCHAR(30) NULL COMMENT '자녀 거절 사유 코드' AFTER `remaining_count`,
     ADD COLUMN `decline_reason_detail` VARCHAR(500) NULL COMMENT '자녀 거절 상세 사유' AFTER `decline_reason_code`,
     CHANGE COLUMN `completed_at` `ended_at` DATETIME NULL COMMENT '최종 종료 일시';
 

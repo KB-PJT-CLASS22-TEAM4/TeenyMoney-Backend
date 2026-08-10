@@ -97,6 +97,15 @@ class QuestMapperContextTest {
                 .contains("ORDER BY q.ended_at DESC, q.id DESC"));
     }
 
+    @Test
+    void 상세_조회_SQL에_사용하지_않는_수락_시각이_없다() {
+        String detailSql = sql("selectDetailByParent", Map.of(
+                "questId", 55L,
+                "memberId", 1L));
+
+        assertFalse(detailSql.contains("accepted_at"), detailSql);
+    }
+
     private String sql(String statement, Map<String, Object> params) {
         return sqlSessionFactory.getConfiguration()
                 .getMappedStatement(NAMESPACE + "." + statement)

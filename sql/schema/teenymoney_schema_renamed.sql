@@ -303,7 +303,6 @@ CREATE TABLE `T_QST_BASE_M` (
 	`reward_amount`	BIGINT	NOT NULL	COMMENT '완료 시 보상 금액(원) (0 이상인지 CHECK)',
 	`status`	VARCHAR(20)	NOT NULL	DEFAULT 'AVAILABLE'	COMMENT '상태: AVAILABLE/IN_PROGRESS/PENDING/COMPLETED/FAILED/EXPIRED/DECLINED (CHECK)',
 	`remaining_count`	TINYINT	NOT NULL	DEFAULT 3	COMMENT '남은 제출 기회',
-	`accepted_at`	DATETIME	NULL	COMMENT '자녀 수락 일시',
 	`decline_reason_code`	VARCHAR(30)	NULL	COMMENT '자녀 거절 사유 코드',
 	`decline_reason_detail`	VARCHAR(500)	NULL	COMMENT '자녀 거절 상세 사유',
 	`created_at`	DATETIME	NOT NULL	DEFAULT CURRENT_TIMESTAMP	COMMENT '생성 일시',

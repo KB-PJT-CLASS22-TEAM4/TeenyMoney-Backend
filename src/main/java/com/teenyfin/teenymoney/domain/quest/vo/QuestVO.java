@@ -28,7 +28,6 @@ public class QuestVO {
     private Long rewardAmount;
     private QuestStatus status;
     private Integer remainingCount;
-    private LocalDateTime acceptedAt;
     private String declineReasonCode;
     private String declineReasonDetail;
     private LocalDateTime createdAt;

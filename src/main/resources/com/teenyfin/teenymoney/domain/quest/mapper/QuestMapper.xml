@@ -19,7 +19,6 @@
         <result property="rewardAmount" column="reward_amount"/>
         <result property="status" column="status"/>
         <result property="remainingCount" column="remaining_count"/>
-        <result property="acceptedAt" column="accepted_at"/>
         <result property="declineReasonCode" column="decline_reason_code"/>
         <result property="declineReasonDetail" column="decline_reason_detail"/>
         <result property="createdAt" column="created_at"/>
@@ -53,7 +52,6 @@
         q.reward_amount,
         q.status,
         q.remaining_count,
-        q.accepted_at,
         q.decline_reason_code,
         q.decline_reason_detail,
         q.created_at,
