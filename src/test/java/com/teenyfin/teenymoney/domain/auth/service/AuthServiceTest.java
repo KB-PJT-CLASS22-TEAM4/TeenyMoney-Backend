@@ -6,6 +6,7 @@ import com.teenyfin.teenymoney.domain.auth.dto.response.SignupResponseDTO;
 import com.teenyfin.teenymoney.domain.auth.exception.AuthErrorCode;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
+import com.teenyfin.teenymoney.domain.teenyscore.service.TeenyScoreGradeService;
 import com.teenyfin.teenymoney.domain.wallet.service.WalletService;
 import com.teenyfin.teenymoney.global.auth.RefreshTokenStore;
 import com.teenyfin.teenymoney.global.auth.LegalGuardianConsentStore;
@@ -55,6 +56,7 @@ class AuthServiceTest {
     private LegalGuardianConsentStore legalGuardianConsentStore;
     private AuthService authService;
     private WalletService walletService;
+    private TeenyScoreGradeService teenyScoreGradeService;
 
     @BeforeEach
     void setUp() {
@@ -65,6 +67,7 @@ class AuthServiceTest {
         refreshTokenStore = mock(RefreshTokenStore.class);
         legalGuardianConsentStore = mock(LegalGuardianConsentStore.class);
         walletService = mock(WalletService.class);
+        teenyScoreGradeService = mock(TeenyScoreGradeService.class);
         authService = new AuthService(
                 memberMapper,
                 passwordEncoder,
@@ -73,7 +76,8 @@ class AuthServiceTest {
                 refreshTokenStore,
                 legalGuardianConsentStore,
                 CLOCK,
-                walletService);
+                walletService,
+                teenyScoreGradeService);
         when(passwordEncoder.encode("password123")).thenReturn("encoded-password");
         when(memberMapper.selectEffectiveAgreementId(
                 eq("SERVICE_TERMS"), eq("1.0"), any(LocalDateTime.class)))
@@ -98,6 +102,7 @@ class AuthServiceTest {
 
         ArgumentCaptor<MemberVO> memberCaptor = ArgumentCaptor.forClass(MemberVO.class);
         verify(memberMapper).insert(memberCaptor.capture());
+        verify(teenyScoreGradeService).initializeGrade(17L);
         MemberVO inserted = memberCaptor.getValue();
         assertEquals("user@example.com", inserted.getEmail());
         assertEquals("01012345678", inserted.getPhoneNumber());
@@ -521,7 +526,13 @@ class AuthServiceTest {
 
         ArgumentCaptor<MemberVO> captor = ArgumentCaptor.forClass(MemberVO.class);
         verify(memberMapper).insert(captor.capture());
-        return captor.getValue().getRole();
+        String role = captor.getValue().getRole();
+        if ("CHILD".equals(role)) {
+            verify(teenyScoreGradeService).initializeGrade(17L);
+        } else {
+            verify(teenyScoreGradeService, never()).initializeGrade(any());
+        }
+        return role;
     }
 
     private SignupRequestDTO request(LocalDate birthDate) {
