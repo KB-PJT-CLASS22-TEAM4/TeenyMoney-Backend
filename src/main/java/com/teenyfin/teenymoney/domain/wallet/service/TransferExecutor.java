@@ -4,6 +4,7 @@ package com.teenyfin.teenymoney.domain.wallet.service;
 import com.teenyfin.teenymoney.domain.wallet.exception.WalletErrorCode;
 import com.teenyfin.teenymoney.domain.wallet.mapper.TransferMapper;
 import com.teenyfin.teenymoney.domain.wallet.vo.ReferenceType;
+import com.teenyfin.teenymoney.domain.wallet.vo.TransferType;
 import com.teenyfin.teenymoney.domain.wallet.vo.TransferVO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import org.springframework.stereotype.Service;
@@ -55,12 +56,14 @@ public class TransferExecutor {
         //     항상 같은 순서(작은 id부터)로 잠그니까 서로 물리는 상황 자체가 생기지 않는다.
         // debit()/credit() 각각이 내부에서 SELECT ... FOR UPDATE로 잠그기 때문에,
         // 여기서 "어느 걸 먼저 호출하느냐"로 잠금 순서를 강제한다.
+
+        String label = TransferType.valueOf(current.getType()).getLabel();
         if (current.getFromWalletId() < current.getToWalletId()) {
-            walletLedgerService.debit(current.getFromWalletId(), current.getAmount(), ReferenceType.TRANSFER, current.getId(), null);
-            walletLedgerService.credit(current.getToWalletId(), current.getAmount(), ReferenceType.TRANSFER, current.getId(), null);
+            walletLedgerService.debit(current.getFromWalletId(), current.getAmount(), ReferenceType.TRANSFER, current.getId(),label + " 출금");
+            walletLedgerService.credit(current.getToWalletId(), current.getAmount(), ReferenceType.TRANSFER, current.getId(), label + " 입금");
         } else {
-            walletLedgerService.credit(current.getToWalletId(), current.getAmount(), ReferenceType.TRANSFER, current.getId(), null);
-            walletLedgerService.debit(current.getFromWalletId(), current.getAmount(), ReferenceType.TRANSFER, current.getId(), null);
+            walletLedgerService.credit(current.getToWalletId(), current.getAmount(), ReferenceType.TRANSFER, current.getId(), label + " 입금");
+            walletLedgerService.debit(current.getFromWalletId(), current.getAmount(), ReferenceType.TRANSFER, current.getId(),label + " 출금");
         }
 
         transferMapper.updateStatus(current.getId(), "COMPLETED", null);

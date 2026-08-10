@@ -36,7 +36,7 @@ public class AllowanceService {
             throw new BusinessException(WalletErrorCode.WALLET_NOT_FOUND);
         }
 
-        WalletVO childWallet = walletMapper.selectMemberWalletByMemberId(principal.memberId());
+        WalletVO childWallet = walletMapper.selectMemberWalletByMemberId(childId);
         if(childWallet == null) {
             throw new BusinessException(WalletErrorCode.WALLET_NOT_FOUND);
         }
