@@ -6,8 +6,8 @@
 
     <resultMap id="categoryPolicyResultMap" type="com.teenyfin.teenymoney.domain.categoryPolicy.vo.CategoryPolicyVO">
         <id property="id" column="id"/>
-        <result property="merchantCategoryId" column="merchant_category_id"/>
-        <result property="merchantCategoryName" column="name"/>
+        <result property="categoryId" column="merchant_category_id"/>
+        <result property="categoryName" column="name"/>
         <result property="policy" column="policy"/>
     </resultMap>
 
@@ -59,14 +59,12 @@
         WHERE m.id = #{merchantCode}
     </select>
 
-    <select id="selectByMerchantCodeAndChildId" resultMap="categoryPolicyResultMap">
+    <select id="selectByCategoryIdAndChildId" resultMap="categoryPolicyResultMap">
         SELECT p.id, p.merchant_category_id, c.name, p.policy
-        FROM T_MCC_CODE_C m
+        FROM T_MCC_POLICY_M p
         JOIN T_MCC_CTGR_C c
-        ON m.merchant_category_id = c.id
-        JOIN T_MCC_POLICY_M p
         ON p.merchant_category_id = c.id
-        WHERE m.id = #{merchantCode} AND p.child_id = #{childId}
+        WHERE p.merchant_category_id = #{categoryId} AND p.child_id = #{childId}
     </select>
 
 </mapper>

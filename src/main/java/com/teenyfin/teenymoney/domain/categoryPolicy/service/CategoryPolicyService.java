@@ -65,7 +65,7 @@ public class CategoryPolicyService {
         return categoryPolicyVOList.stream()
                 .map(x -> CategoryPolicyResponseDTO.builder()
                         .id(x.getId())
-                        .merchantCategoryName(x.getMerchantCategoryName())
+                        .categoryName(x.getCategoryName())
                         .policy(x.getPolicy())
                         .build())
                 .toList();
@@ -96,7 +96,7 @@ public class CategoryPolicyService {
         return categoryPolicyVOList.stream()
                 .map(x -> CategoryPolicyResponseDTO.builder()
                         .id(x.getId())
-                        .merchantCategoryName(x.getMerchantCategoryName())
+                        .categoryName(x.getCategoryName())
                         .policy(x.getPolicy())
                         .build())
                 .toList();

@@ -40,7 +40,7 @@ class CategoryPolicyServiceTest {
 
         CategoryPolicyVO vo = CategoryPolicyVO.builder()
                 .id(2L)
-                .merchantCategoryName("PC방")
+                .categoryName("PC방")
                 .policy("BLOCK")
                 .build();
         given(categoryPolicyMapper.selectByChildId(memberId)).willReturn(List.of(vo));
@@ -63,7 +63,7 @@ class CategoryPolicyServiceTest {
 
         CategoryPolicyVO vo = CategoryPolicyVO.builder()
                 .id(1L)
-                .merchantCategoryName("외식")
+                .categoryName("외식")
                 .policy("ALLOW")
                 .build();
 
@@ -75,7 +75,7 @@ class CategoryPolicyServiceTest {
 
         // then
         assertThat(result).hasSize(1);
-        assertThat(result.get(0).getMerchantCategoryName()).isEqualTo("외식");
+        assertThat(result.get(0).getCategoryName()).isEqualTo("외식");
         verify(categoryPolicyMapper).selectByChildId(childId);
     }
 
@@ -130,9 +130,9 @@ class CategoryPolicyServiceTest {
         String role = "CHILD";
 
         given(categoryPolicyMapper.selectByChildId(memberId)).willReturn(List.of(
-                CategoryPolicyVO.builder().id(1L).merchantCategoryName("편의점").policy("ALLOW").build(),
-                CategoryPolicyVO.builder().id(3L).merchantCategoryName("PC방").policy("WATCH").build(),
-                CategoryPolicyVO.builder().id(5L).merchantCategoryName("유흥주점").policy("BLOCK").build()
+                CategoryPolicyVO.builder().id(1L).categoryName("편의점").policy("ALLOW").build(),
+                CategoryPolicyVO.builder().id(3L).categoryName("PC방").policy("WATCH").build(),
+                CategoryPolicyVO.builder().id(5L).categoryName("유흥주점").policy("BLOCK").build()
         ));
 
         // when

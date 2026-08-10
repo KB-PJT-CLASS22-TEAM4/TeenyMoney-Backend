@@ -10,9 +10,6 @@ import java.util.List;
 @Mapper
 public interface CategoryPolicyMapper {
 
-    // 아이디로 카테고리 정책 조회
-    CategoryPolicyVO selectById(@Param("id") Long id);
-
     // 자녀 아이디로 전체 카테고리 정책 조회
     List<CategoryPolicyVO> selectByChildId(@Param("childId") Long childId);
 
@@ -25,8 +22,8 @@ public interface CategoryPolicyMapper {
     // 업종 코드로 업종 카테고리 아이디 조회
     Long selectCategoryIdByMerchantCode(@Param("merchantCode") String merchantCode);
 
-    // 자녀 아이디와 업종 코드로 특정 업종 카테고리 정책 조회
-    CategoryPolicyVO selectByMerchantCodeAndChildId(@Param("merchantCode") String merchantCode, @Param("childId") Long childId);
+    // 자녀 아이디와 업종 카테고리 아이디로 특정 업종 카테고리 정책 조회
+    CategoryPolicyVO selectByCategoryIdAndChildId(@Param("categoryId") Long categoryId, @Param("childId") Long childId);
 }
 
 
