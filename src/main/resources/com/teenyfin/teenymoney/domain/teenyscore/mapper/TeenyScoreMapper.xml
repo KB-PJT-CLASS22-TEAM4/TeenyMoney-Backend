@@ -61,7 +61,7 @@
             grade.color
         FROM T_MBR_INFO_M member
         INNER JOIN T_TNY_GRADE_A grade
-            ON member.teeny_score BETWEEN grade.min_score AND grade.max_score
+            ON member.applied_grade_id = grade.grade_id
         WHERE member.id = #{childId}
           AND member.role = 'CHILD'
           AND member.status = 'ACTIVE'
@@ -140,6 +140,30 @@
         WHERE id = #{childId}
           AND role = 'CHILD'
           AND status = 'ACTIVE'
+    </update>
+
+    <update id="updateAllActiveChildGrades">
+        UPDATE T_MBR_INFO_M member
+        INNER JOIN T_TNY_GRADE_A grade
+            ON member.teeny_score BETWEEN grade.min_score AND grade.max_score
+        SET member.applied_grade_id = grade.grade_id,
+            member.grade_applied_at = #{appliedAt},
+            member.updated_at = #{appliedAt}
+        WHERE member.role = 'CHILD'
+          AND member.status = 'ACTIVE'
+    </update>
+
+    <update id="initializeAppliedGrade">
+        UPDATE T_MBR_INFO_M member
+        INNER JOIN T_TNY_GRADE_A grade
+            ON member.teeny_score BETWEEN grade.min_score AND grade.max_score
+        SET member.applied_grade_id = grade.grade_id,
+            member.grade_applied_at = #{appliedAt},
+            member.updated_at = #{appliedAt}
+        WHERE member.id = #{childId}
+          AND member.role = 'CHILD'
+          AND member.status = 'ACTIVE'
+          AND member.applied_grade_id IS NULL
     </update>
 
     <insert id="insertScoreHistory">

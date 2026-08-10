@@ -12,6 +12,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.lang.reflect.Method;
+import java.time.LocalDate;
+import java.time.YearMonth;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -20,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -116,6 +119,72 @@ class TeenyScoreChangeServiceTest {
         verify(teenyScoreMapper, never()).insertScoreHistory(
                 2L, 10, 620, "DEPOSIT_MATURED", "EVENT:4",
                 "예금 만기 달성", "DEPOSIT_ENROLLMENT", 11L);
+    }
+
+    @Test
+    void sameDayBlockPaymentIsAppliedOnlyOnce() {
+        TeenyScorePolicyService policyService =
+                new TeenyScorePolicyService();
+        TeenyScoreChangeRequestDTO first = policyService.blockPayment(
+                2L, 100L, LocalDate.of(2026, 8, 10));
+        TeenyScoreChangeRequestDTO second = policyService.blockPayment(
+                2L, 101L, LocalDate.of(2026, 8, 10));
+        when(teenyScoreMapper.selectScoreForUpdate(2L))
+                .thenReturn(600, 580);
+        when(teenyScoreMapper.existsHistoryByEventKey(
+                2L, "PAYMENT_BLOCKED:2026-08-10"))
+                .thenReturn(false, true);
+
+        TeenyScoreChangeResponseDTO firstResult =
+                teenyScoreChangeService.change(first);
+        TeenyScoreChangeResponseDTO secondResult =
+                teenyScoreChangeService.change(second);
+
+        assertTrue(firstResult.isApplied());
+        assertEquals(580, firstResult.getScoreAfter());
+        assertFalse(secondResult.isApplied());
+        assertEquals(580, secondResult.getScoreAfter());
+        verify(teenyScoreMapper, times(1)).insertScoreHistory(
+                2L, -20, 580, "PAYMENT_BLOCKED",
+                "PAYMENT_BLOCKED:2026-08-10",
+                "BLOCK 업종 결제 시도", "PAYMENT", 100L);
+    }
+
+    @Test
+    void loanDefaultIsSeparateFromMonthlyOverdueAndAppliedOnlyOnce() {
+        TeenyScorePolicyService policyService =
+                new TeenyScorePolicyService();
+        TeenyScoreChangeRequestDTO overdue = policyService.loanOverdue(
+                2L, 20L, YearMonth.of(2026, 8),
+                0, 10_000, 0);
+        TeenyScoreChangeRequestDTO defaulted =
+                policyService.loanDefault(2L, 20L);
+        when(teenyScoreMapper.selectScoreForUpdate(2L))
+                .thenReturn(600, 592, 572);
+        when(teenyScoreMapper.existsHistoryByEventKey(
+                2L, "LOAN_OVERDUE:20:2026-08"))
+                .thenReturn(false);
+        when(teenyScoreMapper.existsHistoryByEventKey(
+                2L, "LOAN_DEFAULTED:20"))
+                .thenReturn(false, true);
+
+        TeenyScoreChangeResponseDTO overdueResult =
+                teenyScoreChangeService.change(overdue);
+        TeenyScoreChangeResponseDTO defaultResult =
+                teenyScoreChangeService.change(defaulted);
+        TeenyScoreChangeResponseDTO duplicateResult =
+                teenyScoreChangeService.change(defaulted);
+
+        assertEquals(-8, overdueResult.getAppliedAmount());
+        assertEquals(592, overdueResult.getScoreAfter());
+        assertEquals(-20, defaultResult.getAppliedAmount());
+        assertEquals(572, defaultResult.getScoreAfter());
+        assertFalse(duplicateResult.isApplied());
+        assertEquals(572, duplicateResult.getScoreAfter());
+        verify(teenyScoreMapper, times(1)).insertScoreHistory(
+                2L, -20, 572, "LOAN_DEFAULTED",
+                "LOAN_DEFAULTED:20", "대출 최종 만기 미상환",
+                "LOAN_ENROLLMENT", 20L);
     }
 
     @Test

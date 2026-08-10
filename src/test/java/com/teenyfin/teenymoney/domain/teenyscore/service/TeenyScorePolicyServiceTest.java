@@ -6,6 +6,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDate;
 import java.time.YearMonth;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -45,6 +46,20 @@ class TeenyScorePolicyServiceTest {
         printResult("WATCH 결제",
                 "기준 3회 / 3회=-1점 / 4회=-2점 / eventKey="
                         + withinThreshold.getEventKey());
+    }
+
+    @Test
+    void blockPaymentAppliesDailyPenaltyAndCreatesDailyEventKey() {
+        TeenyScoreChangeRequestDTO request =
+                teenyScorePolicyService.blockPayment(
+                        2L, 100L, LocalDate.of(2026, 8, 10));
+
+        assertEquals(-20, request.getAmount());
+        assertEquals(TeenyScoreEventCode.PAYMENT_BLOCKED,
+                request.getEventCode());
+        assertEquals("PAYMENT_BLOCKED:2026-08-10", request.getEventKey());
+        assertEquals("PAYMENT", request.getReferenceType());
+        assertEquals(100L, request.getReferenceId());
     }
 
     @Test
@@ -290,22 +305,18 @@ class TeenyScorePolicyServiceTest {
     }
 
     @Test
-    @DisplayName("대출 정상 완납은 +6점이고 최종 미상환 총 감점은 -20점이다")
+    @DisplayName("대출 정상 완납은 +6점이고 최종 미상환 사건은 별도로 -20점이다")
     void loanMaturityAndDefaultUseConfiguredScores() {
         assertEquals(
                 6,
                 teenyScorePolicyService.loanMaturity(
                         2L, 20L).getAmount());
         assertEquals(
-                -12,
-                teenyScorePolicyService.loanDefault(
-                        2L, 20L, -8).getAmount());
-        assertEquals(
                 -20,
                 teenyScorePolicyService.loanDefault(
-                        2L, 21L, 0).getAmount());
+                        2L, 21L).getAmount());
 
-        printResult("대출 만기", "정상 완납=+6 / 기존 -8점이면 추가 -12 / 기존 0점이면 -20");
+        printResult("대출 만기", "정상 완납=+6 / 월별 미납 감점과 별도로 최종 미상환=-20");
     }
 
     @Test
@@ -327,11 +338,6 @@ class TeenyScorePolicyServiceTest {
                 IllegalArgumentException.class,
                 () -> teenyScorePolicyService.loanOverdue(
                         2L, 1L, YearMonth.of(2026, 8), 0, 0, 0));
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> teenyScorePolicyService.loanDefault(
-                        2L, 1L, -21));
-
         printResult("입력 검증", "기간·진행률·회차·상환액·기존 감점 오류 거부 완료");
     }
 

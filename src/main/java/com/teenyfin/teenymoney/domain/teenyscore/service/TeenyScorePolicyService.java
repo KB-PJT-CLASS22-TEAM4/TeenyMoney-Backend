@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.YearMonth;
 
 /**
@@ -18,7 +19,7 @@ public class TeenyScorePolicyService {
     private static final int CONSECUTIVE_MATURITY_BONUS = 10;  // 6개월 이상 예·적금을 2회 연속 정상 만기한 경우 적용하는 추가 점수
     private static final int REPEATED_EARLY_TERMINATION_PENALTY = -8;   // 최근 3개월 내 예·적금 중도해지가 3회 이상 누적된 경우 적용하는 감점
     private static final int LOAN_MATURITY_SCORE = 6;         // 대출 만기일까지 원금과 이자를 모두 정상 상환한 경우 적용하는 점수
-    private static final int LOAN_DEFAULT_TOTAL_PENALTY = -20;   // 대출 만기 후 유예기간까지 미상환한 경우 적용할 최종 누적 감점
+    private static final int LOAN_DEFAULT_PENALTY = -20;   // 월별 미납 감점과 별도로 최종 미상환 사건에 한 번 적용하는 감점
 
     // 예금 중도해지 감점표
     // 행: 가입 기간 순서 1개월, 3개월, 6개월, 12개월
@@ -62,6 +63,24 @@ public class TeenyScorePolicyService {
                 exceeded
                         ? "WATCH 업종 기준 초과 결제"
                         : "WATCH 업종 기준 이내 결제",
+                "PAYMENT",
+                paymentId);
+    }
+
+    /** BLOCK 결제 시도는 결제를 거절하고, 자녀별 하루 최초 1회에만 감점한다. */
+    public TeenyScoreChangeRequestDTO blockPayment(
+            Long childId,
+            Long paymentId,
+            LocalDate paymentDate) {
+        if (paymentDate == null) {
+            throw new IllegalArgumentException("paymentDate는 필수입니다.");
+        }
+        return request(
+                childId,
+                TeenyScoreEventCode.PAYMENT_BLOCKED,
+                -20,
+                "PAYMENT_BLOCKED:" + paymentDate,
+                "BLOCK 업종 결제 시도",
                 "PAYMENT",
                 paymentId);
     }
@@ -295,17 +314,11 @@ public class TeenyScorePolicyService {
 
     public TeenyScoreChangeRequestDTO loanDefault(
             Long childId,
-            Long loanEnrollmentId,
-            int existingMaturityPenalty) {
-        if (existingMaturityPenalty > 0
-                || existingMaturityPenalty < LOAN_DEFAULT_TOTAL_PENALTY) {
-            throw new IllegalArgumentException(
-                    "existingMaturityPenalty는 -20 이상 0 이하여야 합니다.");
-        }
+            Long loanEnrollmentId) {
         return request(
                 childId,
                 TeenyScoreEventCode.LOAN_DEFAULTED, // 만기 후 유예기간이 끝나도 미상환 금액이 남은 상태
-                LOAN_DEFAULT_TOTAL_PENALTY - existingMaturityPenalty,
+                LOAN_DEFAULT_PENALTY,
                 "LOAN_DEFAULTED:" + loanEnrollmentId,
                 "대출 최종 만기 미상환",
                 "LOAN_ENROLLMENT",

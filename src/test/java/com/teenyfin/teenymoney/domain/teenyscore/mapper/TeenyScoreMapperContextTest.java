@@ -47,6 +47,8 @@ class TeenyScoreMapperContextTest {
                 "selectScoreForUpdate",
                 "existsHistoryByEventKey",
                 "updateTeenyScore",
+                "updateAllActiveChildGrades",
+                "initializeAppliedGrade",
                 "insertScoreHistory")) {
             assertTrue(sqlSessionFactory.getConfiguration()
                     .hasStatement(NAMESPACE + "." + statement));

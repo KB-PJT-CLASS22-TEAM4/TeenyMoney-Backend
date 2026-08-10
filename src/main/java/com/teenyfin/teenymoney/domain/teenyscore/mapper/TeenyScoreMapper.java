@@ -7,6 +7,7 @@ import com.teenyfin.teenymoney.domain.teenyscore.vo.TeenyScoreVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Mapper
@@ -33,6 +34,13 @@ public interface TeenyScoreMapper {
     int updateTeenyScore(
             @Param("childId") Long childId,
             @Param("teenyScore") int teenyScore);
+
+    int updateAllActiveChildGrades(
+            @Param("appliedAt") LocalDateTime appliedAt);
+
+    int initializeAppliedGrade(
+            @Param("childId") Long childId,
+            @Param("appliedAt") LocalDateTime appliedAt);
 
     int insertScoreHistory(
             @Param("childId") Long childId,

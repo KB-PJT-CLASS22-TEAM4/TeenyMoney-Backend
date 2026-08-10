@@ -5,6 +5,7 @@ public enum TeenyScoreEventCode {
     // 결제
     PAYMENT_WATCH_WITHIN_THRESHOLD,
     PAYMENT_WATCH_OVER_THRESHOLD,
+    PAYMENT_BLOCKED,
 
     // 예금
     DEPOSIT_MATURED,
