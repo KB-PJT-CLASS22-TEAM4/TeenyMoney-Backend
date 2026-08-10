@@ -8,6 +8,7 @@ import lombok.Getter;
 public class CategoryPolicyVO {
 
     private Long id;
+    private Long merchantCategoryId;
     private String merchantCategoryName;
     private String policy;
 }
