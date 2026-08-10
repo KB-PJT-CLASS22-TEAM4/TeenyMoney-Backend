@@ -65,6 +65,7 @@ public class ChargeMethodService {
         chargeMethod.setParentId(parentId);
         chargeMethod.setBillingKey(billingKeyEncryptor.encrypt(tossResponse.getBillingKey()));
         chargeMethod.setType("CARD");
+        chargeMethod.setStatus("ACTIVE");
         chargeMethod.setCardCompany(CardIssuerCode.toKoreanName(tossResponse.getCard().getIssuerCode()));
         chargeMethod.setMaskedCardNumber(tossResponse.getCard().getNumber());
 
