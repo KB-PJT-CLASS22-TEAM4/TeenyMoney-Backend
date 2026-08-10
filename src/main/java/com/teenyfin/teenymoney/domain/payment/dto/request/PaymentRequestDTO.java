@@ -5,17 +5,13 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
-
 @Builder
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
-public class PaymentQrRequestDTO {
+public class PaymentRequestDTO {
 
     private String orderId;
-    private String merchantName;
-    private String merchantCode;
-    private Long amount;
-    private LocalDateTime expiredAt;
+    private String idempotencyKey;
+    private String password;
 }

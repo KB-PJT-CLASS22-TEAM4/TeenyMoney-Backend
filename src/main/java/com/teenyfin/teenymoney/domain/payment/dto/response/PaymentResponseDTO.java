@@ -4,15 +4,15 @@ import com.teenyfin.teenymoney.domain.categoryPolicy.dto.response.CategoryPolicy
 import lombok.Builder;
 import lombok.Getter;
 
+import java.time.LocalDateTime;
+
 @Builder
 @Getter
-public class PaymentQrResponseDTO {
+public class PaymentResponseDTO {
 
-    private String orderId;
     private String merchantName;
     private Long amount;
     private Long balance;
     private CategoryPolicyResponseDTO categoryPolicy;
-    private Integer totalCount;
-    private Long totalAmount;
+    private LocalDateTime createdAt;
 }

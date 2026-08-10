@@ -9,11 +9,11 @@ import org.springframework.http.HttpStatus;
 @RequiredArgsConstructor
 public enum PaymentErrorCode implements ErrorCode {
 
-    QR_EXPIRED(HttpStatus.BAD_REQUEST, "만료된 QR코드입니다."),
     INVALID_MERCHANT_CODE(HttpStatus.BAD_REQUEST, "존재하지 않는 업종 코드입니다."),
-    INSUFFICIENT_BALANCE(HttpStatus.BAD_REQUEST, "잔액이 부족합니다."),
-    PAYMENT_INFO_EXPIRED(HttpStatus.BAD_REQUEST, "만료된 QR 코드입니다."),
-    PAYMENT_ALREADY_IN_PROGRESS(HttpStatus.BAD_REQUEST, "이미 결제가 진행 중인 QR 코드입니다.");
+    EXPIRED_QR_CODE(HttpStatus.BAD_REQUEST, "만료된 QR 코드입니다."),
+    INVALID_QR_CODE(HttpStatus.BAD_REQUEST, "유효하지 않은 주문 아이디입니다."),
+    BLOCKED_CATEGORY(HttpStatus.BAD_REQUEST, "차단된 카테고리는 결제할 수 없습니다."),
+    PAYMENT_ALREADY_COMPLETED(HttpStatus.BAD_REQUEST, "이미 완료된 결제입니다.");
 
     private final HttpStatus status;
     private final String message;

@@ -1,7 +1,9 @@
 package com.teenyfin.teenymoney.domain.payment.controller;
 
 import com.teenyfin.teenymoney.domain.payment.dto.request.PaymentQrRequestDTO;
+import com.teenyfin.teenymoney.domain.payment.dto.request.PaymentRequestDTO;
 import com.teenyfin.teenymoney.domain.payment.dto.response.PaymentQrResponseDTO;
+import com.teenyfin.teenymoney.domain.payment.dto.response.PaymentResponseDTO;
 import com.teenyfin.teenymoney.domain.payment.service.PaymentService;
 import com.teenyfin.teenymoney.global.response.ApiResponse;
 import com.teenyfin.teenymoney.global.security.MemberPrincipal;
@@ -24,6 +26,14 @@ public class PaymentController {
     public ApiResponse<PaymentQrResponseDTO> getPaymentInfo(
             @AuthenticationPrincipal MemberPrincipal memberPrincipal,
             @RequestBody @Valid PaymentQrRequestDTO paymentQrRequestDTO) {
-        return ApiResponse.ok(paymentService.getPaymentInfo(memberPrincipal.memberId(), memberPrincipal.role(), paymentQrRequestDTO));
+        return ApiResponse.ok(paymentService.getPaymentInfo(memberPrincipal.memberId(), paymentQrRequestDTO));
+    }
+
+    @ApiOperation(value = "결제 진행", notes = "비밀번호를 입력받아 실제 결제를 진행합니다.")
+    @PostMapping
+    public ApiResponse<PaymentResponseDTO> progressPayment(
+            @AuthenticationPrincipal MemberPrincipal memberPrincipal,
+            @RequestBody @Valid PaymentRequestDTO paymentRequestDTO) {
+        return ApiResponse.ok(paymentService.progressPayment(memberPrincipal.memberId(), paymentRequestDTO));
     }
 }

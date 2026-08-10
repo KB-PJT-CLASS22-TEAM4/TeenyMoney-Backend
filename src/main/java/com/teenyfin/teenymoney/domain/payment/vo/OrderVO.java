@@ -5,10 +5,9 @@ import lombok.Getter;
 
 @Builder
 @Getter
-public class PaymentInfoVO {
+public class OrderVO {
 
-    private Long walletId;
     private String merchantName;
-    private Long categoryPolicyId;
+    private Long categoryId;
     private Long amount;
 }
