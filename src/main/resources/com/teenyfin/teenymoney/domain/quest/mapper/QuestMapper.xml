@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.teenyfin.teenymoney.domain.quest.mapper.QuestMapper">
+
+    <resultMap id="questResultMap" type="com.teenyfin.teenymoney.domain.quest.vo.QuestVO">
+        <id property="id" column="id"/>
+        <result property="parentId" column="parent_id"/>
+        <result property="childId" column="child_id"/>
+        <result property="creationRequestKey" column="creation_request_key"/>
+        <result property="childName" column="child_name"/>
+        <result property="childProfileImageKey" column="child_profile_image_key"/>
+        <result property="title" column="title"/>
+        <result property="content" column="content"/>
+        <result property="deadline" column="deadline"/>
+        <result property="teenyScoreEnabled" column="is_teeny_score"/>
+        <result property="verificationRequirement" column="verification_requirement"/>
+        <result property="rewardAmount" column="reward_amount"/>
+        <result property="status" column="status"/>
+        <result property="remainingCount" column="remaining_count"/>
+        <result property="acceptedAt" column="accepted_at"/>
+        <result property="declineReasonCode" column="decline_reason_code"/>
+        <result property="declineReasonDetail" column="decline_reason_detail"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+        <result property="endedAt" column="ended_at"/>
+    </resultMap>
+
+    <resultMap id="questVerificationResultMap"
+               type="com.teenyfin.teenymoney.domain.quest.vo.QuestVerificationVO">
+        <id property="id" column="id"/>
+        <result property="questId" column="quest_id"/>
+        <result property="attemptNo" column="attempt_no"/>
+        <result property="imageKey" column="image_key"/>
+        <result property="content" column="content"/>
+        <result property="status" column="status"/>
+        <result property="rejectionReason" column="rejection_reason"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="reviewedAt" column="reviewed_at"/>
+    </resultMap>
+
+    <sql id="questColumns">
+        q.id,
+        q.parent_id,
+        q.child_id,
+        q.creation_request_key,
+        q.title,
+        q.content,
+        q.deadline,
+        q.is_teeny_score,
+        q.verification_requirement,
+        q.reward_amount,
+        q.status,
+        q.remaining_count,
+        q.accepted_at,
+        q.decline_reason_code,
+        q.decline_reason_detail,
+        q.created_at,
+        q.updated_at,
+        q.ended_at
+    </sql>
+
+    <sql id="questColumnsWithChild">
+        <include refid="questColumns"/>,
+        c.name AS child_name,
+        c.profile_image_key AS child_profile_image_key
+    </sql>
+
+    <sql id="statusCondition">
+        q.status IN
+        <foreach collection="statuses" item="status" open="(" separator="," close=")">
+            #{status}
+        </foreach>
+    </sql>
+
+    <sql id="cursorAndOrder">
+        <choose>
+            <when test="completed">
+                <if test="cursorTime != null">
+                    AND (q.ended_at &lt; #{cursorTime}
+                         OR (q.ended_at = #{cursorTime} AND q.id &lt; #{cursorId}))
+                </if>
+                ORDER BY q.ended_at DESC, q.id DESC
+            </when>
+            <otherwise>
+                <if test="cursorTime != null">
+                    AND (q.deadline &gt; #{cursorTime}
+                         OR (q.deadline = #{cursorTime} AND q.id &gt; #{cursorId}))
+                </if>
+                ORDER BY q.deadline ASC, q.id ASC
+            </otherwise>
+        </choose>
+        LIMIT #{limit}
+    </sql>
+
+    <select id="selectByCreationRequestKey" resultMap="questResultMap">
+        SELECT
+        <include refid="questColumns"/>
+        FROM T_QST_BASE_M q
+        WHERE q.parent_id = #{parentId}
+          AND q.creation_request_key = #{creationRequestKey}
+        ORDER BY q.id ASC
+    </select>
+
+    <select id="selectByIdForUpdateByParent" resultMap="questResultMap">
+        SELECT
+        <include refid="questColumns"/>
+        FROM T_QST_BASE_M q
+        WHERE q.id = #{questId}
+          AND q.parent_id = #{parentId}
+        FOR UPDATE
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO T_QST_BASE_M (
+            parent_id,
+            child_id,
+            creation_request_key,
+            title,
+            content,
+            deadline,
+            is_teeny_score,
+            verification_requirement,
+            reward_amount,
+            status,
+            remaining_count,
+            created_at
+        ) VALUES (
+            #{parentId},
+            #{childId},
+            #{creationRequestKey},
+            #{title},
+            #{content},
+            #{deadline},
+            #{teenyScoreEnabled},
+            #{verificationRequirement},
+            #{rewardAmount},
+            #{status},
+            #{remainingCount},
+            #{createdAt}
+        )
+    </insert>
+
+    <update id="updateAvailable">
+        UPDATE T_QST_BASE_M
+        SET title = #{title},
+            content = #{content},
+            deadline = #{deadline},
+            is_teeny_score = #{teenyScoreEnabled},
+            verification_requirement = #{verificationRequirement},
+            reward_amount = #{rewardAmount},
+            updated_at = #{updatedAt}
+        WHERE id = #{id}
+          AND parent_id = #{parentId}
+          AND status = 'AVAILABLE'
+    </update>
+
+    <delete id="deleteAvailable">
+        DELETE FROM T_QST_BASE_M
+        WHERE id = #{questId}
+          AND parent_id = #{parentId}
+          AND status = 'AVAILABLE'
+    </delete>
+
+    <select id="selectPageByParent" resultMap="questResultMap">
+        SELECT
+        <include refid="questColumnsWithChild"/>
+        FROM T_QST_BASE_M q
+        JOIN T_MBR_INFO_M c ON c.id = q.child_id
+        WHERE q.parent_id = #{memberId}
+          AND <include refid="statusCondition"/>
+        <if test="childId != null">
+          AND q.child_id = #{childId}
+        </if>
+        <include refid="cursorAndOrder"/>
+    </select>
+
+    <select id="selectPageByChild" resultMap="questResultMap">
+        SELECT
+        <include refid="questColumnsWithChild"/>
+        FROM T_QST_BASE_M q
+        JOIN T_MBR_INFO_M c ON c.id = q.child_id
+        WHERE q.child_id = #{memberId}
+          AND <include refid="statusCondition"/>
+        <include refid="cursorAndOrder"/>
+    </select>
+
+    <select id="selectDetailByParent" resultMap="questResultMap">
+        SELECT
+        <include refid="questColumnsWithChild"/>
+        FROM T_QST_BASE_M q
+        JOIN T_MBR_INFO_M c ON c.id = q.child_id
+        WHERE q.id = #{questId}
+          AND q.parent_id = #{memberId}
+    </select>
+
+    <select id="selectDetailByChild" resultMap="questResultMap">
+        SELECT
+        <include refid="questColumnsWithChild"/>
+        FROM T_QST_BASE_M q
+        JOIN T_MBR_INFO_M c ON c.id = q.child_id
+        WHERE q.id = #{questId}
+          AND q.child_id = #{memberId}
+    </select>
+
+    <select id="selectLatestVerification" resultMap="questVerificationResultMap">
+        SELECT id,
+               quest_id,
+               attempt_no,
+               image_key,
+               content,
+               status,
+               rejection_reason,
+               created_at,
+               reviewed_at
+        FROM T_QST_VERIFY_L
+        WHERE quest_id = #{questId}
+        ORDER BY attempt_no DESC
+        LIMIT 1
+    </select>
+</mapper>

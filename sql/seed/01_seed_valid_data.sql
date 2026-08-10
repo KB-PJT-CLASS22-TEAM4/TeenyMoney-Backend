@@ -3568,12 +3568,14 @@ VALUES
 
 -- T_QST_BASE_M: 부모1이 자녀2에게 퀘스트 생성
 INSERT INTO `T_QST_BASE_M`
-	(`id`, `parent_id`, `child_id`, `title`, `deadline`, `is_teeny_score`, `reward_amount`, `reward_teeny_score`, `status`)
-VALUES (1, 1, 2, '방 청소하기', '2026-08-05 23:59:59', TRUE, 1000, 10, 'IN_PROGRESS');
+	(`id`, `parent_id`, `child_id`, `creation_request_key`, `title`, `content`, `deadline`,
+	 `is_teeny_score`, `verification_requirement`, `reward_amount`, `status`, `accepted_at`)
+VALUES (1, 1, 2, '00000000-0000-0000-0000-000000000001', '방 청소하기', '방과 책상을 깨끗하게 정리해 주세요.',
+	'2026-08-05 23:59:59', TRUE, 'PHOTO_REQUIRED', 1000, 'IN_PROGRESS', '2026-08-01 09:00:00');
 
 -- T_QST_VERIFY_L: 자녀2가 인증 제출
-INSERT INTO `T_QST_VERIFY_L` (`id`, `quest_id`, `image_url`, `content`, `status`)
-VALUES (1, 1, 'https://cdn.test.com/quest/1.jpg', '깨끗하게 치웠어요!', 'PENDING');
+INSERT INTO `T_QST_VERIFY_L` (`id`, `quest_id`, `attempt_no`, `image_key`, `content`, `status`)
+VALUES (1, 1, 1, 'quest-verifications/1/seed.jpg', '깨끗하게 치웠어요!', 'PENDING');
 
 -- T_TNY_SCOREHIST_H: 적금 1회차 납입 성공으로 자녀2 점수 +10 (600 -> 610)
 --
