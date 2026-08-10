@@ -8,6 +8,7 @@ import lombok.Getter;
 @Getter
 public class PaymentQrResponseDTO {
 
+    private String paymentInfoId;
     private String merchantName;
     private Long amount;
     private Long balance;

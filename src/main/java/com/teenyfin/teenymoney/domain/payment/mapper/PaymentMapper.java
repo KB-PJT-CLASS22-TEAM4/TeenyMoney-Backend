@@ -1,5 +1,6 @@
 package com.teenyfin.teenymoney.domain.payment.mapper;
 
+import com.teenyfin.teenymoney.domain.payment.vo.PaymentVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
