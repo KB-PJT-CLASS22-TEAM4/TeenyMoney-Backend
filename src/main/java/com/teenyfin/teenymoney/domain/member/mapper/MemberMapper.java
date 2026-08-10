@@ -16,6 +16,8 @@ public interface MemberMapper {
 
     MemberVO selectById(@Param("id") Long id);
 
+    MemberVO selectByIdForUpdate(@Param("id") Long id);
+
     boolean existsByEmail(@Param("email") String email);
 
     boolean existsByPhoneNumber(@Param("phoneNumber") String phoneNumber);

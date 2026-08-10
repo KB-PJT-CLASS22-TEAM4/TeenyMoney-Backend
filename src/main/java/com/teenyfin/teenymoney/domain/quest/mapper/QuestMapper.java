@@ -1,0 +1,57 @@
+package com.teenyfin.teenymoney.domain.quest.mapper;
+
+import com.teenyfin.teenymoney.domain.quest.vo.QuestVO;
+import com.teenyfin.teenymoney.domain.quest.vo.QuestStatus;
+import com.teenyfin.teenymoney.domain.quest.vo.QuestVerificationVO;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+
+import java.util.List;
+import java.time.LocalDateTime;
+
+@Mapper
+public interface QuestMapper {
+
+    List<QuestVO> selectByCreationRequestKey(
+            @Param("parentId") Long parentId,
+            @Param("creationRequestKey") String creationRequestKey);
+
+    QuestVO selectByIdForUpdateByParent(
+            @Param("questId") Long questId,
+            @Param("parentId") Long parentId);
+
+    int insert(QuestVO quest);
+
+    int updateAvailable(QuestVO quest);
+
+    int deleteAvailable(
+            @Param("questId") Long questId,
+            @Param("parentId") Long parentId);
+
+    List<QuestVO> selectPageByParent(
+            @Param("memberId") Long memberId,
+            @Param("childId") Long childId,
+            @Param("statuses") List<QuestStatus> statuses,
+            @Param("cursorTime") LocalDateTime cursorTime,
+            @Param("cursorId") Long cursorId,
+            @Param("completed") boolean completed,
+            @Param("limit") int limit);
+
+    List<QuestVO> selectPageByChild(
+            @Param("memberId") Long memberId,
+            @Param("statuses") List<QuestStatus> statuses,
+            @Param("cursorTime") LocalDateTime cursorTime,
+            @Param("cursorId") Long cursorId,
+            @Param("completed") boolean completed,
+            @Param("limit") int limit);
+
+    QuestVO selectDetailByParent(
+            @Param("questId") Long questId,
+            @Param("memberId") Long memberId);
+
+    QuestVO selectDetailByChild(
+            @Param("questId") Long questId,
+            @Param("memberId") Long memberId);
+
+    QuestVerificationVO selectLatestVerification(@Param("questId") Long questId);
+}

@@ -41,6 +41,14 @@
         WHERE id = #{id}
     </select>
 
+    <select id="selectByIdForUpdate" resultMap="memberResultMap">
+        SELECT
+        <include refid="memberColumns"/>
+        FROM T_MBR_INFO_M
+        WHERE id = #{id}
+        FOR UPDATE
+    </select>
+
     <select id="existsByEmail" resultType="boolean">
         SELECT EXISTS (
             SELECT 1
