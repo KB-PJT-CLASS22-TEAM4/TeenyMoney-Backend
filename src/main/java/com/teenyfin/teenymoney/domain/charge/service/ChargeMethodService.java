@@ -15,6 +15,7 @@ import com.teenyfin.teenymoney.global.security.MemberPrincipal;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.teenyfin.teenymoney.domain.charge.toss.CardIssuerCode;
 
 import java.util.List;
 import java.util.UUID;
@@ -58,13 +59,14 @@ public class ChargeMethodService {
                 cardExpirationMonth, customerIdentityNumber, cardPassword);
         TossBillingKeyResponseDTO tossResponse = tossPaymentsClient.issueCardBillingKey(tossRequest);
 
+
         // 3단계: 발급받은 빌링키는 암호화해서, 나머지 정보(카드사/마스킹번호)는 그대로 VO에 채운다.
         ChargeMethodVO chargeMethod = new ChargeMethodVO();
         chargeMethod.setParentId(parentId);
         chargeMethod.setBillingKey(billingKeyEncryptor.encrypt(tossResponse.getBillingKey()));
         chargeMethod.setType("CARD");
-        chargeMethod.setCardCompany(tossResponse.getCardCompany());
-        chargeMethod.setMaskedCardNumber(tossResponse.getCardNumber());
+        chargeMethod.setCardCompany(CardIssuerCode.toKoreanName(tossResponse.getCard().getIssuerCode()));
+        chargeMethod.setMaskedCardNumber(tossResponse.getCard().getNumber());
 
         // 4단계: DB에 저장. insert 직후 chargeMethod.getId()에 생성된 PK가 채워짐
         try{
