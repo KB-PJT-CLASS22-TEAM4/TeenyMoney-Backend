@@ -65,8 +65,9 @@ public interface MemberMapper {
             @Param("childId") Long childId
     );
 
-    // 결제수단 등록(ChargeMethodService)에서 처음 UUID를 발급할 때 딱 한 번 씀.
-    // 이미 customerKey가 있는 회원한테 다시 호출해도 그냥 덮어씀 - 호출하는 쪽(서비스)이
-    // "null일 때만 호출"하도록 책임지는 구조라, 여기서 별도로 막지 않음.
-    void updateCustomerKey(@Param("id") Long id, @Param("customerKey") String customerKey);
+    // customer_key가 지금도 null일 때만 갱신한다. WHERE 절의 "AND customer_key IS NULL"이
+    // 동시성 가드 역할을 함 - 두 요청이 동시에 호출해도 DB가 한 번에 하나씩만 처리하니까,
+    // 둘 다 성공할 수 없고 딱 하나만 실제로 값을 씀. 영향받은 row 수(0 또는 1)를 리턴해서
+    // 호출한 쪽이 "내가 쓴 값이 채택됐는지" 알 수 있게 함.
+    int updateCustomerKeyIfAbsent(@Param("id") Long id, @Param("customerKey") String customerKey);
 }

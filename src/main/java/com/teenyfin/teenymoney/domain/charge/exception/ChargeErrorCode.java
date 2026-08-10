@@ -22,7 +22,9 @@ public enum ChargeErrorCode implements ErrorCode {
     CHARGE_METHOD_ACCESS_DENIED(
             HttpStatus.FORBIDDEN, "본인의 결제수단만 관리할 수 있습니다."),
     BILLING_KEY_ENCRYPTION_FAILED(
-            HttpStatus.INTERNAL_SERVER_ERROR, "결제수단 정보 처리 중 오류가 발생했습니다.");
+            HttpStatus.INTERNAL_SERVER_ERROR, "결제수단 정보 처리 중 오류가 발생했습니다."),
+    CHARGE_METHOD_SAVE_FAILED(
+            HttpStatus.INTERNAL_SERVER_ERROR, "결제수단 저장에 실패했습니다.");
 
     private final HttpStatus status;
     private final String message;

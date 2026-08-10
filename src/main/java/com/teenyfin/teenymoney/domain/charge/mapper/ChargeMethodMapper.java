@@ -10,12 +10,12 @@ import java.util.List;
 public interface ChargeMethodMapper {
 
     // 새 결제수단 row를 INSERT한다.
-    // 파라미터가 PaymentMethodVO 통째인 이유: TransferMapper.insertTransfer랑 같은 이유 -
+    // 파라미터가 ChargeMethodVO 통째인 이유: TransferMapper.insertTransfer랑 같은 이유 -
     // 채워야 할 컬럼이 여러 개라 객체로 묶어 넘기는 게 깔끔함.
-    // 리턴 타입은 void지만, 실행 후 paymentMethod.getId()에 방금 생성된 PK가 자동으로 채워짐
+    // 리턴 타입은 void지만, 실행 후 ChargeMethod.getId()에 방금 생성된 PK가 자동으로 채워짐
     // (XML의 useGeneratedKeys="true" keyProperty="id" 덕분).
 
-    void insert(ChargeMethodVO paymentMethodVO);
+    void insert(ChargeMethodVO chargeMethod);
 
     // 특정 부모 회원의 결제수단을 전부 조회한다 (목록 API에서 씀).
     // 여러 건이라 List로 받음 - 등록된 게 하나도 없으면 빈 리스트(null 아님)가 옴.
@@ -35,6 +35,6 @@ public interface ChargeMethodMapper {
     void setPrimary(@Param("id") Long id);
 
     // 결제수단의 상태를 바꾼다 (삭제 시 status = 'INACTIVE'로 바꾸는 용도).
-    // 실제 DELETE는 안 하고 status만 바꾸는 이유는 PaymentMethodVO 주석 참고.
+    // 실제 DELETE는 안 하고 status만 바꾸는 이유는 ChargeMethodVO 주석 참고.
     void updateStatus(@Param("id") Long id, @Param("status") String status);
 }

@@ -104,11 +104,11 @@
         WHERE id = #{id}
     </update>
 
-    <update id="updateCustomerKey">
+    <update id="updateCustomerKeyIfAbsent">
         UPDATE T_MBR_INFO_M
         SET customer_key = #{customerKey},
         updated_at = NOW()
-        WHERE id = #{id}
+        WHERE id = #{id} AND customer_key IS NULL
     </update>
     <!-- [보호자 가입 흐름 9] 현재 적용 기간에 포함되는 정확한 약관 버전만 조회한다. -->
     <select id="selectEffectiveAgreementId" resultType="long">
