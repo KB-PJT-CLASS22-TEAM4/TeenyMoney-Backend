@@ -70,17 +70,23 @@ class FinancialProductServiceTest {
         assertFalse(response.isEligible());
         assertEquals("LOAN_NOT_AVAILABLE_FOR_GRADE",
                 response.getIneligibleReason());
+        assertEquals(new BigDecimal("5.00"),
+                response.getExpectedAppliedRate());
     }
 
     @Test
-    void loanDetailReturnsGradeRateAndFixedTerms() {
-        when(mapper.selectActiveLoanProductById(1L)).thenReturn(loan());
+    void loanDetailReturnsProductRatesAndFixedTerms() {
+        LoanProductVO loan = loan();
+        loan.setBaseRate(new BigDecimal("3.50"));
+        when(mapper.selectActiveLoanProductById(1L)).thenReturn(loan);
 
         FinancialProductDetailResponseDTO response =
                 service.getProductDetail(CHILD, "loan", 1L);
 
-        assertEquals(new BigDecimal("5.00"),
+        assertEquals(new BigDecimal("3.50"), response.getBaseRate());
+        assertEquals(new BigDecimal("3.50"),
                 response.getExpectedAppliedRate());
+        assertEquals(new BigDecimal("8.00"), response.getLateFeeRate());
         assertEquals(List.of(1, 3, 6, 12), response.getAvailableTerms());
     }
 

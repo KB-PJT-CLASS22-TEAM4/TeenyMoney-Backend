@@ -15,6 +15,7 @@ public class DepositProductVO {
     private String financialProductCode;
     private String financialCompanyName;
     private String name;
+    private String interestCalculationType;
     private BigDecimal rate1m;
     private BigDecimal rate3m;
     private BigDecimal rate6m;
