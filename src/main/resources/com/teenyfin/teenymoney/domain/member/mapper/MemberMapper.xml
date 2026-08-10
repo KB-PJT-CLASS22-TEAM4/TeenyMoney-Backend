@@ -13,6 +13,7 @@
         <result property="password" column="password"/>
         <result property="profileImageKey" column="profile_image_key"/>
         <result property="status" column="status"/>
+        <result property="customerKey" column="customer_key"/>
     </resultMap>
 
     <sql id="memberColumns">
@@ -24,7 +25,8 @@
         email,
         password,
         profile_image_key,
-        status
+        status,
+        customer_key
     </sql>
 
     <select id="selectByEmail" resultMap="memberResultMap">
@@ -99,6 +101,13 @@
         UPDATE T_MBR_INFO_M
         SET profile_image_key = #{profileImageKey},
             updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateCustomerKey">
+        UPDATE T_MBR_INFO_M
+        SET customer_key = #{customerKey},
+        updated_at = NOW()
         WHERE id = #{id}
     </update>
     <!-- [보호자 가입 흐름 9] 현재 적용 기간에 포함되는 정확한 약관 버전만 조회한다. -->

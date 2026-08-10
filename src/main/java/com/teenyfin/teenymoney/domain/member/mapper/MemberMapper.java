@@ -64,4 +64,9 @@ public interface MemberMapper {
             @Param("parentId") Long parentId,
             @Param("childId") Long childId
     );
+
+    // 결제수단 등록(ChargeMethodService)에서 처음 UUID를 발급할 때 딱 한 번 씀.
+    // 이미 customerKey가 있는 회원한테 다시 호출해도 그냥 덮어씀 - 호출하는 쪽(서비스)이
+    // "null일 때만 호출"하도록 책임지는 구조라, 여기서 별도로 막지 않음.
+    void updateCustomerKey(@Param("id") Long id, @Param("customerKey") String customerKey);
 }
