@@ -1,5 +1,6 @@
 package com.teenyfin.teenymoney.domain.member.mapper;
 
+import com.teenyfin.teenymoney.config.LazyBeanInitializer;
 import com.teenyfin.teenymoney.config.RootConfig;
 import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
 import org.apache.ibatis.mapping.BoundSql;
@@ -27,7 +28,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith(SpringExtension.class)
-@ContextConfiguration(classes = RootConfig.class)
+// 이 테스트는 매퍼 등록과 SQL 문만 확인한다. RootConfig가 스캔하는 서비스 계층까지
+// 생성하면 S3·Redis 같은 무관한 의존이 필요해지므로 지연 생성으로 둔다.
+@ContextConfiguration(classes = RootConfig.class, initializers = LazyBeanInitializer.class)
 @TestPropertySource(properties = {
         "jdbc.driver=com.mysql.cj.jdbc.Driver",
         "jdbc.url=jdbc:mysql://127.0.0.1:1/teenymoney",

@@ -2,11 +2,13 @@ package com.teenyfin.teenymoney.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.web.multipart.MultipartResolver;
 import org.springframework.web.multipart.support.StandardServletMultipartResolver;
+import org.springframework.context.annotation.FilterType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.scheduling.annotation.EnableScheduling;
-import org.springframework.transaction.annotation.EnableTransactionManagement;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.method.HandlerTypePredicate;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
@@ -15,23 +17,37 @@ import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
- * 서블릿(자식) 컨텍스트. Controller와 그 아래 계층이 여기 산다.
+ * 서블릿(자식) 컨텍스트. 웹 계층만 여기 산다.
  *
- * 스캔 대상은 domain, global 두 곳이다. config 패키지는 여기 없으므로
- * RootConfig가 자식 컨텍스트에 중복 등록되지 않는다.
- * (섞여 있으면 DataSource·TransactionManager가 두 벌 생겨 트랜잭션 경계가 깨진다)
+ * 표준 Spring MVC 배치대로 @Controller와 @ControllerAdvice만 스캔한다. 서비스·매퍼·스토어는
+ * RootConfig(부모)가 갖고, 자식은 부모 빈을 조회할 수 있으므로 컨트롤러 주입은 그대로 된다.
+ * 반대는 안 된다 - 부모는 자식을 못 본다. 이 단방향이 계층 역전을 구조로 막아준다.
  *
- * @EnableMethodSecurity가 SecurityConfig(루트)가 아니라 여기 있는 이유:
- * 이 애노테이션은 '자기가 속한 컨텍스트의 빈'에만 프록시를 건다. @PreAuthorize를 붙일
- * 컨트롤러·서비스가 이 자식 컨텍스트에 있으므로 여기 둬야 한다. 루트에 두면 애노테이션은
- * 붙어 있는데 권한 검사가 조용히 통째로 건너뛰어진다(예외도 로그도 없다).
+ * useDefaultFilters = false가 핵심이다. 이게 없으면 기본 필터(@Component 전체)가 살아 있어
+ * 서비스가 부모·자식에 두 벌 생긴다. 그러면 컨트롤러는 트랜잭션 프록시가 안 걸린 자식 사본을
+ * 주입받아, 트랜잭션이 조용히 없는 상태가 된다.
+ *
+ * @EnableMethodSecurity가 여기 있는 이유: 이 애노테이션은 '자기가 속한 컨텍스트의 빈'에만
+ * 프록시를 건다. @PreAuthorize는 지금 컨트롤러(자식)에만 붙어 있으므로 실제로 일하는 것은
+ * 이쪽이다. 여기서 빼면 컨트롤러의 권한 검사가 예외도 로그도 없이 건너뛰어진다.
+ * (RootConfig에도 같은 스위치가 있다. 서비스에 @PreAuthorize를 붙이는 날을 위한 대비다.)
+ *
+ * @EnableTransactionManagement와 @EnableScheduling은 RootConfig로 갔다. 대상 빈이 거기 있다.
+ *
+ * @Configuration이 필요한 이유: 이게 없어도 @ComponentScan 덕에 lite 모드로 처리돼 동작은 한다.
+ * 다만 lite 모드는 CGLIB 프록시가 없어서, @Bean 메서드가 다른 @Bean 메서드를 호출하면
+ * 싱글턴이 아니라 새 인스턴스가 조용히 만들어진다.
  */
+@Configuration
 @EnableWebMvc
-@EnableMethodSecurity
-@EnableScheduling
-@EnableTransactionManagement   // 없으면 @Transactional이 조용히 무시된다
-@ComponentScan(basePackages = {"com.teenyfin.teenymoney.domain",
-                                "com.teenyfin.teenymoney.global"})
+@EnableMethodSecurity   // 없으면 컨트롤러의 @PreAuthorize가 조용히 무시된다
+@ComponentScan(
+        basePackages = {"com.teenyfin.teenymoney.domain", "com.teenyfin.teenymoney.global"},
+        useDefaultFilters = false,
+        includeFilters = {
+                @ComponentScan.Filter(type = FilterType.ANNOTATION, classes = Controller.class),
+                @ComponentScan.Filter(type = FilterType.ANNOTATION, classes = ControllerAdvice.class)
+        })
 public class ServletConfig implements WebMvcConfigurer {
 
     /**
@@ -56,26 +72,17 @@ public class ServletConfig implements WebMvcConfigurer {
         );
     }
 
+    /**
+     * API 서버라 src/main/webapp이 없다. 정적 리소스는 springfox jar 안의 Swagger UI가 전부다.
+     * /swagger-resources, /v2/api-docs는 springfox 컨트롤러가 처리하므로 여기 둘 대상이 아니다.
+     */
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        registry
-                .addResourceHandler("/resources/**") // url이 /resources/로 시작하는 모든 경로
-                .addResourceLocations("/resources/"); // webapp/resources/경로로 매핑
-
-        // Swagger UI 리소스를 위한 핸들러 설정
         registry.addResourceHandler("/swagger-ui.html")
                 .addResourceLocations("classpath:/META-INF/resources/");
 
-        // Swagger WebJar 리소스 설정
+        // Swagger UI가 로드하는 js/css
         registry.addResourceHandler("/webjars/**")
                 .addResourceLocations("classpath:/META-INF/resources/webjars/");
-
-        // Swagger 리소스 설정
-        registry.addResourceHandler("/swagger-resources/**")
-                .addResourceLocations("classpath:/META-INF/resources/");
-
-        registry.addResourceHandler("/v2/api-docs")
-                .addResourceLocations("classpath:/META-INF/resources/");
-
     }
 }

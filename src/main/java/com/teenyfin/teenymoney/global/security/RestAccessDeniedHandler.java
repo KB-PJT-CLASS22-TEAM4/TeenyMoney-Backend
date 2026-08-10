@@ -15,8 +15,7 @@ import java.io.IOException;
  * 인증 실패(401)와 달리 분기가 없다. 인가 실패는 이미 인증이 끝난 뒤의 문제이므로
  * 토큰 관련 사유(만료/위조)를 볼 필요가 없고, 사유도 '권한 부족' 하나뿐이다.
  *
- * 등록은 SecurityConfig의 exceptionHandling에서 한다(Task 4).
- * 실제로 호출되려면 @PreAuthorize 같은 role 게이팅이 필요하다(향후 이슈).
+ * 등록은 SecurityConfig의 exceptionHandling에서 한다.
  */
 public class RestAccessDeniedHandler implements AccessDeniedHandler {
 

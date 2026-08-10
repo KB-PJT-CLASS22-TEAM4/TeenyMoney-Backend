@@ -24,20 +24,18 @@ public class WebConfig extends AbstractAnnotationConfigDispatcherServletInitiali
         return new Class[] {ServletConfig.class, SwaggerConfig.class};
     }
 
+    // "/"는 default 매핑이라 다른 서블릿이 가져가지 않는 모든 경로가 여기로 온다.
+    // Swagger 경로를 덧붙이지 말 것. 서블릿 스펙의 매핑 패턴은 "/path/*", "*.ext", "/", 정확일치뿐이라
+    // "/webjars/**" 같은 걸 적으면 리터럴 문자열 정확일치로 등록되어 아무것도 매칭하지 않는다.
     @Override
     protected String[] getServletMappings() {
-        return new String[] {
-                "/",
-                "/swagger-ui.html",
-                "/swagger-resources/**",
-                "/v2/api-docs",
-                "/webjars/**"
-        };
+        return new String[] {"/"};
     }
 
-    // POSTbody문자인코딩필터설정-UTF-8설정
     @Override
     protected Filter[] getServletFilters() {
+        // forceEncoding(true)는 응답에도 UTF-8을 강제한다. 이게 없으면 컨테이너가
+        // 지정한 기본 인코딩이 그대로 나가 한글 응답이 깨진다.
         CharacterEncodingFilter characterEncodingFilter= new CharacterEncodingFilter();
         characterEncodingFilter.setEncoding("UTF-8");
         characterEncodingFilter.setForceEncoding(true);

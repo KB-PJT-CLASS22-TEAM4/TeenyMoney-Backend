@@ -18,7 +18,7 @@ import java.io.IOException;
  * 권한 없는 화면을 누를 때마다 로그인 화면으로 무한히 튕긴다.
  *
  * Spring Security가 인증되지 않은 요청을 거부할 때 이 클래스를 호출한다.
- * 등록은 SecurityConfig의 exceptionHandling에서 한다(Task 4).
+ * 등록은 SecurityConfig의 exceptionHandling에서 한다.
  */
 public class RestAuthenticationEntryPoint implements AuthenticationEntryPoint {
 

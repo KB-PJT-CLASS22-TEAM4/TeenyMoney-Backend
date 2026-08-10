@@ -13,8 +13,8 @@ import java.util.UUID;
  * JWT 발급·검증. HS256.
  *
  * 인증 파이프라인의 맨 아래 계층이다. 위쪽이 모두 여기에 의존한다.
- *   로그인(하위3)          → createAccessToken / createRefreshToken
- *   토큰 재발급(하위4)      → parse 로 Refresh 검증
+ *   로그인                  → createAccessToken / createRefreshToken
+ *   토큰 재발급             → parse 로 Refresh 검증
  *   JwtAuthenticationFilter → parse 로 매 요청 Access 검증
  *
  * secret은 Base64로 인코딩된 무작위 키(디코딩 후 최소 256bit=32바이트).
@@ -22,7 +22,10 @@ import java.util.UUID;
  * 만료는 ExpiredJwtException, 서명/형식 오류는 JwtException 계열로 전파한다(호출측이 구분).
  *
  * 스프링 애노테이션이 없는 순수 자바 클래스다. SecurityConfig의 @Bean으로 등록한다.
- * @Component를 붙이면 ServletConfig가 자식 컨텍스트에 빈을 만들어 필터체인(루트)에 안 붙는다.
+ * 생성자가 secret과 만료시간을 값으로 받으므로, 이 값들을 읽는 SecurityConfig가
+ * 필터체인과 같은 자리에서 조립하는 편이 자명하다.
+ * (@Component + 생성자 @Value로도 된다. ServletConfig가 useDefaultFilters = false라
+ *  @Component는 자식 컨텍스트에 복제되지 않고 루트에만 생긴다.)
  */
 public class JwtProvider {
 

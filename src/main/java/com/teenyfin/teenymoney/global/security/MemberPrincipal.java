@@ -15,7 +15,7 @@ package com.teenyfin.teenymoney.global.security;
  *   - toString이 MemberPrincipal[memberId=17, role=PARENT] 로 나와 테스트에서 바로 읽힌다
  *   - 접근자가 getMemberId()가 아니라 memberId() 다 (호출측이 이 이름을 쓴다)
  *
- * 회원이 DB에 실제로 존재하는지는 확인하지 않는다. 그 확인은 로그인(하위3) 시점에
+ * 회원이 DB에 실제로 존재하는지는 확인하지 않는다. 그 확인은 로그인 시점에
  * 이미 끝났다는 전제다.
  */
 public record MemberPrincipal(Long memberId, String role) {
