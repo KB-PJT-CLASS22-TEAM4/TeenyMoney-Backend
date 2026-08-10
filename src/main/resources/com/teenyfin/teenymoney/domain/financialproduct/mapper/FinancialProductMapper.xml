@@ -12,6 +12,7 @@
         <result property="financialProductCode" column="fin_prdt_cd"/>
         <result property="financialCompanyName" column="kor_co_nm"/>
         <result property="name" column="name"/>
+        <result property="interestCalculationType" column="interest_calculation_type"/>
         <result property="rate1m" column="rate_1m"/>
         <result property="rate3m" column="rate_3m"/>
         <result property="rate6m" column="rate_6m"/>
@@ -131,12 +132,14 @@
     <insert id="upsertDepositProduct">
         INSERT INTO T_DPT_PROD_M (
             fin_co_no, fin_prdt_cd, kor_co_nm, name,
+            interest_calculation_type,
             rate_1m, rate_3m, rate_6m, rate_12m,
             early_termination_rate, min_amount, max_amount,
             min_teeny_score, description, is_active
         ) VALUES (
             #{financialCompanyCode}, #{financialProductCode},
             #{financialCompanyName}, #{name},
+            #{interestCalculationType},
             #{rate1m}, #{rate3m}, #{rate6m}, #{rate12m},
             #{earlyTerminationRate}, #{minAmount}, #{maxAmount},
             #{minTeenyScore}, #{description}, #{active}
@@ -144,6 +147,7 @@
         ON DUPLICATE KEY UPDATE
             kor_co_nm = VALUES(kor_co_nm),
             name = VALUES(name),
+            interest_calculation_type = VALUES(interest_calculation_type),
             rate_1m = VALUES(rate_1m),
             rate_3m = VALUES(rate_3m),
             rate_6m = VALUES(rate_6m),

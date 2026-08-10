@@ -6,6 +6,7 @@ import com.teenyfin.teenymoney.domain.financialproduct.finlife.dto.FinlifeProduc
 import com.teenyfin.teenymoney.domain.financialproduct.finlife.dto.FinlifeProductOptionDTO;
 import com.teenyfin.teenymoney.domain.financialproduct.mapper.FinancialProductMapper;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.DepositProductVO;
+import com.teenyfin.teenymoney.domain.financialproduct.vo.SavingProductVO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -51,7 +52,32 @@ class FinancialProductSyncServiceTest {
         assertEquals(1, affected);
         assertEquals(new BigDecimal("3.50"), captor.getValue().getRate12m());
         assertNull(captor.getValue().getRate1m());
+        assertEquals("SIMPLE",
+                captor.getValue().getInterestCalculationType());
         assertEquals("0010927", captor.getValue().getFinancialCompanyCode());
+    }
+
+    @Test
+    void savingUsesOneCoherentOptionProfile() {
+        FinlifeApiResponseDTO.Result result = new FinlifeApiResponseDTO.Result();
+        result.setBaseList(List.of(base()));
+        result.setOptionList(List.of(
+                option("12", "3.50", "F", "S"),
+                option("6", "4.00", "S", "M"),
+                option("12", "4.20", "S", "M")));
+        when(client.fetchSavingProducts()).thenReturn(result);
+        when(mapper.upsertSavingProduct(any())).thenReturn(1);
+
+        service.syncSavingProducts();
+
+        ArgumentCaptor<SavingProductVO> captor =
+                ArgumentCaptor.forClass(SavingProductVO.class);
+        verify(mapper).upsertSavingProduct(captor.capture());
+        SavingProductVO product = captor.getValue();
+        assertEquals("FREE", product.getSavingsType());
+        assertEquals("COMPOUND", product.getInterestCalculationType());
+        assertEquals(new BigDecimal("4.00"), product.getRate6m());
+        assertEquals(new BigDecimal("4.20"), product.getRate12m());
     }
 
     private FinlifeProductBaseDTO base() {
@@ -64,11 +90,21 @@ class FinancialProductSyncServiceTest {
     }
 
     private FinlifeProductOptionDTO option(String term, String rate) {
+        return option(term, rate, null, null);
+    }
+
+    private FinlifeProductOptionDTO option(
+            String term,
+            String rate,
+            String reserveType,
+            String interestRateType) {
         FinlifeProductOptionDTO option = new FinlifeProductOptionDTO();
         option.setFinancialCompanyCode("0010927");
         option.setFinancialProductCode("WR0001B");
         option.setSavingTerm(term);
         option.setInterestRate(new BigDecimal(rate));
+        option.setReserveType(reserveType);
+        option.setInterestRateType(interestRateType);
         return option;
     }
 }

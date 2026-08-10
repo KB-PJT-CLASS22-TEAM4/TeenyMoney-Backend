@@ -192,6 +192,8 @@ public class FinancialProductService {
                 .ineligibleReason(ineligibleReason(eligible, benefit))
                 .availableTerms(terms(rates))
                 .rates(rates)
+                .interestCalculationType(
+                        product.getInterestCalculationType())
                 .build();
     }
 
@@ -215,6 +217,9 @@ public class FinancialProductService {
                 .ineligibleReason(ineligibleReason(eligible, benefit))
                 .availableTerms(terms(rates))
                 .rates(rates)
+                .savingsType(product.getSavingsType())
+                .interestCalculationType(
+                        product.getInterestCalculationType())
                 .build();
     }
 
@@ -231,8 +236,10 @@ public class FinancialProductService {
                 .eligible(eligible)
                 .ineligibleReason(loanIneligibleReason(product, benefit))
                 .availableTerms(LOAN_TERMS)
-                .rates(List.of())
-                .expectedAppliedRate(benefit.getLoanRate())
+                .baseRate(product.getBaseRate())
+                .expectedAppliedRate(product.getBaseRate())
+                .lateFeeRate(product.getLateFeeRate())
+                .repaymentType(product.getRepaymentType())
                 .build();
     }
 
@@ -261,6 +268,8 @@ public class FinancialProductService {
                 .earlyTerminationRate(product.getEarlyTerminationRate())
                 .minimumAmount(product.getMinAmount())
                 .maximumAmount(product.getMaxAmount())
+                .interestCalculationType(
+                        product.getInterestCalculationType())
                 .build();
     }
 
@@ -309,8 +318,8 @@ public class FinancialProductService {
                 .eligible(loanEligible(product, benefit))
                 .ineligibleReason(loanIneligibleReason(product, benefit))
                 .availableTerms(LOAN_TERMS)
-                .rates(List.of())
-                .expectedAppliedRate(benefit.getLoanRate())
+                .baseRate(product.getBaseRate())
+                .expectedAppliedRate(product.getBaseRate())
                 .lateFeeRate(product.getLateFeeRate())
                 .minimumAmount(product.getMinAmount())
                 .maximumAmount(product.getMaxAmount())

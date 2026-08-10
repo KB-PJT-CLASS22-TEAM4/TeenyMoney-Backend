@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -88,7 +89,13 @@ public class FinancialProductSyncService {
             List<FinlifeProductOptionDTO> options) {
         DepositProductVO product = new DepositProductVO();
         applyBase(base, product);
-        applyRates(options, option -> true,
+        FinlifeProductOptionDTO representative = representativeOption(options);
+        String interestRateType = normalizeInterestRateType(representative);
+        product.setInterestCalculationType(
+                interestCalculationType(interestRateType));
+        applyRates(options,
+                option -> interestRateType.equals(
+                        normalizeInterestRateType(option)),
                 product::setRate1m, product::setRate3m,
                 product::setRate6m, product::setRate12m);
         product.setEarlyTerminationRate(DEFAULT_DEPOSIT_TERMINATION_RATE);
@@ -112,16 +119,16 @@ public class FinancialProductSyncService {
         product.setFinancialCompanyName(base.getFinancialCompanyName());
         product.setName(base.getProductName());
 
-        String reserveType = options.stream()
-                .anyMatch(option -> "F".equalsIgnoreCase(option.getReserveType()))
-                ? "F" : "S";
-        product.setSavingsType("F".equals(reserveType) ? "FIXED" : "FREE");
-        product.setInterestCalculationType(options.stream()
-                .anyMatch(option -> "M".equalsIgnoreCase(
-                        option.getInterestRateType()))
-                ? "COMPOUND" : "SIMPLE");
+        FinlifeProductOptionDTO representative = representativeOption(options);
+        String reserveType = normalizeReserveType(representative);
+        String interestRateType = normalizeInterestRateType(representative);
+        product.setSavingsType(savingsType(reserveType));
+        product.setInterestCalculationType(
+                interestCalculationType(interestRateType));
         applyRates(options,
-                option -> reserveType.equalsIgnoreCase(option.getReserveType()),
+                option -> reserveType.equals(normalizeReserveType(option))
+                        && interestRateType.equals(
+                        normalizeInterestRateType(option)),
                 product::setRate1m, product::setRate3m,
                 product::setRate6m, product::setRate12m);
         product.setEarlyTerminationRate(DEFAULT_SAVING_TERMINATION_RATE);
@@ -160,6 +167,36 @@ public class FinancialProductSyncService {
         rate3m.accept(rates.get(3));
         rate6m.accept(rates.get(6));
         rate12m.accept(rates.get(12));
+    }
+
+    private FinlifeProductOptionDTO representativeOption(
+            List<FinlifeProductOptionDTO> options) {
+        return safe(options).stream()
+                .filter(this::validOption)
+                .max(Comparator
+                        .comparing(FinlifeProductOptionDTO::getInterestRate)
+                        .thenComparingInt(option -> Integer.parseInt(
+                                option.getSavingTerm())))
+                .orElse(null);
+    }
+
+    private String normalizeReserveType(FinlifeProductOptionDTO option) {
+        return option != null
+                && "F".equalsIgnoreCase(option.getReserveType()) ? "F" : "S";
+    }
+
+    private String normalizeInterestRateType(
+            FinlifeProductOptionDTO option) {
+        return option != null
+                && "M".equalsIgnoreCase(option.getInterestRateType()) ? "M" : "S";
+    }
+
+    private String savingsType(String reserveType) {
+        return "F".equals(reserveType) ? "FIXED" : "FREE";
+    }
+
+    private String interestCalculationType(String interestRateType) {
+        return "M".equals(interestRateType) ? "COMPOUND" : "SIMPLE";
     }
 
     private Map<String, List<FinlifeProductOptionDTO>> groupOptions(
