@@ -4,12 +4,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.teenyfin.teenymoney.domain.quest.dto.request.QuestCreateRequestDTO;
 import com.teenyfin.teenymoney.domain.quest.dto.request.QuestDeclineRequestDTO;
+import com.teenyfin.teenymoney.domain.quest.dto.request.QuestRejectRequestDTO;
 import com.teenyfin.teenymoney.domain.quest.dto.request.QuestUpdateRequestDTO;
 import com.teenyfin.teenymoney.domain.quest.dto.response.QuestDetailResponseDTO;
 import com.teenyfin.teenymoney.domain.quest.dto.response.QuestListResponseDTO;
 import com.teenyfin.teenymoney.domain.quest.service.QuestCreationService;
 import com.teenyfin.teenymoney.domain.quest.service.QuestProgressService;
 import com.teenyfin.teenymoney.domain.quest.service.QuestQueryService;
+import com.teenyfin.teenymoney.domain.quest.service.QuestReviewService;
+import com.teenyfin.teenymoney.domain.quest.vo.AfterDeadlineAction;
 import com.teenyfin.teenymoney.domain.quest.vo.DeclineReasonCode;
 import com.teenyfin.teenymoney.domain.quest.vo.QuestStatus;
 import com.teenyfin.teenymoney.domain.quest.vo.QuestTab;
@@ -57,13 +60,18 @@ class QuestControllerTest {
     private final QuestProgressService questProgressService = mock(QuestProgressService.class);
     private final QuestCreationService creationService = mock(QuestCreationService.class);
     private final QuestQueryService queryService = mock(QuestQueryService.class);
+    private final QuestReviewService reviewService = mock(QuestReviewService.class);
     private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(
-                        new QuestController(questProgressService, creationService, queryService))
+                        new QuestController(
+                                questProgressService,
+                                creationService,
+                                queryService,
+                                reviewService))
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .setMessageConverters(new MappingJackson2HttpMessageConverter(objectMapper))
                 .setControllerAdvice(new GlobalExceptionAdvice())
@@ -305,6 +313,77 @@ class QuestControllerTest {
         // 무엇이 필수인지는 퀘스트마다 다르므로 컨트롤러가 아니라 서비스가 판단한다.
         verify(questProgressService).submitVerification(
                 new MemberPrincipal(2L, "CHILD"), 55L, null, null);
+    }
+
+    @Test
+    @DisplayName("인증 승인은 부모와 두 ID를 서비스에 전달하고 갱신된 전체 상세를 반환한다")
+    void approveVerificationReturnsFreshFullDetail() throws Exception {
+        given(queryService.getQuest(any(), eq(55L))).willReturn(detail());
+
+        var response = mockMvc.perform(
+                        patch("/quests/55/verifications/9/approve"))
+                .andReturn().getResponse();
+        String body = response.getContentAsString(StandardCharsets.UTF_8);
+
+        assertEquals(200, response.getStatus(), body);
+        assertTrue(body.contains("\"questId\":55"), body);
+        assertTrue(body.contains("\"rewardAmount\":1000"), body);
+        assertTrue(body.contains("\"teenyScoreEnabled\":true"), body);
+        verify(reviewService).approve(
+                new MemberPrincipal(1L, "PARENT"), 55L, 9L);
+        verify(queryService).getQuest(
+                new MemberPrincipal(1L, "PARENT"), 55L);
+    }
+
+    @Test
+    @DisplayName("인증 반려는 사유와 기한 후 선택을 서비스에 전달하고 갱신된 전체 상세를 반환한다")
+    void rejectVerificationPassesReviewRequestAndReturnsFreshDetail()
+            throws Exception {
+        given(queryService.getQuest(any(), eq(55L))).willReturn(detail());
+        ArgumentCaptor<QuestRejectRequestDTO> captor =
+                ArgumentCaptor.forClass(QuestRejectRequestDTO.class);
+        LocalDateTime extension = LocalDateTime.of(2026, 8, 20, 20, 0);
+
+        var response = mockMvc.perform(
+                        patch("/quests/55/verifications/9/reject")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsBytes(
+                                        QuestRejectRequestDTO.builder()
+                                                .reason("다시 확인해 주세요")
+                                                .afterDeadlineAction(
+                                                        AfterDeadlineAction.EXTEND)
+                                                .extendedDeadline(extension)
+                                                .build())))
+                .andReturn().getResponse();
+        String body = response.getContentAsString(StandardCharsets.UTF_8);
+
+        assertEquals(200, response.getStatus(), body);
+        assertTrue(body.contains("\"questId\":55"), body);
+        verify(reviewService).reject(
+                eq(new MemberPrincipal(1L, "PARENT")),
+                eq(55L),
+                eq(9L),
+                captor.capture());
+        assertEquals("다시 확인해 주세요", captor.getValue().getReason());
+        assertEquals(AfterDeadlineAction.EXTEND,
+                captor.getValue().getAfterDeadlineAction());
+        assertEquals(extension, captor.getValue().getExtendedDeadline());
+    }
+
+    @Test
+    @DisplayName("반려 사유가 비어 있으면 필드 오류 400이고 심사 서비스를 부르지 않는다")
+    void rejectVerificationWithoutReasonReturns400() throws Exception {
+        var response = mockMvc.perform(
+                        patch("/quests/55/verifications/9/reject")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{}"))
+                .andReturn().getResponse();
+        String body = response.getContentAsString(StandardCharsets.UTF_8);
+
+        assertEquals(400, response.getStatus(), body);
+        assertTrue(body.contains("\"code\":\"COMMON_INVALID_INPUT\""), body);
+        assertTrue(body.contains("\"reason\""), body);
+        verify(reviewService, never()).reject(any(), any(), any(), any());
     }
 
     /** 수락·거절·인증 제출은 자녀 전용이라 setUp 의 PARENT 인증을 CHILD 로 바꾼다. */

@@ -2,12 +2,14 @@ package com.teenyfin.teenymoney.domain.quest.controller;
 
 import com.teenyfin.teenymoney.domain.quest.dto.request.QuestCreateRequestDTO;
 import com.teenyfin.teenymoney.domain.quest.dto.request.QuestDeclineRequestDTO;
+import com.teenyfin.teenymoney.domain.quest.dto.request.QuestRejectRequestDTO;
 import com.teenyfin.teenymoney.domain.quest.dto.request.QuestUpdateRequestDTO;
 import com.teenyfin.teenymoney.domain.quest.dto.response.QuestDetailResponseDTO;
 import com.teenyfin.teenymoney.domain.quest.dto.response.QuestListResponseDTO;
 import com.teenyfin.teenymoney.domain.quest.service.QuestCreationService;
 import com.teenyfin.teenymoney.domain.quest.service.QuestProgressService;
 import com.teenyfin.teenymoney.domain.quest.service.QuestQueryService;
+import com.teenyfin.teenymoney.domain.quest.service.QuestReviewService;
 import com.teenyfin.teenymoney.domain.quest.vo.QuestTab;
 import com.teenyfin.teenymoney.global.response.ApiResponse;
 import com.teenyfin.teenymoney.global.security.MemberPrincipal;
@@ -33,7 +35,7 @@ import org.springframework.web.multipart.MultipartFile;
 import javax.validation.Valid;
 import java.util.List;
 
-@Api(tags = "퀘스트", description = "퀘스트 생성·조회·수정·삭제·수락·거절·인증 제출 API")
+@Api(tags = "퀘스트", description = "퀘스트 생성·조회·진행·인증 제출·부모 심사 API")
 @RestController
 @RequestMapping("/quests")
 @RequiredArgsConstructor
@@ -42,6 +44,7 @@ public class QuestController {
     private final QuestProgressService questProgressService;
     private final QuestCreationService questCreationService;
     private final QuestQueryService questQueryService;
+    private final QuestReviewService questReviewService;
 
     @ApiOperation(
             value = "퀘스트 목록 조회",
@@ -145,6 +148,37 @@ public class QuestController {
             @ApiParam(value = "인증 사진 한 장")
             @RequestParam(value = "image", required = false) MultipartFile image) {
         questProgressService.submitVerification(principal, questId, content, image);
+        return ApiResponse.ok(questQueryService.getQuest(principal, questId));
+    }
+
+    @ApiOperation(
+            value = "퀘스트 인증 승인",
+            notes = "부모 본인의 퀘스트에서 최신 PENDING 인증만 승인합니다. "
+                    + "현금 보상, 티니점수, 인증 승인, 퀘스트 완료를 한 트랜잭션으로 처리하고 최신 전체 상세를 반환합니다.")
+    @PreAuthorize("hasRole('PARENT')")
+    @PatchMapping("/{questId}/verifications/{verificationId}/approve")
+    public ApiResponse<QuestDetailResponseDTO> approveVerification(
+            @AuthenticationPrincipal MemberPrincipal principal,
+            @PathVariable Long questId,
+            @PathVariable Long verificationId) {
+        questReviewService.approve(principal, questId, verificationId);
+        return ApiResponse.ok(questQueryService.getQuest(principal, questId));
+    }
+
+    @ApiOperation(
+            value = "퀘스트 인증 반려",
+            notes = "최신 PENDING 인증을 사유와 함께 반려합니다. 기한 전에는 재시도하고, "
+                    + "기한 후에는 EXTEND 또는 FAIL을 선택합니다. 마지막 인증 기회 반려는 항상 최종 실패입니다. "
+                    + "처리 후 최신 전체 상세를 반환합니다.")
+    @PreAuthorize("hasRole('PARENT')")
+    @PatchMapping("/{questId}/verifications/{verificationId}/reject")
+    public ApiResponse<QuestDetailResponseDTO> rejectVerification(
+            @AuthenticationPrincipal MemberPrincipal principal,
+            @PathVariable Long questId,
+            @PathVariable Long verificationId,
+            @RequestBody @Valid QuestRejectRequestDTO request) {
+        questReviewService.reject(
+                principal, questId, verificationId, request);
         return ApiResponse.ok(questQueryService.getQuest(principal, questId));
     }
 }
