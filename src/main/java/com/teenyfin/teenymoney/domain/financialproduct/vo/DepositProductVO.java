@@ -23,7 +23,6 @@ public class DepositProductVO {
     private BigDecimal earlyTerminationRate;
     private Long minAmount;
     private Long maxAmount;
-    private Integer minTeenyScore;
     private String description;
     private Boolean active;
 }

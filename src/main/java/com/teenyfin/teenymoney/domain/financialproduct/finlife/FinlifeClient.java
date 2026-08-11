@@ -3,6 +3,8 @@ package com.teenyfin.teenymoney.domain.financialproduct.finlife;
 import com.teenyfin.teenymoney.domain.financialproduct.exception.FinancialProductErrorCode;
 import com.teenyfin.teenymoney.domain.financialproduct.finlife.dto.FinlifeApiResponseDTO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
+import lombok.extern.log4j.Log4j;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -12,12 +14,12 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.ArrayList;
-
+@Log4j2
 @Component
 public class FinlifeClient {
 
     private static final String SUCCESS_CODE = "000";
-    private static final int TIMEOUT_MILLISECONDS = 5_000;
+    private static final int TIMEOUT_MILLISECONDS = 30_000;
 
     private final RestTemplate restTemplate;
     private final String apiKey;
@@ -121,6 +123,13 @@ public class FinlifeClient {
         } catch (BusinessException exception) {
             throw exception;
         } catch (RestClientException exception) {
+            log.error(
+                    "금감원 API 호출 실패: endpoint={}, pageNumber={}, message={}",
+                    endpoint,
+                    pageNumber,
+                    exception.getMessage(),
+                    exception
+            );
             throw new BusinessException(
                     FinancialProductErrorCode.FINLIFE_API_UNAVAILABLE);
         }

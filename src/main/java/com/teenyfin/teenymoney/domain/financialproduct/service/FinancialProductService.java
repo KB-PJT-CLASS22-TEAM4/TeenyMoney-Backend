@@ -1,15 +1,19 @@
 package com.teenyfin.teenymoney.domain.financialproduct.service;
 
 import com.teenyfin.teenymoney.domain.financialproduct.dto.response.FinancialProductDetailResponseDTO;
+import com.teenyfin.teenymoney.domain.financialproduct.dto.response.FinancialProductEnrollmentListResponseDTO;
+import com.teenyfin.teenymoney.domain.financialproduct.dto.response.FinancialProductEnrollmentResponseDTO;
 import com.teenyfin.teenymoney.domain.financialproduct.dto.response.FinancialProductListResponseDTO;
 import com.teenyfin.teenymoney.domain.financialproduct.dto.response.ProductRateResponseDTO;
 import com.teenyfin.teenymoney.domain.financialproduct.exception.FinancialProductErrorCode;
 import com.teenyfin.teenymoney.domain.financialproduct.mapper.FinancialProductMapper;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.DepositProductVO;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductBenefitVO;
+import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductEnrollmentVO;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductType;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.LoanProductVO;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.SavingProductVO;
+import com.teenyfin.teenymoney.domain.family.service.FamilyAccessService;
 import com.teenyfin.teenymoney.domain.teenyscore.exception.TeenyScoreErrorCode;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import com.teenyfin.teenymoney.global.security.MemberPrincipal;
@@ -24,16 +28,20 @@ import java.util.List;
 public class FinancialProductService {
 
     private static final List<Integer> LOAN_TERMS = List.of(1, 3, 6, 12);
-    private static final String INSUFFICIENT_SCORE = "INSUFFICIENT_TEENY_SCORE";
+    private static final String INSUFFICIENT_GRADE = "INSUFFICIENT_GRADE";
     private static final String LOAN_GRADE_RESTRICTED =
             "LOAN_NOT_AVAILABLE_FOR_GRADE";
     private static final String PARENT_CANNOT_ENROLL =
             "PARENT_CANNOT_ENROLL";
 
     private final FinancialProductMapper financialProductMapper;
+    private final FamilyAccessService familyAccessService;
 
-    public FinancialProductService(FinancialProductMapper financialProductMapper) {
+    public FinancialProductService(
+            FinancialProductMapper financialProductMapper,
+            FamilyAccessService familyAccessService) {
         this.financialProductMapper = financialProductMapper;
+        this.familyAccessService = familyAccessService;
     }
 
     @Transactional(readOnly = true)
@@ -82,6 +90,109 @@ public class FinancialProductService {
     }
 
     @Transactional(readOnly = true)
+    public List<FinancialProductEnrollmentListResponseDTO> getProductsByChildId(
+            MemberPrincipal principal,
+            Long childId) {
+        requireParentChildAccess(principal, childId);
+        List<FinancialProductEnrollmentListResponseDTO> enrollments =
+                new ArrayList<>();
+        financialProductMapper.selectDepositEnrollmentsByChildId(childId)
+                .stream().map(FinancialProductEnrollmentListResponseDTO::of)
+                .forEach(enrollments::add);
+        financialProductMapper.selectSavingEnrollmentsByChildId(childId)
+                .stream().map(FinancialProductEnrollmentListResponseDTO::of)
+                .forEach(enrollments::add);
+        financialProductMapper.selectLoanEnrollmentsByChildId(childId)
+                .stream().map(FinancialProductEnrollmentListResponseDTO::of)
+                .forEach(enrollments::add);
+        return enrollments;
+    }
+
+    @Transactional(readOnly = true)
+    public List<FinancialProductEnrollmentListResponseDTO>
+            getDepositProductsByChildId(
+            MemberPrincipal principal,
+            Long childId) {
+        requireParentChildAccess(principal, childId);
+        return financialProductMapper.selectDepositEnrollmentsByChildId(childId)
+                .stream()
+                .map(FinancialProductEnrollmentListResponseDTO::of)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<FinancialProductEnrollmentListResponseDTO>
+            getSavingProductsByChildId(
+            MemberPrincipal principal,
+            Long childId) {
+        requireParentChildAccess(principal, childId);
+        return financialProductMapper.selectSavingEnrollmentsByChildId(childId)
+                .stream()
+                .map(FinancialProductEnrollmentListResponseDTO::of)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<FinancialProductEnrollmentListResponseDTO>
+            getLoanProductsByChildId(
+            MemberPrincipal principal,
+            Long childId) {
+        requireParentChildAccess(principal, childId);
+        return financialProductMapper.selectLoanEnrollmentsByChildId(childId)
+                .stream()
+                .map(FinancialProductEnrollmentListResponseDTO::of)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<FinancialProductEnrollmentListResponseDTO> getMyEnrollments(
+            MemberPrincipal principal) {
+        Long childId = requireChild(principal);
+        List<FinancialProductEnrollmentListResponseDTO> enrollments =
+                new ArrayList<>();
+        financialProductMapper.selectDepositEnrollmentsByChildId(childId)
+                .stream().map(FinancialProductEnrollmentListResponseDTO::of)
+                .forEach(enrollments::add);
+        financialProductMapper.selectSavingEnrollmentsByChildId(childId)
+                .stream().map(FinancialProductEnrollmentListResponseDTO::of)
+                .forEach(enrollments::add);
+        financialProductMapper.selectLoanEnrollmentsByChildId(childId)
+                .stream().map(FinancialProductEnrollmentListResponseDTO::of)
+                .forEach(enrollments::add);
+        return enrollments;
+    }
+
+    @Transactional(readOnly = true)
+    public List<FinancialProductEnrollmentListResponseDTO>
+            getMyDepositEnrollments(MemberPrincipal principal) {
+        return financialProductMapper
+                .selectDepositEnrollmentsByChildId(requireChild(principal))
+                .stream()
+                .map(FinancialProductEnrollmentListResponseDTO::of)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<FinancialProductEnrollmentListResponseDTO>
+            getMySavingEnrollments(MemberPrincipal principal) {
+        return financialProductMapper
+                .selectSavingEnrollmentsByChildId(requireChild(principal))
+                .stream()
+                .map(FinancialProductEnrollmentListResponseDTO::of)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<FinancialProductEnrollmentListResponseDTO>
+            getMyLoanEnrollments(MemberPrincipal principal) {
+        return financialProductMapper
+                .selectLoanEnrollmentsByChildId(requireChild(principal))
+                .stream()
+                .map(FinancialProductEnrollmentListResponseDTO::of)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
     public FinancialProductDetailResponseDTO getProductDetail(
             MemberPrincipal principal,
             String productType,
@@ -115,6 +226,39 @@ public class FinancialProductService {
         return loanDetail(findLoan(productId), findBenefit(principal));
     }
 
+    @Transactional(readOnly = true)
+    public FinancialProductEnrollmentResponseDTO getProductDetailByChildId(
+            MemberPrincipal principal,
+            Long childId,
+            String productType,
+            Long enrollmentId) {
+        requireParentChildAccess(principal, childId);
+        return enrollmentDetail(childId, productType, enrollmentId);
+    }
+
+    private FinancialProductEnrollmentResponseDTO enrollmentDetail(
+            Long childId,
+            String productType,
+            Long enrollmentId) {
+        FinancialProductEnrollmentVO enrollment = switch (
+                FinancialProductType.from(productType)) {
+            case DEPOSIT -> financialProductMapper
+                    .selectDepositEnrollmentByChildIdAndId(
+                            childId, enrollmentId);
+            case SAVING -> financialProductMapper
+                    .selectSavingEnrollmentByChildIdAndId(
+                            childId, enrollmentId);
+            case LOAN -> financialProductMapper
+                    .selectLoanEnrollmentByChildIdAndId(
+                            childId, enrollmentId);
+        };
+        if (enrollment == null) {
+            throw new BusinessException(FinancialProductErrorCode
+                    .FINANCIAL_PRODUCT_ENROLLMENT_NOT_FOUND);
+        }
+        return FinancialProductEnrollmentResponseDTO.of(enrollment);
+    }
+
     private FinancialProductBenefitVO findBenefit(MemberPrincipal principal) {
         if (principal == null) {
             throw new BusinessException(
@@ -138,6 +282,24 @@ public class FinancialProductService {
                     TeenyScoreErrorCode.TEENY_SCORE_CHILD_NOT_FOUND);
         }
         return benefit;
+    }
+
+    private void requireParentChildAccess(
+            MemberPrincipal principal,
+            Long childId) {
+        if (principal == null || !"PARENT".equals(principal.role())) {
+            throw new BusinessException(
+                    FinancialProductErrorCode.FINANCIAL_PRODUCT_PARENT_ONLY);
+        }
+        familyAccessService.requireChildAccess(principal, childId);
+    }
+
+    private Long requireChild(MemberPrincipal principal) {
+        if (principal == null || !"CHILD".equals(principal.role())) {
+            throw new BusinessException(
+                    FinancialProductErrorCode.FINANCIAL_PRODUCT_CHILD_ONLY);
+        }
+        return principal.memberId();
     }
 
     private DepositProductVO findDeposit(Long id) {
@@ -175,8 +337,7 @@ public class FinancialProductService {
     private FinancialProductListResponseDTO depositListItem(
             DepositProductVO product,
             FinancialProductBenefitVO benefit) {
-        boolean eligible = scoreEligible(
-                benefit.getTeenyScore(), product.getMinTeenyScore());
+        boolean eligible = !isParentView(benefit);
         List<ProductRateResponseDTO> rates = rates(
                 product.getRate1m(), product.getRate3m(),
                 product.getRate6m(), product.getRate12m(),
@@ -186,8 +347,8 @@ public class FinancialProductService {
                 .productType(FinancialProductType.DEPOSIT)
                 .financialCompanyName(product.getFinancialCompanyName())
                 .productName(product.getName())
-                .minimumTeenyScore(product.getMinTeenyScore())
-                .currentTeenyScore(benefit.getTeenyScore())
+                .appliedGradeId(benefit.getGradeId())
+                .appliedGradeName(benefit.getGradeName())
                 .eligible(eligible)
                 .ineligibleReason(ineligibleReason(eligible, benefit))
                 .availableTerms(terms(rates))
@@ -200,8 +361,7 @@ public class FinancialProductService {
     private FinancialProductListResponseDTO savingListItem(
             SavingProductVO product,
             FinancialProductBenefitVO benefit) {
-        boolean eligible = scoreEligible(
-                benefit.getTeenyScore(), product.getMinTeenyScore());
+        boolean eligible = !isParentView(benefit);
         List<ProductRateResponseDTO> rates = rates(
                 product.getRate1m(), product.getRate3m(),
                 product.getRate6m(), product.getRate12m(),
@@ -211,8 +371,8 @@ public class FinancialProductService {
                 .productType(FinancialProductType.SAVING)
                 .financialCompanyName(product.getFinancialCompanyName())
                 .productName(product.getName())
-                .minimumTeenyScore(product.getMinTeenyScore())
-                .currentTeenyScore(benefit.getTeenyScore())
+                .appliedGradeId(benefit.getGradeId())
+                .appliedGradeName(benefit.getGradeName())
                 .eligible(eligible)
                 .ineligibleReason(ineligibleReason(eligible, benefit))
                 .availableTerms(terms(rates))
@@ -231,8 +391,10 @@ public class FinancialProductService {
                 .productId(product.getId())
                 .productType(FinancialProductType.LOAN)
                 .productName(product.getName())
-                .minimumTeenyScore(product.getMinTeenyScore())
-                .currentTeenyScore(benefit.getTeenyScore())
+                .appliedGradeId(benefit.getGradeId())
+                .appliedGradeName(benefit.getGradeName())
+                .requiredGradeId(product.getRequiredGradeId())
+                .requiredGradeName(product.getRequiredGradeName())
                 .eligible(eligible)
                 .ineligibleReason(loanIneligibleReason(product, benefit))
                 .availableTerms(LOAN_TERMS)
@@ -246,8 +408,7 @@ public class FinancialProductService {
     private FinancialProductDetailResponseDTO depositDetail(
             DepositProductVO product,
             FinancialProductBenefitVO benefit) {
-        boolean eligible = scoreEligible(
-                benefit.getTeenyScore(), product.getMinTeenyScore());
+        boolean eligible = !isParentView(benefit);
         List<ProductRateResponseDTO> rates = rates(
                 product.getRate1m(), product.getRate3m(),
                 product.getRate6m(), product.getRate12m(),
@@ -258,9 +419,8 @@ public class FinancialProductService {
                 .financialCompanyName(product.getFinancialCompanyName())
                 .productName(product.getName())
                 .description(product.getDescription())
-                .currentTeenyScore(benefit.getTeenyScore())
-                .gradeName(benefit.getGradeName())
-                .minimumTeenyScore(product.getMinTeenyScore())
+                .appliedGradeId(benefit.getGradeId())
+                .appliedGradeName(benefit.getGradeName())
                 .eligible(eligible)
                 .ineligibleReason(ineligibleReason(eligible, benefit))
                 .availableTerms(terms(rates))
@@ -276,8 +436,7 @@ public class FinancialProductService {
     private FinancialProductDetailResponseDTO savingDetail(
             SavingProductVO product,
             FinancialProductBenefitVO benefit) {
-        boolean eligible = scoreEligible(
-                benefit.getTeenyScore(), product.getMinTeenyScore());
+        boolean eligible = !isParentView(benefit);
         List<ProductRateResponseDTO> rates = rates(
                 product.getRate1m(), product.getRate3m(),
                 product.getRate6m(), product.getRate12m(),
@@ -288,9 +447,8 @@ public class FinancialProductService {
                 .financialCompanyName(product.getFinancialCompanyName())
                 .productName(product.getName())
                 .description(product.getDescription())
-                .currentTeenyScore(benefit.getTeenyScore())
-                .gradeName(benefit.getGradeName())
-                .minimumTeenyScore(product.getMinTeenyScore())
+                .appliedGradeId(benefit.getGradeId())
+                .appliedGradeName(benefit.getGradeName())
                 .eligible(eligible)
                 .ineligibleReason(ineligibleReason(eligible, benefit))
                 .availableTerms(terms(rates))
@@ -312,9 +470,10 @@ public class FinancialProductService {
                 .productType(FinancialProductType.LOAN)
                 .productName(product.getName())
                 .description(product.getDescription())
-                .currentTeenyScore(benefit.getTeenyScore())
-                .gradeName(benefit.getGradeName())
-                .minimumTeenyScore(product.getMinTeenyScore())
+                .appliedGradeId(benefit.getGradeId())
+                .appliedGradeName(benefit.getGradeName())
+                .requiredGradeId(product.getRequiredGradeId())
+                .requiredGradeName(product.getRequiredGradeName())
                 .eligible(loanEligible(product, benefit))
                 .ineligibleReason(loanIneligibleReason(product, benefit))
                 .availableTerms(LOAN_TERMS)
@@ -327,16 +486,13 @@ public class FinancialProductService {
                 .build();
     }
 
-    private boolean scoreEligible(Integer score, int minimumScore) {
-        return score != null && score >= minimumScore;
-    }
-
     private boolean loanEligible(
             LoanProductVO product,
             FinancialProductBenefitVO benefit) {
         return benefit.getLoanRate() != null
-                && scoreEligible(
-                        benefit.getTeenyScore(), product.getMinTeenyScore());
+                && benefit.getGradeId() != null
+                && product.getRequiredGradeId() != null
+                && benefit.getGradeId() >= product.getRequiredGradeId();
     }
 
     private String loanIneligibleReason(
@@ -348,9 +504,7 @@ public class FinancialProductService {
         if (benefit.getLoanRate() == null) {
             return LOAN_GRADE_RESTRICTED;
         }
-        return scoreEligible(
-                benefit.getTeenyScore(), product.getMinTeenyScore())
-                ? null : INSUFFICIENT_SCORE;
+        return loanEligible(product, benefit) ? null : INSUFFICIENT_GRADE;
     }
 
     private String ineligibleReason(
@@ -359,7 +513,7 @@ public class FinancialProductService {
         if (isParentView(benefit)) {
             return PARENT_CANNOT_ENROLL;
         }
-        return eligible ? null : INSUFFICIENT_SCORE;
+        return eligible ? null : INSUFFICIENT_GRADE;
     }
 
     private boolean isParentView(FinancialProductBenefitVO benefit) {

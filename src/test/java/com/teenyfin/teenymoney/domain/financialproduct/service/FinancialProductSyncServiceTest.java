@@ -54,6 +54,8 @@ class FinancialProductSyncServiceTest {
         assertNull(captor.getValue().getRate1m());
         assertEquals("SIMPLE",
                 captor.getValue().getInterestCalculationType());
+        assertEquals("이자를 원금에 합산하지 않고 계산하는 단리 예금",
+                captor.getValue().getDescription());
         assertEquals("0010927", captor.getValue().getFinancialCompanyCode());
     }
 
@@ -76,8 +78,27 @@ class FinancialProductSyncServiceTest {
         SavingProductVO product = captor.getValue();
         assertEquals("FREE", product.getSavingsType());
         assertEquals("COMPOUND", product.getInterestCalculationType());
+        assertEquals("원하는 금액을 자유롭게 납입하는 복리 자유적금",
+                product.getDescription());
         assertEquals(new BigDecimal("4.00"), product.getRate6m());
         assertEquals(new BigDecimal("4.20"), product.getRate12m());
+    }
+
+    @Test
+    void fixedSimpleSavingGetsMatchingDescription() {
+        FinlifeApiResponseDTO.Result result = new FinlifeApiResponseDTO.Result();
+        result.setBaseList(List.of(base()));
+        result.setOptionList(List.of(option("12", "3.50", "F", "S")));
+        when(client.fetchSavingProducts()).thenReturn(result);
+        when(mapper.upsertSavingProduct(any())).thenReturn(1);
+
+        service.syncSavingProducts();
+
+        ArgumentCaptor<SavingProductVO> captor =
+                ArgumentCaptor.forClass(SavingProductVO.class);
+        verify(mapper).upsertSavingProduct(captor.capture());
+        assertEquals("매월 정해진 금액을 납입하는 단리 정액적금",
+                captor.getValue().getDescription());
     }
 
     private FinlifeProductBaseDTO base() {

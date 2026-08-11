@@ -20,8 +20,14 @@ public class FinancialProductListResponseDTO {
     private final FinancialProductType productType;
     private final String financialCompanyName;
     private final String productName;
-    private final Integer minimumTeenyScore;
-    private final Integer currentTeenyScore;
+    @ApiModelProperty(value = "이번 달 적용 등급 ID", example = "2")
+    private final Long appliedGradeId;
+    @ApiModelProperty(value = "이번 달 적용 등급명", example = "스타터")
+    private final String appliedGradeName;
+    @ApiModelProperty(value = "대출상품 최소 요구등급 ID", example = "3")
+    private final Long requiredGradeId;
+    @ApiModelProperty(value = "대출상품 최소 요구등급명", example = "플러스")
+    private final String requiredGradeName;
     private final boolean eligible;
     @ApiModelProperty(value = "가입 불가 사유. 가입 가능하면 null")
     private final String ineligibleReason;

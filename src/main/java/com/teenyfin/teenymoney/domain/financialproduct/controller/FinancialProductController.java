@@ -1,6 +1,8 @@
 package com.teenyfin.teenymoney.domain.financialproduct.controller;
 
 import com.teenyfin.teenymoney.domain.financialproduct.dto.response.FinancialProductDetailResponseDTO;
+import com.teenyfin.teenymoney.domain.financialproduct.dto.response.FinancialProductEnrollmentListResponseDTO;
+import com.teenyfin.teenymoney.domain.financialproduct.dto.response.FinancialProductEnrollmentResponseDTO;
 import com.teenyfin.teenymoney.domain.financialproduct.dto.response.FinancialProductListResponseDTO;
 import com.teenyfin.teenymoney.domain.financialproduct.service.FinancialProductService;
 import com.teenyfin.teenymoney.global.response.ApiResponse;
@@ -56,6 +58,52 @@ public class FinancialProductController {
         return ApiResponse.ok(financialProductService.getLoanProducts(principal));
     }
 
+    @GetMapping("/children/{childId}")
+    @ApiOperation(value = "자녀가 가입한 전체 금융상품 목록 조회",
+            notes = "부모가 본인 자녀의 예금·적금·대출 가입상품을 조회합니다. 거절된 신청은 제외합니다.")
+    public ApiResponse<List<FinancialProductEnrollmentListResponseDTO>>
+            getProductsByChildId(
+                    @AuthenticationPrincipal MemberPrincipal principal,
+                    @ApiParam(value = "자녀 회원 ID", example = "2")
+                    @PathVariable Long childId) {
+        return ApiResponse.ok(
+                financialProductService.getProductsByChildId(
+                        principal, childId));
+    }
+
+    @GetMapping("/children/{childId}/deposit")
+    @ApiOperation(value = "자녀가 가입한 예금상품 목록 조회")
+    public ApiResponse<List<FinancialProductEnrollmentListResponseDTO>>
+            getDepositProductsByChildId(
+                    @AuthenticationPrincipal MemberPrincipal principal,
+                    @PathVariable Long childId) {
+        return ApiResponse.ok(
+                financialProductService.getDepositProductsByChildId(
+                        principal, childId));
+    }
+
+    @GetMapping("/children/{childId}/saving")
+    @ApiOperation(value = "자녀가 가입한 적금상품 목록 조회")
+    public ApiResponse<List<FinancialProductEnrollmentListResponseDTO>>
+            getSavingProductsByChildId(
+                    @AuthenticationPrincipal MemberPrincipal principal,
+                    @PathVariable Long childId) {
+        return ApiResponse.ok(
+                financialProductService.getSavingProductsByChildId(
+                        principal, childId));
+    }
+
+    @GetMapping("/children/{childId}/loan")
+    @ApiOperation(value = "자녀가 가입한 대출상품 목록 조회")
+    public ApiResponse<List<FinancialProductEnrollmentListResponseDTO>>
+            getLoanProductsByChildId(
+                    @AuthenticationPrincipal MemberPrincipal principal,
+                    @PathVariable Long childId) {
+        return ApiResponse.ok(
+                financialProductService.getLoanProductsByChildId(
+                        principal, childId));
+    }
+
     @GetMapping("/deposit/{productId}")
     @ApiOperation(value = "예금 상품 상세 조회")
     public ApiResponse<FinancialProductDetailResponseDTO> getDepositProductDetail(
@@ -81,6 +129,81 @@ public class FinancialProductController {
             @ApiParam(value = "대출 상품 ID", example = "1")
             @PathVariable Long productId) {
         return ApiResponse.ok(financialProductService.getLoanProductDetail(principal, productId));
+    }
+
+    @GetMapping("/children/{childId}/deposit/{enrollmentId}")
+    @ApiOperation(value = "자녀가 가입한 예금계약 상세 조회")
+    public ApiResponse<FinancialProductEnrollmentResponseDTO>
+            getDepositProductDetailByChildId(
+                    @AuthenticationPrincipal MemberPrincipal principal,
+                    @PathVariable Long childId,
+                    @ApiParam(value = "예금 가입 계약 ID", example = "1")
+                    @PathVariable Long enrollmentId) {
+        return ApiResponse.ok(
+                financialProductService.getProductDetailByChildId(
+                        principal, childId, "deposit", enrollmentId));
+    }
+
+    @GetMapping("/children/{childId}/saving/{enrollmentId}")
+    @ApiOperation(value = "자녀가 가입한 적금계약 상세 조회")
+    public ApiResponse<FinancialProductEnrollmentResponseDTO>
+            getSavingProductDetailByChildId(
+                    @AuthenticationPrincipal MemberPrincipal principal,
+                    @PathVariable Long childId,
+                    @ApiParam(value = "적금 가입 계약 ID", example = "1")
+                    @PathVariable Long enrollmentId) {
+        return ApiResponse.ok(
+                financialProductService.getProductDetailByChildId(
+                        principal, childId, "saving", enrollmentId));
+    }
+
+    @GetMapping("/children/{childId}/loan/{enrollmentId}")
+    @ApiOperation(value = "자녀가 가입한 대출계약 상세 조회")
+    public ApiResponse<FinancialProductEnrollmentResponseDTO>
+            getLoanProductDetailByChildId(
+                    @AuthenticationPrincipal MemberPrincipal principal,
+                    @PathVariable Long childId,
+                    @ApiParam(value = "대출 가입 계약 ID", example = "1")
+                    @PathVariable Long enrollmentId) {
+        return ApiResponse.ok(
+                financialProductService.getProductDetailByChildId(
+                        principal, childId, "loan", enrollmentId));
+    }
+
+    @GetMapping("/me/enrollments")
+    @ApiOperation(value = "자녀 본인의 전체 금융상품 가입계약 목록 조회")
+    public ApiResponse<List<FinancialProductEnrollmentListResponseDTO>>
+            getMyEnrollments(
+                    @AuthenticationPrincipal MemberPrincipal principal) {
+        return ApiResponse.ok(
+                financialProductService.getMyEnrollments(principal));
+    }
+
+    @GetMapping("/me/enrollments/deposit")
+    @ApiOperation(value = "자녀 본인의 예금 가입계약 목록 조회")
+    public ApiResponse<List<FinancialProductEnrollmentListResponseDTO>>
+            getMyDepositEnrollments(
+                    @AuthenticationPrincipal MemberPrincipal principal) {
+        return ApiResponse.ok(
+                financialProductService.getMyDepositEnrollments(principal));
+    }
+
+    @GetMapping("/me/enrollments/saving")
+    @ApiOperation(value = "자녀 본인의 적금 가입계약 목록 조회")
+    public ApiResponse<List<FinancialProductEnrollmentListResponseDTO>>
+            getMySavingEnrollments(
+                    @AuthenticationPrincipal MemberPrincipal principal) {
+        return ApiResponse.ok(
+                financialProductService.getMySavingEnrollments(principal));
+    }
+
+    @GetMapping("/me/enrollments/loan")
+    @ApiOperation(value = "자녀 본인의 대출 가입계약 목록 조회")
+    public ApiResponse<List<FinancialProductEnrollmentListResponseDTO>>
+            getMyLoanEnrollments(
+                    @AuthenticationPrincipal MemberPrincipal principal) {
+        return ApiResponse.ok(
+                financialProductService.getMyLoanEnrollments(principal));
     }
 
 }
