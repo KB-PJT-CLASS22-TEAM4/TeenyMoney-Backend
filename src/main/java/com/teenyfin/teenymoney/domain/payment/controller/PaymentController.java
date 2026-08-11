@@ -8,6 +8,7 @@ import com.teenyfin.teenymoney.domain.payment.dto.response.PaymentResponseDTO;
 import com.teenyfin.teenymoney.domain.payment.service.PaymentService;
 import com.teenyfin.teenymoney.global.response.ApiResponse;
 import com.teenyfin.teenymoney.global.security.MemberPrincipal;
+import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
 
+@Api(tags = "결제")
 @RestController
 @RequestMapping("/payments")
 @RequiredArgsConstructor
@@ -38,7 +40,7 @@ public class PaymentController {
         return ApiResponse.ok(paymentService.progressPayment(memberPrincipal.memberId(), paymentRequestDTO));
     }
 
-    @ApiOperation(value = "결제 비밀번호 등록", notes = "최초로 결제 비밀번호를 등록합니다.")
+    @ApiOperation(value = "결제 비밀번호 최초 등록", notes = "결제 비밀번호를 최초 등록합니다.")
     @PostMapping("/password")
     public ApiResponse<Void> setPaymentPassword(
             @AuthenticationPrincipal MemberPrincipal memberPrincipal,

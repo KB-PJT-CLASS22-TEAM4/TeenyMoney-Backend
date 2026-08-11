@@ -48,6 +48,7 @@ public class PaymentService {
     private final OrderStore orderStore;
     private final PasswordEncoder passwordEncoder;
 
+    // QR 코드로 주문 정보를 Redis에 저장 후 반환
     @Transactional(readOnly = true)
     public PaymentQrResponseDTO getPaymentInfo(Long memberId, PaymentQrRequestDTO paymentQrRequestDTO) {
 
@@ -61,7 +62,7 @@ public class PaymentService {
             throw new BusinessException(PaymentErrorCode.PAYMENT_ALREADY_COMPLETED);
         }
 
-        // 이미 Redis에 저장된 결제 정보가 있으면 재사용
+        // 이미 Redis에 저장된 주문 정보가 있으면 재사용
         OrderVO orderVO = orderStore.find(paymentQrRequestDTO.getOrderId());
 
         if (orderVO == null) {
@@ -73,7 +74,7 @@ public class PaymentService {
                 throw new BusinessException(PaymentErrorCode.INVALID_MERCHANT_CODE);
             }
 
-            // 결제 정보를 임시로 Redis에 저장, QR 만료 시각까지만 유효
+            // 주문 정보를 임시로 Redis에 저장, QR 만료 시각까지만 유효
             orderVO = OrderVO.builder()
                     .merchantName(paymentQrRequestDTO.getMerchantName())
                     .categoryId(categoryId)
@@ -128,6 +129,7 @@ public class PaymentService {
                 .build();
     }
 
+    // 결제 진행
     @Transactional
     public PaymentResponseDTO progressPayment(Long memberId, PaymentRequestDTO paymentRequestDTO) {
 
@@ -235,6 +237,7 @@ public class PaymentService {
                 .build();
     }
 
+    // 결제 비밀번호 등록, 최초 1회만 실행
     @Transactional
     public void setPaymentPassword(Long memberId, PaymentPasswordRequestDTO paymentPasswordRequestDTO) {
         MemberPaymentVO memberPaymentVO = memberPaymentMapper.selectByMemberId(memberId);
