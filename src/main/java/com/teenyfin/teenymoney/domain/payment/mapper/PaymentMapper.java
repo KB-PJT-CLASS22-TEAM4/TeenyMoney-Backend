@@ -17,6 +17,6 @@ public interface PaymentMapper {
     int insert(PaymentVO paymentVO);
 
     // 멱등성 키로 결제 내역 조회
-    PaymentVO selectByIdempotencyKey(@Param("childId") String idempotencyKey);
+    PaymentVO selectByIdempotencyKey(@Param("idempotencyKey") String idempotencyKey);
 
 }

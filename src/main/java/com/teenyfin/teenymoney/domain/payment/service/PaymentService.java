@@ -9,7 +9,9 @@ import com.teenyfin.teenymoney.domain.payment.dto.request.PaymentRequestDTO;
 import com.teenyfin.teenymoney.domain.payment.dto.response.PaymentQrResponseDTO;
 import com.teenyfin.teenymoney.domain.payment.dto.response.PaymentResponseDTO;
 import com.teenyfin.teenymoney.domain.payment.exception.PaymentErrorCode;
+import com.teenyfin.teenymoney.domain.payment.mapper.MemberPaymentMapper;
 import com.teenyfin.teenymoney.domain.payment.mapper.PaymentMapper;
+import com.teenyfin.teenymoney.domain.payment.vo.MemberPaymentVO;
 import com.teenyfin.teenymoney.domain.payment.vo.OrderVO;
 import com.teenyfin.teenymoney.domain.payment.vo.PaymentVO;
 import com.teenyfin.teenymoney.domain.wallet.exception.WalletErrorCode;
@@ -20,6 +22,7 @@ import com.teenyfin.teenymoney.domain.wallet.vo.WalletVO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,11 +33,16 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 public class PaymentService {
 
+    private static final String DUMMY_PASSWORD_HASH =
+            "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
+
     private final PaymentMapper paymentMapper;
     private final CategoryPolicyMapper categoryPolicyMapper;
+    private final MemberPaymentMapper memberPaymentMapper;
     private final WalletMapper walletMapper;
     private final OrderStore orderStore;
     private final WalletLedgerService walletLedgerService;
+    private final PasswordEncoder passwordEncoder;
 
     @Transactional(readOnly = true)
     public PaymentQrResponseDTO getPaymentInfo(Long memberId, PaymentQrRequestDTO paymentQrRequestDTO) {
@@ -121,6 +129,32 @@ public class PaymentService {
             throw new BusinessException(PaymentErrorCode.INVALID_QR_CODE);
         }
 
+        MemberPaymentVO memberPaymentVO = memberPaymentMapper.selectByMemberId(memberId);
+
+        // 결제 잠금 상태면 막음
+        if (memberPaymentVO.getPaymentLockedUntil() != null
+                && memberPaymentVO.getPaymentLockedUntil().isAfter(LocalDateTime.now())) {
+            throw new BusinessException(PaymentErrorCode.PAYMENT_LOCKED);
+        }
+
+        // 결제 비밀번호 검증
+        if (!passwordEncoder.matches(paymentRequestDTO.getPassword(), memberPaymentVO.getPaymentPassword())) {
+
+            memberPaymentMapper.incrementPaymentPasswordFailedCount(memberId);  // 실패 횟수 1 증가
+            MemberPaymentVO updated = memberPaymentMapper.selectByMemberId(memberId);
+
+            // 증가 후 횟수가 5회면 잠금 시간 10분 후로 설정
+            if (updated.getPaymentPasswordFailedCount() >= 5) {
+                memberPaymentMapper.updatePaymentLockedUntil(memberId, LocalDateTime.now().plusMinutes(10));
+                throw new BusinessException(PaymentErrorCode.PAYMENT_JUST_LOCKED);
+            }
+
+            throw new BusinessException(PaymentErrorCode.INVALID_PAYMENT_PASSWORD);
+        }
+
+        // 성공하면 실패 횟수 초기화
+        memberPaymentMapper.resetPaymentPasswordFailedCount(memberId);
+
         CategoryPolicyVO categoryPolicyVO = categoryPolicyMapper.selectByCategoryIdAndChildId(orderVO.getCategoryId(), memberId);
 
         // 해당 카테고리 정책이 존재하는지 검증
@@ -173,9 +207,6 @@ public class PaymentService {
 
         // 최신 잔액 조회 (debit 이후 실제 반영된 값)
         walletVO = walletMapper.selectWalletForUpdate(walletVO.getId());
-
-        // Redis에서 주문 정보 삭제
-        orderStore.delete(paymentRequestDTO.getOrderId());
 
         return PaymentResponseDTO.builder()
                 .merchantName(orderVO.getMerchantName())

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.teenyfin.teenymoney.domain.payment.mapper.MemberPaymentMapper">
+
+    <resultMap id="memberPaymentResultMap" type="com.teenyfin.teenymoney.domain.payment.vo.MemberPaymentVO">
+        <result property="paymentPassword" column="payment_password"/>
+        <result property="paymentPasswordFailedCount" column="payment_password_failed_count"/>
+        <result property="paymentLockedUntil" column="payment_locked_until"/>
+    </resultMap>
+
+    <select id="selectByMemberId" resultMap="memberPaymentResultMap">
+        SELECT
+        payment_password,
+        payment_password_failed_count,
+        payment_locked_until
+        FROM T_MBR_INFO_M
+        WHERE id = #{memberId}
+    </select>
+
+    <update id="incrementPaymentPasswordFailedCount">
+        UPDATE T_MBR_INFO_M
+        SET payment_password_failed_count = payment_password_failed_count + 1
+        WHERE id = #{memberId}
+    </update>
+
+    <update id="resetPaymentPasswordFailedCount">
+        UPDATE T_MBR_INFO_M
+        SET payment_password_failed_count = 0
+        WHERE id = #{memberId}
+    </update>
+
+    <update id="updatePaymentLockedUntil">
+        UPDATE T_MBR_INFO_M
+        SET payment_locked_until = #{paymentLockedUntil}
+        WHERE id = #{memberId}
+    </update>
+
+</mapper>
