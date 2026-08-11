@@ -10,7 +10,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 
 /**
- * 결제·예금·적금·대출 이벤트를 티니점수 정책으로 변환한다.
+ * 결제·예금·적금·대출·퀘스트 이벤트를 티니점수 정책으로 변환한다.
  * 점수를 직접 저장하지 않고 공통 변경 로직에 전달할 요청을 만든다.
  */
 @Service
@@ -323,6 +323,36 @@ public class TeenyScorePolicyService {
                 "대출 최종 만기 미상환",
                 "LOAN_ENROLLMENT",
                 loanEnrollmentId);
+    }
+
+    // ========================================
+    // 퀘스트 정책
+    // ========================================
+
+    public TeenyScoreChangeRequestDTO questCompleted(
+            Long childId,
+            Long questId) {
+        return request(
+                childId,
+                TeenyScoreEventCode.QUEST_COMPLETED,
+                3,
+                "QUEST_COMPLETED:" + questId,
+                "퀘스트 성공",
+                "QUEST",
+                questId);
+    }
+
+    public TeenyScoreChangeRequestDTO questFailed(
+            Long childId,
+            Long questId) {
+        return request(
+                childId,
+                TeenyScoreEventCode.QUEST_FAILED,
+                -2,
+                "QUEST_FAILED:" + questId,
+                "퀘스트 최종 실패",
+                "QUEST",
+                questId);
     }
 
     private int depositMaturityScore(int termMonths) {

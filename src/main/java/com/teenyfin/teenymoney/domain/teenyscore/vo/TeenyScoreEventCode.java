@@ -24,5 +24,9 @@ public enum TeenyScoreEventCode {
     // 대출
     LOAN_INSTALLMENT_OVERDUE,
     LOAN_MATURED_REPAID,
-    LOAN_DEFAULTED
+    LOAN_DEFAULTED,
+
+    // 퀘스트
+    QUEST_COMPLETED,
+    QUEST_FAILED
 }

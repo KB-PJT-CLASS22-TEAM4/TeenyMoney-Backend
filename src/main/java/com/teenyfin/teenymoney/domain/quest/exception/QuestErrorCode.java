@@ -23,6 +23,10 @@ public enum QuestErrorCode implements ErrorCode {
             "거절 사유를 선택해 주세요. 기타를 선택하면 상세 사유가 필요합니다."),
     QUEST_VERIFICATION_REQUIREMENT_UNMET(HttpStatus.BAD_REQUEST,
             "이 퀘스트의 인증 방식에 필요한 사진 또는 글이 없습니다."),
+    QUEST_REVIEW_REQUEST_INVALID(HttpStatus.BAD_REQUEST,
+            "반려 요청의 사유와 기한 후 처리 방법을 확인해 주세요."),
+    QUEST_EXTENDED_DEADLINE_INVALID(HttpStatus.BAD_REQUEST,
+            "연장 기한은 현재보다 미래이며 1년 이내여야 합니다."),
 
     // 403
     QUEST_PARENT_ONLY(HttpStatus.FORBIDDEN,
@@ -41,6 +45,8 @@ public enum QuestErrorCode implements ErrorCode {
             "퀘스트 기한이 지났습니다. 새로고침해 주세요."),
     QUEST_CREATION_REQUEST_CONFLICT(HttpStatus.CONFLICT,
             "같은 요청 식별 키가 다른 퀘스트 내용에 사용되었습니다."),
+    QUEST_VERIFICATION_CONFLICT(HttpStatus.CONFLICT,
+            "최신 대기 중 인증만 처리할 수 있습니다. 새로고침해 주세요."),
     QUEST_VERIFICATION_ATTEMPT_EXCEEDED(HttpStatus.CONFLICT,
         "남은 인증 기회를 모두 사용했습니다.");
 

@@ -320,6 +320,34 @@ class TeenyScorePolicyServiceTest {
     }
 
     @Test
+    @DisplayName("점수 대상 퀘스트 성공은 +3점과 퀘스트 단위 멱등성 키를 만든다")
+    void questCompletedAppliesThreePointsWithQuestIdentity() {
+        TeenyScoreChangeRequestDTO request =
+                teenyScorePolicyService.questCompleted(2L, 104L);
+
+        assertEquals(3, request.getAmount());
+        assertEquals(TeenyScoreEventCode.QUEST_COMPLETED,
+                request.getEventCode());
+        assertEquals("QUEST_COMPLETED:104", request.getEventKey());
+        assertEquals("QUEST", request.getReferenceType());
+        assertEquals(104L, request.getReferenceId());
+    }
+
+    @Test
+    @DisplayName("점수 대상 퀘스트 최종 실패는 -2점과 퀘스트 단위 멱등성 키를 만든다")
+    void questFailedAppliesTwoPointPenaltyWithQuestIdentity() {
+        TeenyScoreChangeRequestDTO request =
+                teenyScorePolicyService.questFailed(2L, 104L);
+
+        assertEquals(-2, request.getAmount());
+        assertEquals(TeenyScoreEventCode.QUEST_FAILED,
+                request.getEventCode());
+        assertEquals("QUEST_FAILED:104", request.getEventKey());
+        assertEquals("QUEST", request.getReferenceType());
+        assertEquals(104L, request.getReferenceId());
+    }
+
+    @Test
     @DisplayName("지원하지 않는 기간과 잘못된 정책 입력을 거부한다")
     void invalidPolicyInputsAreRejected() {
         assertThrows(
