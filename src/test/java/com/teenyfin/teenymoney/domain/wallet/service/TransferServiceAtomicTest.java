@@ -16,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -76,5 +77,31 @@ class TransferServiceAtomicTest {
         assertSame(completed, result);
         verify(transferMapper).insertTransfer(any(TransferVO.class));
         verify(transferExecutor).lockAndMove(77L);
+    }
+
+    @Test
+    @DisplayName("같은 멱등성 키의 송금이 있으면 새 행 없이 기존 송금만 안전하게 재확인한다")
+    void atomicTransferReusesExistingIdempotentTransfer() {
+        TransferVO existing = new TransferVO();
+        existing.setId(88L);
+        existing.setFromWalletId(10L);
+        existing.setToWalletId(20L);
+        existing.setAmount(3_000L);
+        existing.setType(TransferType.QUEST_REWARD.name());
+        existing.setStatus("COMPLETED");
+        when(transferMapper.selectByIdempotencyKey("QUEST_REWARD:104"))
+                .thenReturn(existing);
+        when(transferExecutor.lockAndMove(88L)).thenReturn(existing);
+
+        TransferVO result = transferService.transferInExistingTransaction(
+                10L,
+                20L,
+                3_000L,
+                TransferType.QUEST_REWARD,
+                "QUEST_REWARD:104");
+
+        assertSame(existing, result);
+        verify(transferMapper, never()).insertTransfer(any());
+        verify(transferExecutor).lockAndMove(88L);
     }
 }

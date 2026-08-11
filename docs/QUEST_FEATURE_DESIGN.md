@@ -737,9 +737,9 @@ PENDING --기한 후 최종 실패 선택--> FAILED
 - 같은 생성 요청의 모든 자녀 행은 하나의 트랜잭션에서 삽입한다.
 - 부모가 `AVAILABLE` 퀘스트를 물리 삭제한 뒤 새 퀘스트를 만들 때는 이전 생성 요청 키를 재사용하지 않는다.
 - 승인 시 부모 차감, 자녀 적립, 원장, 점수, 인증 승인, 퀘스트 완료를 한 트랜잭션으로 묶는다.
-- 현금 보상이 있으면 기존 내부 송금 테이블과 지갑 잠금 순서를 재사용한다. 퀘스트 ID로부터 항상 같은 UUID 형식의 내부 송금 식별 키를 만들고, 송금 실행이 퀘스트 승인 트랜잭션에 참여하도록 기존 송금 서비스에 내부 호출 경로를 추가한다.
+- 현금 보상이 있으면 기존 내부 송금 테이블과 지갑 잠금 순서를 재사용한다. 퀘스트 ID로부터 `QUEST_REWARD:{questId}` 형식의 내부 송금 식별 키를 만들고, 송금 실행이 퀘스트 승인 트랜잭션에 참여하도록 기존 송금 서비스에 내부 호출 경로를 추가한다.
 - 현금 보상이 0원이면 송금 관련 처리를 호출하지 않는다.
-- 성공 점수 이벤트 키는 `QUEST_COMPLETED:{questId}`, 실패 점수 이벤트 키는 실패 원인과 퀘스트 ID 조합을 사용한다.
+- 성공 점수 이벤트 키는 `QUEST_COMPLETED:{questId}`, 최종 실패 점수 이벤트 키는 `QUEST_FAILED:{questId}`를 사용한다.
 - 승인이나 실패 처리의 재요청은 퀘스트 상태, 내부 송금 식별 키와 점수 이벤트 키 검증으로 돈과 점수가 두 번 반영되지 않게 한다.
 
 ### 15.3 S3와 DB 경계
@@ -1035,17 +1035,18 @@ TeenyMoney-Backend/docs/QUEST_FEATURE_DESIGN.md를 전체 기준으로 읽어라
 | 400 | `QUEST_CHILD_DUPLICATED` | 같은 자녀를 중복해서 선택할 수 없습니다. |
 | 400 | `QUEST_REWARD_INVALID` | 현금 보상은 0원 또는 100원 이상이어야 하며, 현금이나 티니점수 중 하나는 필요합니다. |
 | 400 | `QUEST_DEADLINE_INVALID` | 기한은 현재보다 미래이며 1년 이내여야 합니다. |
-| 400 | `QUEST_VERIFICATION_REQUIRED` | 설정된 인증 방식에 필요한 사진이나 글을 등록해 주세요. |
-| 400 | `QUEST_REJECTION_ACTION_INVALID` | 기한 연장 또는 최종 실패 처리 방법을 확인해 주세요. |
+| 400 | `QUEST_VERIFICATION_REQUIREMENT_UNMET` | 이 퀘스트의 인증 방식에 필요한 사진 또는 글이 없습니다. |
+| 400 | `QUEST_REVIEW_REQUEST_INVALID` | 반려 요청의 사유와 기한 후 처리 방법을 확인해 주세요. |
+| 400 | `QUEST_EXTENDED_DEADLINE_INVALID` | 연장 기한은 현재보다 미래이며 1년 이내여야 합니다. |
 | 400 | `QUEST_CREATION_KEY_INVALID` | 요청 식별 키를 확인해 주세요. |
 | 403 | `QUEST_PARENT_ONLY` | 부모만 사용할 수 있는 기능입니다. |
 | 403 | `QUEST_CHILD_ONLY` | 자녀만 사용할 수 있는 기능입니다. |
 | 403 | `QUEST_CHILD_NOT_LINKED` | 연결된 자녀의 퀘스트만 처리할 수 있습니다. |
 | 404 | `QUEST_NOT_FOUND_OR_ACCESS_DENIED` | 퀘스트를 찾을 수 없거나 접근할 수 없습니다. |
-| 404 | `QUEST_VERIFICATION_NOT_FOUND` | 인증 요청을 찾을 수 없습니다. |
 | 409 | `QUEST_STATUS_CONFLICT` | 현재 퀘스트 상태에서는 처리할 수 없습니다. 새로고침해 주세요. |
 | 409 | `QUEST_DEADLINE_PASSED` | 퀘스트 기한이 지났습니다. 새로고침해 주세요. |
-| 409 | `QUEST_VERIFICATION_ALREADY_PROCESSED` | 이미 처리됐거나 새로운 인증이 제출되었습니다. 새로고침해 주세요. |
+| 409 | `QUEST_VERIFICATION_CONFLICT` | 최신 대기 중 인증만 처리할 수 있습니다. 새로고침해 주세요. |
+| 409 | `QUEST_VERIFICATION_ATTEMPT_EXCEEDED` | 남은 인증 기회를 모두 사용했습니다. |
 | 409 | `QUEST_CREATION_REQUEST_CONFLICT` | 같은 요청 식별 키가 다른 퀘스트 내용에 사용되었습니다. |
 
 - 부모 잔액 부족은 기존 `INSUFFICIENT_BALANCE`를 재사용하고 프론트는 `지갑 충전하기`를 표시한다.

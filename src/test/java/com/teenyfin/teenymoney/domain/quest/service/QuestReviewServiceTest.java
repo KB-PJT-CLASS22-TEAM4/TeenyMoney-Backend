@@ -211,6 +211,41 @@ class QuestReviewServiceTest {
     }
 
     @Test
+    @DisplayName("PENDING이 아닌 퀘스트는 인증을 잠그거나 보상을 처리하지 않는다")
+    void approveRejectsNonPendingQuest() {
+        QuestVO completed = pendingQuest(3_000L, true);
+        completed.setStatus(QuestStatus.COMPLETED);
+        when(questMapper.selectByIdForUpdateByParent(QUEST_ID, PARENT_ID))
+                .thenReturn(completed);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.approve(parent(), QUEST_ID, VERIFICATION_ID));
+
+        assertEquals(QuestErrorCode.QUEST_STATUS_CONFLICT,
+                exception.getErrorCode());
+        verify(questMapper, never())
+                .selectLatestVerificationForUpdate(any());
+        verify(transferService, never()).transferInExistingTransaction(
+                any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("인증 조건부 갱신이 경합에서 0건이면 409로 전체 승인을 롤백시킨다")
+    void approveRejectsLostVerificationUpdateRace() {
+        when(questMapper.updateVerificationReview(
+                VERIFICATION_ID, QUEST_ID, "APPROVED", null, NOW))
+                .thenReturn(0);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.approve(parent(), QUEST_ID, VERIFICATION_ID));
+
+        assertEquals(QuestErrorCode.QUEST_VERIFICATION_CONFLICT,
+                exception.getErrorCode());
+        verify(questMapper, never()).updateCompletedByParent(
+                any(), any(), any(), any());
+    }
+
+    @Test
     @DisplayName("기한 전 반려는 사유를 정리하고 남은 횟수를 줄여 다시 수행 상태로 연다")
     void rejectBeforeDeadlineReopensQuest() {
         service.reject(parent(), QUEST_ID, VERIFICATION_ID,
@@ -359,6 +394,22 @@ class QuestReviewServiceTest {
                 rejectRequest("최종 반려", null, null));
 
         verify(teenyScoreChangeService, never()).change(any());
+    }
+
+    @Test
+    @DisplayName("반려 퀘스트 조건부 갱신이 경합에서 0건이면 409로 전체 반려를 롤백시킨다")
+    void rejectRejectsLostQuestUpdateRace() {
+        when(questMapper.updateAfterRejectionByParent(
+                eq(QUEST_ID), eq(PARENT_ID), any(), any(),
+                nullable(LocalDateTime.class), nullable(LocalDateTime.class),
+                eq(NOW))).thenReturn(0);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.reject(parent(), QUEST_ID, VERIFICATION_ID,
+                        rejectRequest("다시 제출해 주세요", null, null)));
+
+        assertEquals(QuestErrorCode.QUEST_STATUS_CONFLICT,
+                exception.getErrorCode());
     }
 
     private QuestVO pendingQuest(Long rewardAmount, boolean scoreEnabled) {
