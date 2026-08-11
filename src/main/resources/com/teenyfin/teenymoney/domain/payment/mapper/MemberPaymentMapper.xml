@@ -37,4 +37,10 @@
         WHERE id = #{memberId}
     </update>
 
+    <update id="updatePaymentPassword">
+        UPDATE T_MBR_INFO_M
+        SET payment_password = #{paymentPassword}
+        WHERE id = #{memberId}
+    </update>
+
 </mapper>

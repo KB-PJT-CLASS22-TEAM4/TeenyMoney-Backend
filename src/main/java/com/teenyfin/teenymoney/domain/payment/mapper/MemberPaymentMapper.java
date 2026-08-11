@@ -20,4 +20,7 @@ public interface MemberPaymentMapper {
 
     // 잠금 해제 시간 수정
     void updatePaymentLockedUntil(@Param("memberId") Long memberId, @Param("paymentLockedUntil") LocalDateTime paymentLockedUntil);
+
+    // 결제 비밀번호 최초 등록
+    void updatePaymentPassword(@Param("memberId") Long memberId, @Param("paymentPassword") String paymentPassword);
 }

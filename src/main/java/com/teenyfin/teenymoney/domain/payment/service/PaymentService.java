@@ -4,6 +4,7 @@ import com.teenyfin.teenymoney.domain.categoryPolicy.dto.response.CategoryPolicy
 import com.teenyfin.teenymoney.domain.categoryPolicy.exception.CategoryPolicyErrorCode;
 import com.teenyfin.teenymoney.domain.categoryPolicy.mapper.CategoryPolicyMapper;
 import com.teenyfin.teenymoney.domain.categoryPolicy.vo.CategoryPolicyVO;
+import com.teenyfin.teenymoney.domain.payment.dto.request.PaymentPasswordRequestDTO;
 import com.teenyfin.teenymoney.domain.payment.dto.request.PaymentQrRequestDTO;
 import com.teenyfin.teenymoney.domain.payment.dto.request.PaymentRequestDTO;
 import com.teenyfin.teenymoney.domain.payment.dto.response.PaymentQrResponseDTO;
@@ -24,7 +25,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
@@ -140,6 +140,10 @@ public class PaymentService {
 
         MemberPaymentVO memberPaymentVO = memberPaymentMapper.selectByMemberId(memberId);
 
+        if (memberPaymentVO.getPaymentPassword() == null) {
+            throw new BusinessException(PaymentErrorCode.NOT_SET_PAYMENT_PASSWORD);
+        }
+
         // 결제 잠금 상태면 막음
         if (memberPaymentVO.getPaymentLockedUntil() != null
                 && memberPaymentVO.getPaymentLockedUntil().isAfter(LocalDateTime.now())) {
@@ -229,5 +233,16 @@ public class PaymentService {
                         .build())
                 .createdAt(paymentVO.getCreatedAt())
                 .build();
+    }
+
+    @Transactional
+    public void setPaymentPassword(Long memberId, PaymentPasswordRequestDTO paymentPasswordRequestDTO) {
+        MemberPaymentVO memberPaymentVO = memberPaymentMapper.selectByMemberId(memberId);
+
+        if (memberPaymentVO.getPaymentPassword() != null) {
+            throw new BusinessException(PaymentErrorCode.ALREADY_SET_PAYMENT_PASSWORD);
+        }
+
+        memberPaymentMapper.updatePaymentPassword(memberId, passwordEncoder.encode(paymentPasswordRequestDTO.getPassword()));
     }
 }

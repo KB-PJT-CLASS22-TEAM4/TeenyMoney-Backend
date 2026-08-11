@@ -1,5 +1,6 @@
 package com.teenyfin.teenymoney.domain.payment.controller;
 
+import com.teenyfin.teenymoney.domain.payment.dto.request.PaymentPasswordRequestDTO;
 import com.teenyfin.teenymoney.domain.payment.dto.request.PaymentQrRequestDTO;
 import com.teenyfin.teenymoney.domain.payment.dto.request.PaymentRequestDTO;
 import com.teenyfin.teenymoney.domain.payment.dto.response.PaymentQrResponseDTO;
@@ -35,5 +36,14 @@ public class PaymentController {
             @AuthenticationPrincipal MemberPrincipal memberPrincipal,
             @RequestBody @Valid PaymentRequestDTO paymentRequestDTO) {
         return ApiResponse.ok(paymentService.progressPayment(memberPrincipal.memberId(), paymentRequestDTO));
+    }
+
+    @ApiOperation(value = "결제 비밀번호 등록", notes = "최초로 결제 비밀번호를 등록합니다.")
+    @PostMapping("/password")
+    public ApiResponse<Void> setPaymentPassword(
+            @AuthenticationPrincipal MemberPrincipal memberPrincipal,
+            @RequestBody @Valid PaymentPasswordRequestDTO paymentPasswordRequestDTO) {
+        paymentService.setPaymentPassword(memberPrincipal.memberId(), paymentPasswordRequestDTO);
+        return ApiResponse.ok();
     }
 }
