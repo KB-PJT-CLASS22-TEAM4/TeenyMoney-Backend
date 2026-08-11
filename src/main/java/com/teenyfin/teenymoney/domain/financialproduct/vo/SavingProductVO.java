@@ -24,7 +24,6 @@ public class SavingProductVO {
     private BigDecimal earlyTerminationRate;
     private Long minMonthAmount;
     private Long maxMonthAmount;
-    private Integer minTeenyScore;
     private String description;
     private Boolean active;
 }

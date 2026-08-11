@@ -10,6 +10,8 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
+import java.util.Map;
+
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -43,5 +45,31 @@ class FinancialProductMapperContextTest {
                 "member.applied_grade_id = grade.grade_id"));
         assertFalse(sql.contains(
                 "member.teeny_score BETWEEN grade.min_score"));
+    }
+
+    @Test
+    void enrollmentQueriesKeepContractsSeparateAndUseEnrollmentIdForDetail() {
+        String namespace = FinancialProductMapper.class.getName();
+        String listSql = sqlSessionFactory.getConfiguration()
+                .getMappedStatement(namespace
+                        + ".selectDepositEnrollmentsByChildId")
+                .getBoundSql(Map.of("childId", 2L))
+                .getSql()
+                .replaceAll("\\s+", " ")
+                .trim();
+        String detailSql = sqlSessionFactory.getConfiguration()
+                .getMappedStatement(namespace
+                        + ".selectDepositEnrollmentByChildIdAndId")
+                .getBoundSql(Map.of(
+                        "childId", 2L,
+                        "enrollmentId", 11L))
+                .getSql()
+                .replaceAll("\\s+", " ")
+                .trim();
+
+        assertFalse(listSql.contains("SELECT DISTINCT"));
+        assertTrue(listSql.contains("enrollment.id AS enrollment_id"));
+        assertTrue(detailSql.contains("enrollment.id = ?"));
+        assertFalse(detailSql.contains("product.id = ?"));
     }
 }

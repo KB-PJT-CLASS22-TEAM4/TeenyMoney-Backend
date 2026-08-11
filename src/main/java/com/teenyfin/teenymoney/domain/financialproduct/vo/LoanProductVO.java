@@ -17,7 +17,8 @@ public class LoanProductVO {
     private String repaymentType;
     private Long minAmount;
     private Long maxAmount;
-    private Integer minTeenyScore;
+    private Long requiredGradeId;
+    private String requiredGradeName;
     private String description;
     private Boolean active;
 }

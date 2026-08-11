@@ -104,7 +104,6 @@ public class FinancialProductSyncService {
                 || base.getMaximumLimit() <= DEFAULT_DEPOSIT_MIN_AMOUNT
                 ? DEFAULT_DEPOSIT_MAX_AMOUNT : base.getMaximumLimit();
         product.setMaxAmount(maximum);
-        product.setMinTeenyScore(0);
         product.setDescription("금융감독원 금융상품통합비교공시 연동 상품");
         product.setActive(true);
         return product;
@@ -134,7 +133,6 @@ public class FinancialProductSyncService {
         product.setEarlyTerminationRate(DEFAULT_SAVING_TERMINATION_RATE);
         product.setMinMonthAmount(DEFAULT_SAVING_MIN_AMOUNT);
         product.setMaxMonthAmount(DEFAULT_SAVING_MAX_AMOUNT);
-        product.setMinTeenyScore(0);
         product.setDescription("금융감독원 금융상품통합비교공시 연동 상품");
         product.setActive(true);
         return product;

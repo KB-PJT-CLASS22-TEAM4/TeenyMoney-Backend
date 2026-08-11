@@ -1,6 +1,7 @@
 package com.teenyfin.teenymoney.domain.financialproduct.controller;
 
 import com.teenyfin.teenymoney.domain.financialproduct.dto.response.FinancialProductDetailResponseDTO;
+import com.teenyfin.teenymoney.domain.financialproduct.dto.response.FinancialProductEnrollmentResponseDTO;
 import com.teenyfin.teenymoney.domain.financialproduct.dto.response.FinancialProductListResponseDTO;
 import com.teenyfin.teenymoney.domain.financialproduct.service.FinancialProductService;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductType;
@@ -14,6 +15,7 @@ import org.springframework.security.web.method.annotation.AuthenticationPrincipa
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -121,5 +123,37 @@ class FinancialProductControllerTest {
         assertEquals(200, response.getStatus(), body);
         assertTrue(body.contains("\"productType\":\"DEPOSIT\""), body);
         verify(service).getDepositProductDetail(CHILD, 7L);
+    }
+
+    @Test
+    void parentGetsProductsByChildId() throws Exception {
+        MemberPrincipal parent = new MemberPrincipal(1L, "PARENT");
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(
+                        parent, null, List.of()));
+        FinancialProductEnrollmentResponseDTO enrollment =
+                FinancialProductEnrollmentResponseDTO.builder()
+                        .enrollmentId(11L)
+                        .productId(1L)
+                        .productType(FinancialProductType.DEPOSIT)
+                        .productName("Deposit")
+                        .status("ACTIVE")
+                        .appliedRate(new BigDecimal("4.50"))
+                        .depositAmount(100_000L)
+                        .build();
+        when(service.getProductsByChildId(parent, 2L))
+                .thenReturn(List.of(enrollment));
+
+        var response = mockMvc.perform(
+                        get("/financial-products/children/2"))
+                .andReturn().getResponse();
+
+        assertEquals(200, response.getStatus(),
+                response.getContentAsString());
+        assertTrue(response.getContentAsString()
+                .contains("\"enrollmentId\":11"));
+        assertTrue(response.getContentAsString()
+                .contains("\"appliedRate\":4.50"));
+        verify(service).getProductsByChildId(parent, 2L);
     }
 }

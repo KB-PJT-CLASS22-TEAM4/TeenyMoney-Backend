@@ -20,7 +20,6 @@
         <result property="earlyTerminationRate" column="early_termination_rate"/>
         <result property="minAmount" column="min_amount"/>
         <result property="maxAmount" column="max_amount"/>
-        <result property="minTeenyScore" column="min_teeny_score"/>
         <result property="description" column="description"/>
         <result property="active" column="is_active"/>
     </resultMap>
@@ -41,7 +40,6 @@
         <result property="earlyTerminationRate" column="early_termination_rate"/>
         <result property="minMonthAmount" column="min_month_amount"/>
         <result property="maxMonthAmount" column="max_month_amount"/>
-        <result property="minTeenyScore" column="min_teeny_score"/>
         <result property="description" column="description"/>
         <result property="active" column="is_active"/>
     </resultMap>
@@ -55,7 +53,8 @@
         <result property="repaymentType" column="repayment_type"/>
         <result property="minAmount" column="min_amount"/>
         <result property="maxAmount" column="max_amount"/>
-        <result property="minTeenyScore" column="min_teeny_score"/>
+        <result property="requiredGradeId" column="required_grade_id"/>
+        <result property="requiredGradeName" column="required_grade_name"/>
         <result property="description" column="description"/>
         <result property="active" column="is_active"/>
     </resultMap>
@@ -68,6 +67,35 @@
         <result property="gradeName" column="grade_name"/>
         <result property="bonusRate" column="bonus_rate"/>
         <result property="loanRate" column="loan_rate"/>
+    </resultMap>
+
+    <resultMap id="enrollmentResultMap"
+               type="com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductEnrollmentVO">
+        <id property="enrollmentId" column="enrollment_id"/>
+        <result property="productId" column="product_id"/>
+        <result property="productType" column="product_type"/>
+        <result property="financialCompanyName" column="financial_company_name"/>
+        <result property="productName" column="product_name"/>
+        <result property="status" column="enrollment_status"/>
+        <result property="appliedRate" column="applied_rate"/>
+        <result property="appliedEarlyTerminationRate" column="applied_early_termination_rate"/>
+        <result property="appliedLateFeeRate" column="applied_late_fee_rate"/>
+        <result property="termMonths" column="term_months"/>
+        <result property="startDate" column="start_date"/>
+        <result property="maturityDate" column="maturity_date"/>
+        <result property="closedAt" column="closed_at"/>
+        <result property="requestedAt" column="requested_at"/>
+        <result property="depositAmount" column="deposit_amount"/>
+        <result property="monthlyAmount" column="monthly_amount"/>
+        <result property="accumulatedAmount" column="accumulated_amount"/>
+        <result property="paidCount" column="paid_count"/>
+        <result property="totalPaymentCount" column="total_payment_count"/>
+        <result property="paymentDay" column="payment_day"/>
+        <result property="autoTransfer" column="auto_transfer"/>
+        <result property="principalAmount" column="principal_amount"/>
+        <result property="outstandingPrincipal" column="outstanding_principal"/>
+        <result property="overdueInterest" column="overdue_interest"/>
+        <result property="repaymentType" column="repayment_type"/>
     </resultMap>
 
     <select id="selectActiveDepositProducts" resultMap="depositProductResultMap">
@@ -87,9 +115,13 @@
     </select>
 
     <select id="selectActiveLoanProducts" resultMap="loanProductResultMap">
-        SELECT * FROM T_LON_PROD_M
-        WHERE is_active = TRUE
-        ORDER BY min_teeny_score, id
+        SELECT product.*,
+               required_grade.grade_name AS required_grade_name
+        FROM T_LON_PROD_M product
+        INNER JOIN T_TNY_GRADE_A required_grade
+                ON product.required_grade_id = required_grade.grade_id
+        WHERE product.is_active = TRUE
+        ORDER BY product.required_grade_id, product.id
     </select>
 
     <select id="selectActiveDepositProductById" resultMap="depositProductResultMap">
@@ -109,9 +141,191 @@
     </select>
 
     <select id="selectActiveLoanProductById" resultMap="loanProductResultMap">
-        SELECT * FROM T_LON_PROD_M
-        WHERE id = #{id}
-          AND is_active = TRUE
+        SELECT product.*,
+               required_grade.grade_name AS required_grade_name
+        FROM T_LON_PROD_M product
+        INNER JOIN T_TNY_GRADE_A required_grade
+                ON product.required_grade_id = required_grade.grade_id
+        WHERE product.id = #{id}
+          AND product.is_active = TRUE
+    </select>
+
+    <select id="selectDepositEnrollmentsByChildId"
+            resultMap="enrollmentResultMap">
+        SELECT enrollment.id AS enrollment_id,
+               product.id AS product_id,
+               'DEPOSIT' AS product_type,
+               product.kor_co_nm AS financial_company_name,
+               product.name AS product_name,
+               enrollment.status AS enrollment_status,
+               enrollment.applied_rate,
+               enrollment.applied_early_termination_rate,
+               enrollment.term_months,
+               enrollment.start_date,
+               enrollment.maturity_date,
+               enrollment.closed_at,
+               enrollment.created_at AS requested_at,
+               wallet.balance AS deposit_amount
+        FROM T_DPT_ENROLL_M enrollment
+        INNER JOIN T_DPT_PROD_M product
+                ON enrollment.deposit_id = product.id
+        INNER JOIN T_WLT_BASE_M wallet
+                ON enrollment.wallet_id = wallet.id
+        WHERE enrollment.child_id = #{childId}
+          AND enrollment.status &lt;&gt; 'REJECTED'
+        ORDER BY enrollment.created_at DESC, enrollment.id DESC
+    </select>
+
+    <select id="selectSavingEnrollmentsByChildId"
+            resultMap="enrollmentResultMap">
+        SELECT enrollment.id AS enrollment_id,
+               product.id AS product_id,
+               'SAVING' AS product_type,
+               product.kor_co_nm AS financial_company_name,
+               product.name AS product_name,
+               enrollment.status AS enrollment_status,
+               enrollment.applied_rate,
+               enrollment.applied_early_termination_rate,
+               enrollment.term_months,
+               enrollment.monthly_amount,
+               enrollment.payment_day,
+               enrollment.auto_transfer,
+               enrollment.start_date,
+               enrollment.maturity_date,
+               enrollment.closed_at,
+               enrollment.created_at AS requested_at,
+               wallet.balance AS accumulated_amount,
+               (SELECT COUNT(*)
+                  FROM T_SVG_PAYHIST_H payment
+                 WHERE payment.saving_enrollment_id = enrollment.id
+                   AND payment.status = 'PAID') AS paid_count,
+               enrollment.term_months AS total_payment_count
+        FROM T_SVG_ENROLL_M enrollment
+        INNER JOIN T_SVG_PROD_M product
+                ON enrollment.saving_id = product.id
+        INNER JOIN T_WLT_BASE_M wallet
+                ON enrollment.wallet_id = wallet.id
+        WHERE enrollment.child_id = #{childId}
+          AND enrollment.status &lt;&gt; 'REJECTED'
+        ORDER BY enrollment.created_at DESC, enrollment.id DESC
+    </select>
+
+    <select id="selectLoanEnrollmentsByChildId"
+            resultMap="enrollmentResultMap">
+        SELECT enrollment.id AS enrollment_id,
+               product.id AS product_id,
+               'LOAN' AS product_type,
+               product.name AS product_name,
+               enrollment.status AS enrollment_status,
+               enrollment.applied_rate,
+               enrollment.applied_late_fee_rate,
+               enrollment.term_months,
+               enrollment.payment_day,
+               enrollment.auto_transfer,
+               enrollment.start_date,
+               enrollment.maturity_date,
+               enrollment.created_at AS requested_at,
+               enrollment.principal_amount,
+               enrollment.outstanding_principal,
+               enrollment.overdue_interest,
+               enrollment.paid_count,
+               enrollment.term_months AS total_payment_count,
+               product.repayment_type
+        FROM T_LON_ENROLL_M enrollment
+        INNER JOIN T_LON_PROD_M product
+                ON enrollment.loan_id = product.id
+        WHERE enrollment.child_id = #{childId}
+          AND enrollment.status &lt;&gt; 'REJECTED'
+        ORDER BY enrollment.created_at DESC, enrollment.id DESC
+    </select>
+
+    <select id="selectDepositEnrollmentByChildIdAndId"
+            resultMap="enrollmentResultMap">
+        SELECT enrollment.id AS enrollment_id,
+               product.id AS product_id,
+               'DEPOSIT' AS product_type,
+               product.kor_co_nm AS financial_company_name,
+               product.name AS product_name,
+               enrollment.status AS enrollment_status,
+               enrollment.applied_rate,
+               enrollment.applied_early_termination_rate,
+               enrollment.term_months,
+               enrollment.start_date,
+               enrollment.maturity_date,
+               enrollment.closed_at,
+               enrollment.created_at AS requested_at,
+               wallet.balance AS deposit_amount
+        FROM T_DPT_ENROLL_M enrollment
+        INNER JOIN T_DPT_PROD_M product
+                ON enrollment.deposit_id = product.id
+        INNER JOIN T_WLT_BASE_M wallet
+                ON enrollment.wallet_id = wallet.id
+        WHERE enrollment.child_id = #{childId}
+          AND enrollment.status &lt;&gt; 'REJECTED'
+          AND enrollment.id = #{enrollmentId}
+    </select>
+
+    <select id="selectSavingEnrollmentByChildIdAndId"
+            resultMap="enrollmentResultMap">
+        SELECT enrollment.id AS enrollment_id,
+               product.id AS product_id,
+               'SAVING' AS product_type,
+               product.kor_co_nm AS financial_company_name,
+               product.name AS product_name,
+               enrollment.status AS enrollment_status,
+               enrollment.applied_rate,
+               enrollment.applied_early_termination_rate,
+               enrollment.term_months,
+               enrollment.monthly_amount,
+               enrollment.payment_day,
+               enrollment.auto_transfer,
+               enrollment.start_date,
+               enrollment.maturity_date,
+               enrollment.closed_at,
+               enrollment.created_at AS requested_at,
+               wallet.balance AS accumulated_amount,
+               (SELECT COUNT(*)
+                  FROM T_SVG_PAYHIST_H payment
+                 WHERE payment.saving_enrollment_id = enrollment.id
+                   AND payment.status = 'PAID') AS paid_count,
+               enrollment.term_months AS total_payment_count
+        FROM T_SVG_ENROLL_M enrollment
+        INNER JOIN T_SVG_PROD_M product
+                ON enrollment.saving_id = product.id
+        INNER JOIN T_WLT_BASE_M wallet
+                ON enrollment.wallet_id = wallet.id
+        WHERE enrollment.child_id = #{childId}
+          AND enrollment.status &lt;&gt; 'REJECTED'
+          AND enrollment.id = #{enrollmentId}
+    </select>
+
+    <select id="selectLoanEnrollmentByChildIdAndId"
+            resultMap="enrollmentResultMap">
+        SELECT enrollment.id AS enrollment_id,
+               product.id AS product_id,
+               'LOAN' AS product_type,
+               product.name AS product_name,
+               enrollment.status AS enrollment_status,
+               enrollment.applied_rate,
+               enrollment.applied_late_fee_rate,
+               enrollment.term_months,
+               enrollment.payment_day,
+               enrollment.auto_transfer,
+               enrollment.start_date,
+               enrollment.maturity_date,
+               enrollment.created_at AS requested_at,
+               enrollment.principal_amount,
+               enrollment.outstanding_principal,
+               enrollment.overdue_interest,
+               enrollment.paid_count,
+               enrollment.term_months AS total_payment_count,
+               product.repayment_type
+        FROM T_LON_ENROLL_M enrollment
+        INNER JOIN T_LON_PROD_M product
+                ON enrollment.loan_id = product.id
+        WHERE enrollment.child_id = #{childId}
+          AND enrollment.status &lt;&gt; 'REJECTED'
+          AND enrollment.id = #{enrollmentId}
     </select>
 
     <select id="selectBenefitByChildId" resultMap="benefitResultMap">
@@ -135,14 +349,14 @@
             interest_calculation_type,
             rate_1m, rate_3m, rate_6m, rate_12m,
             early_termination_rate, min_amount, max_amount,
-            min_teeny_score, description, is_active
+            description, is_active
         ) VALUES (
             #{financialCompanyCode}, #{financialProductCode},
             #{financialCompanyName}, #{name},
             #{interestCalculationType},
             #{rate1m}, #{rate3m}, #{rate6m}, #{rate12m},
             #{earlyTerminationRate}, #{minAmount}, #{maxAmount},
-            #{minTeenyScore}, #{description}, #{active}
+            #{description}, #{active}
         )
         ON DUPLICATE KEY UPDATE
             kor_co_nm = VALUES(kor_co_nm),
@@ -161,14 +375,14 @@
             savings_type, interest_calculation_type,
             rate_1m, rate_3m, rate_6m, rate_12m,
             early_termination_rate, min_month_amount, max_month_amount,
-            min_teeny_score, description, is_active
+            description, is_active
         ) VALUES (
             #{financialCompanyCode}, #{financialProductCode},
             #{financialCompanyName}, #{name},
             #{savingsType}, #{interestCalculationType},
             #{rate1m}, #{rate3m}, #{rate6m}, #{rate12m},
             #{earlyTerminationRate}, #{minMonthAmount}, #{maxMonthAmount},
-            #{minTeenyScore}, #{description}, #{active}
+            #{description}, #{active}
         )
         ON DUPLICATE KEY UPDATE
             kor_co_nm = VALUES(kor_co_nm),
