@@ -100,4 +100,16 @@ public interface QuestMapper {
             @Param("updatedAt") LocalDateTime updatedAt);
 
     int insertVerification(QuestVerificationVO verification);
+
+    /** 마감 대상을 상태별로 잠그고 가져온다. 다른 인스턴스가 잡은 행은 기다리지 않고 건너뛴다. */
+    List<QuestVO> selectDeadlineTargetsForUpdate(
+            @Param("status") QuestStatus status,
+            @Param("now") LocalDateTime now,
+            @Param("limit") int limit);
+
+    int updateStatusForDeadline(
+            @Param("questId") Long questId,
+            @Param("fromStatus") QuestStatus fromStatus,
+            @Param("toStatus") QuestStatus toStatus,
+            @Param("endedAt") LocalDateTime endedAt);
 }

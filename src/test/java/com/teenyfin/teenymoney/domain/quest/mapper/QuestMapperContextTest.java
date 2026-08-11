@@ -61,7 +61,9 @@ class QuestMapperContextTest {
                 "updateVerificationReview",
                 "updateCompletedByParent",
                 "updateAfterRejectionByParent",
-                "insertVerification")) {
+                "insertVerification",
+                "selectDeadlineTargetsForUpdate",
+                "updateStatusForDeadline")) {
             assertTrue(sqlSessionFactory.getConfiguration()
                     .hasStatement(NAMESPACE + "." + statement), statement);
         }
@@ -204,6 +206,36 @@ class QuestMapperContextTest {
         assertTrue(update.contains("deadline = COALESCE(?, deadline)"), update);
         assertTrue(update.contains("parent_id = ?"), update);
         assertTrue(update.contains("AND status = 'PENDING'"), update);
+    }
+
+    @Test
+    @DisplayName("마감 대상 조회는 인덱스 순서로 정렬하고 잠긴 행을 건너뛴다")
+    void deadlineTargetSelectUsesIndexOrderAndSkipsLockedRows() {
+        String sql = sql("selectDeadlineTargetsForUpdate", Map.of(
+                "status", QuestStatus.AVAILABLE,
+                "now", LocalDateTime.of(2026, 8, 10, 10, 0),
+                "limit", 200));
+
+        assertTrue(sql.contains("q.status = ?"), sql);
+        assertTrue(sql.contains("q.deadline < ?"), sql);
+        assertFalse(sql.contains("q.deadline <= ?"), sql);
+        assertTrue(sql.contains("ORDER BY q.deadline ASC, q.id ASC"), sql);
+        assertTrue(sql.contains("FOR UPDATE SKIP LOCKED"), sql);
+    }
+
+    @Test
+    @DisplayName("마감 상태 변경은 기대 상태일 때만 적용되고 종료 시각을 남긴다")
+    void deadlineStatusUpdateAppliesOnlyOnExpectedStatusAndSetsEndedAt() {
+        String sql = sql("updateStatusForDeadline", Map.of(
+                "questId", 55L,
+                "fromStatus", QuestStatus.AVAILABLE,
+                "toStatus", QuestStatus.EXPIRED,
+                "endedAt", LocalDateTime.of(2026, 8, 10, 10, 0)));
+
+        assertTrue(sql.contains("AND status = ?"), sql);
+        assertTrue(sql.contains("ended_at = ?"), sql);
+        assertFalse(sql.contains("child_id"), sql);
+        assertFalse(sql.contains("parent_id"), sql);
     }
 
     private String sql(String statement, Map<String, Object> params) {

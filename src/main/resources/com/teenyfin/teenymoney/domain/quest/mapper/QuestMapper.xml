@@ -309,4 +309,23 @@
         FOR UPDATE
     </select>
 
+    <select id="selectDeadlineTargetsForUpdate" resultMap="questResultMap">
+        SELECT
+        <include refid="questColumns"/>
+        FROM T_QST_BASE_M q
+        WHERE q.status = #{status}
+          AND q.deadline &lt; #{now}
+        ORDER BY q.deadline ASC, q.id ASC
+        LIMIT #{limit}
+        FOR UPDATE SKIP LOCKED
+    </select>
+
+    <update id="updateStatusForDeadline">
+        UPDATE T_QST_BASE_M
+        SET status = #{toStatus},
+            updated_at = #{endedAt},
+            ended_at = #{endedAt}
+        WHERE id = #{questId}
+          AND status = #{fromStatus}
+    </update>
 </mapper>
