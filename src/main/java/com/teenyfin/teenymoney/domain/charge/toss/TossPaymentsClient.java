@@ -165,7 +165,7 @@ public class TossPaymentsClient {
         HttpEntity<Map<String, String>> entity = new HttpEntity<>(Map.of("cancelReason", cancelReason), headers);
 
         try {
-            restTemplate.postForObject(url,entity, Void.class);
+            restTemplate.postForObject(url,entity, String.class);
 
         } catch(HttpStatusCodeException exception) {
             TossErrorResponseDTO error = parseTossErrorOrNull(exception);

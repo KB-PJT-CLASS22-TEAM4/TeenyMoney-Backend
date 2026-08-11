@@ -36,7 +36,9 @@ public enum ChargeErrorCode implements ErrorCode {
     // 같은 멱등키로 첫 요청이 아직 처리 중일 때 재시도하면 토스가 이걸 돌려줌.
     // 실패가 아니라 "아직 결과를 모름"이라, 이 상태를 실패로 기록하면 안 됨.
     TOSS_REQUEST_IN_PROGRESS(
-            HttpStatus.CONFLICT, "이전 요청이 아직 처리 중입니다. 잠시 후 다시 확인해주세요.");
+            HttpStatus.CONFLICT, "이전 요청이 아직 처리 중입니다. 잠시 후 다시 확인해주세요."),
+    CHARGE_NOT_FOUND(
+            HttpStatus.NOT_FOUND, "충전 시도를 찾을 수 없습니다.");
 
     private final HttpStatus status;
     private final String message;
