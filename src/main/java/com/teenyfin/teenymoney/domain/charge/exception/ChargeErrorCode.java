@@ -24,7 +24,19 @@ public enum ChargeErrorCode implements ErrorCode {
     BILLING_KEY_ENCRYPTION_FAILED(
             HttpStatus.INTERNAL_SERVER_ERROR, "결제수단 정보 처리 중 오류가 발생했습니다."),
     CHARGE_METHOD_SAVE_FAILED(
-            HttpStatus.INTERNAL_SERVER_ERROR, "결제수단 저장에 실패했습니다.");
+            HttpStatus.INTERNAL_SERVER_ERROR, "결제수단 저장에 실패했습니다."),
+    TOSS_CHARGE_APPROVAL_FAILED(
+            HttpStatus.BAD_GATEWAY, "카드 충전 승인에 실패했습니다."),
+    TOSS_CHARGE_CANCEL_FAILED(
+            HttpStatus.BAD_GATEWAY, "충전 취소에 실패했습니다."),
+    // 정상적인 타임아웃 재시도는 Idempotency-Key 헤더가 처리해줘서 원래 이 에러를 볼 일이 없어야 함.
+    // 그런데도 보인다면 멱등키를 실수로 다르게 보낸 버그일 가능성이 큼 - 2차 안전망 용도.
+    TOSS_ORDER_ID_DUPLICATED(
+            HttpStatus.CONFLICT, "이미 처리된 충전 요청입니다."),
+    // 같은 멱등키로 첫 요청이 아직 처리 중일 때 재시도하면 토스가 이걸 돌려줌.
+    // 실패가 아니라 "아직 결과를 모름"이라, 이 상태를 실패로 기록하면 안 됨.
+    TOSS_REQUEST_IN_PROGRESS(
+            HttpStatus.CONFLICT, "이전 요청이 아직 처리 중입니다. 잠시 후 다시 확인해주세요.");
 
     private final HttpStatus status;
     private final String message;
