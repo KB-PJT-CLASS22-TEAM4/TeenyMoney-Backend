@@ -74,5 +74,30 @@ public interface QuestMapper {
 
     QuestVerificationVO selectLatestVerification(@Param("questId") Long questId);
 
+    QuestVerificationVO selectLatestVerificationForUpdate(
+            @Param("questId") Long questId);
+
+    int updateVerificationReview(
+            @Param("verificationId") Long verificationId,
+            @Param("questId") Long questId,
+            @Param("status") String status,
+            @Param("rejectionReason") String rejectionReason,
+            @Param("reviewedAt") LocalDateTime reviewedAt);
+
+    int updateCompletedByParent(
+            @Param("questId") Long questId,
+            @Param("parentId") Long parentId,
+            @Param("endedAt") LocalDateTime endedAt,
+            @Param("updatedAt") LocalDateTime updatedAt);
+
+    int updateAfterRejectionByParent(
+            @Param("questId") Long questId,
+            @Param("parentId") Long parentId,
+            @Param("toStatus") QuestStatus toStatus,
+            @Param("remainingCount") Integer remainingCount,
+            @Param("deadline") LocalDateTime deadline,
+            @Param("endedAt") LocalDateTime endedAt,
+            @Param("updatedAt") LocalDateTime updatedAt);
+
     int insertVerification(QuestVerificationVO verification);
 }
