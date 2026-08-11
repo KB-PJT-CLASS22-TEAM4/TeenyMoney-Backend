@@ -33,11 +33,12 @@ class PaymentServiceGetPaymentInfoTest {
     private final MemberPaymentMapper memberPaymentMapper = Mockito.mock(MemberPaymentMapper.class);
     private final WalletMapper walletMapper = Mockito.mock(WalletMapper.class);
     private final OrderStore orderStore = Mockito.mock(OrderStore.class);
+    private final MemberPaymentService memberPaymentService = Mockito.mock(MemberPaymentService.class);
     private final WalletLedgerService walletLedgerService = Mockito.mock(WalletLedgerService.class);
     private final PasswordEncoder passwordEncoder = Mockito.mock(PasswordEncoder.class);
     private final PaymentService paymentService = new PaymentService(
             paymentMapper, categoryPolicyMapper, memberPaymentMapper, walletMapper,
-            orderStore, walletLedgerService, passwordEncoder);
+            walletLedgerService, memberPaymentService, orderStore, passwordEncoder);
 
     private WalletVO createWalletVO(Long id, Long balance) {
         WalletVO vo = new WalletVO();

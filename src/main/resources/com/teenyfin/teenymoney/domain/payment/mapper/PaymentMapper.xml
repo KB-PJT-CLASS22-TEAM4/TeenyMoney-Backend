@@ -59,6 +59,28 @@
         )
     </insert>
 
+    <select id="selectById" resultMap="paymentResultMap">
+        SELECT
+            id,
+            wallet_id,
+            category_id,
+            order_id,
+            idempotency_key,
+            applied_policy,
+            amount,
+            status,
+            failure_reason,
+            created_at
+        FROM T_PAY_TRAN_L
+        WHERE id = #{id}
+    </select>
+
+    <select id="existsByOrderId" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1 FROM T_PAY_TRAN_L WHERE order_id = #{orderId}
+        )
+    </select>
+
     <select id="selectByIdempotencyKey" resultMap="paymentResultMap">
         SELECT
             id,

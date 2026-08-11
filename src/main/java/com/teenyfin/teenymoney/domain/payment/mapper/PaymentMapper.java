@@ -16,6 +16,12 @@ public interface PaymentMapper {
     // 결제 내역 삽입
     int insert(PaymentVO paymentVO);
 
+    // 아이디로 결제 내역 조회
+    PaymentVO selectById(@Param("id") Long id);
+
+    // 주문 아이디로 결제 내역 유무 조회
+    Boolean existsByOrderId(@Param("orderId") String orderId);
+
     // 멱등성 키로 결제 내역 조회
     PaymentVO selectByIdempotencyKey(@Param("idempotencyKey") String idempotencyKey);
 

@@ -24,6 +24,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
@@ -40,8 +41,11 @@ public class PaymentService {
     private final CategoryPolicyMapper categoryPolicyMapper;
     private final MemberPaymentMapper memberPaymentMapper;
     private final WalletMapper walletMapper;
-    private final OrderStore orderStore;
+
     private final WalletLedgerService walletLedgerService;
+    private final MemberPaymentService memberPaymentService;
+
+    private final OrderStore orderStore;
     private final PasswordEncoder passwordEncoder;
 
     @Transactional(readOnly = true)
@@ -50,6 +54,11 @@ public class PaymentService {
         // 만료 시간 검증
         if (paymentQrRequestDTO.getExpiredAt().isBefore(LocalDateTime.now())) {
             throw new BusinessException(PaymentErrorCode.EXPIRED_QR_CODE);
+        }
+
+        // 이미 결제 완료된 주문인지 먼저 확인
+        if (paymentMapper.existsByOrderId(paymentQrRequestDTO.getOrderId())) {
+            throw new BusinessException(PaymentErrorCode.PAYMENT_ALREADY_COMPLETED);
         }
 
         // 이미 Redis에 저장된 결제 정보가 있으면 재사용
@@ -140,12 +149,11 @@ public class PaymentService {
         // 결제 비밀번호 검증
         if (!passwordEncoder.matches(paymentRequestDTO.getPassword(), memberPaymentVO.getPaymentPassword())) {
 
-            memberPaymentMapper.incrementPaymentPasswordFailedCount(memberId);  // 실패 횟수 1 증가
-            MemberPaymentVO updated = memberPaymentMapper.selectByMemberId(memberId);
+            int failedCount = memberPaymentService.incrementFailedCountAndGet(memberId); // 실패 횟수 1 증가
 
             // 증가 후 횟수가 5회면 잠금 시간 10분 후로 설정
-            if (updated.getPaymentPasswordFailedCount() >= 5) {
-                memberPaymentMapper.updatePaymentLockedUntil(memberId, LocalDateTime.now().plusMinutes(10));
+            if (failedCount >= 5) {
+                memberPaymentService.lockPayment(memberId, LocalDateTime.now().plusMinutes(10));
                 throw new BusinessException(PaymentErrorCode.PAYMENT_JUST_LOCKED);
             }
 
@@ -153,7 +161,7 @@ public class PaymentService {
         }
 
         // 성공하면 실패 횟수 초기화
-        memberPaymentMapper.resetPaymentPasswordFailedCount(memberId);
+        memberPaymentService.resetFailedCount(memberId);
 
         CategoryPolicyVO categoryPolicyVO = categoryPolicyMapper.selectByCategoryIdAndChildId(orderVO.getCategoryId(), memberId);
 
@@ -204,6 +212,8 @@ public class PaymentService {
                 throw new BusinessException(PaymentErrorCode.PAYMENT_ALREADY_COMPLETED);
             }
         }
+
+        paymentVO = paymentMapper.selectById(paymentVO.getId());
 
         // 최신 잔액 조회 (debit 이후 실제 반영된 값)
         walletVO = walletMapper.selectWalletForUpdate(walletVO.getId());
