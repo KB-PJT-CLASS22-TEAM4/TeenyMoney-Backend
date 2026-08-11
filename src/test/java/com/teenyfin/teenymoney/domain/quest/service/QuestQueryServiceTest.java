@@ -14,6 +14,7 @@ import com.teenyfin.teenymoney.global.exception.CommonErrorCode;
 import com.teenyfin.teenymoney.global.security.MemberPrincipal;
 import com.teenyfin.teenymoney.global.storage.S3Storage;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
@@ -49,7 +50,8 @@ class QuestQueryServiceTest {
     }
 
     @Test
-    void 부모는_연결된_자녀로_좁혀_20건과_다음_커서를_받는다() {
+    @DisplayName("부모는 연결된 자녀로 좁혀 20건과 다음 커서를 받는다")
+    void parentGets20ItemsAndNextCursorNarrowedByChild() {
         given(questMapper.selectPageByParent(
                 eq(1L), eq(2L), anyList(), isNull(), isNull(), eq(false), eq(21)))
                 .willReturn(rows(21, QuestStatus.AVAILABLE));
@@ -65,7 +67,8 @@ class QuestQueryServiceTest {
     }
 
     @Test
-    void 자녀가_childId_필터를_보내면_400_오류다() {
+    @DisplayName("자녀가 childId 필터를 보내면 400 오류다")
+    void childSendingChildIdFilterReturns400() {
         assertError(
                 () -> service.getQuests(child(), QuestTab.AVAILABLE, 3L, null),
                 CommonErrorCode.COMMON_INVALID_INPUT);
@@ -75,7 +78,8 @@ class QuestQueryServiceTest {
     }
 
     @Test
-    void 자녀_목록은_인증된_자녀_ID로만_조회한다() {
+    @DisplayName("자녀 목록은 인증된 자녀 ID로만 조회한다")
+    void childListQueriesOnlyAuthenticatedChildId() {
         given(questMapper.selectPageByChild(
                 eq(2L), anyList(), isNull(), isNull(), eq(false), eq(21)))
                 .willReturn(List.of(row(1L, QuestStatus.IN_PROGRESS)));
@@ -91,7 +95,8 @@ class QuestQueryServiceTest {
     }
 
     @Test
-    void 다음_커서는_같은_탭에서만_사용할_수_있다() {
+    @DisplayName("다음 커서는 같은 탭에서만 사용할 수 있다")
+    void nextCursorWorksOnlyWithinSameTab() {
         given(questMapper.selectPageByParent(
                 eq(1L), isNull(), anyList(), isNull(), isNull(), eq(false), eq(21)))
                 .willReturn(rows(21, QuestStatus.AVAILABLE));
@@ -104,14 +109,16 @@ class QuestQueryServiceTest {
     }
 
     @Test
-    void 깨진_커서는_400_오류다() {
+    @DisplayName("깨진 커서는 400 오류다")
+    void malformedCursorReturns400() {
         assertError(
                 () -> service.getQuests(parent(), QuestTab.AVAILABLE, null, "not-a-cursor"),
                 CommonErrorCode.COMMON_INVALID_INPUT);
     }
 
     @Test
-    void 부모_상세는_부모_범위_SQL을_사용하고_프로필_URL을_만든다() {
+    @DisplayName("부모 상세는 부모 범위 SQL을 사용하고 프로필 URL을 만든다")
+    void parentDetailUsesParentScopedSqlAndBuildsProfileUrl() {
         QuestVO quest = row(55L, QuestStatus.AVAILABLE);
         given(questMapper.selectDetailByParent(55L, 1L)).willReturn(quest);
         given(s3Storage.presignedUrl("profile/2.png")).willReturn("https://signed/profile");
@@ -125,7 +132,8 @@ class QuestQueryServiceTest {
     }
 
     @Test
-    void 접근할_수_없는_상세와_없는_상세는_같은_404다() {
+    @DisplayName("접근할 수 없는 상세와 없는 상세는 같은 404다")
+    void inaccessibleAndMissingDetailReturnSame404() {
         given(questMapper.selectDetailByChild(55L, 2L)).willReturn(null);
 
         assertError(
@@ -134,7 +142,8 @@ class QuestQueryServiceTest {
     }
 
     @Test
-    void 최신_인증_이미지는_90일_전까지만_임시_URL을_제공한다() {
+    @DisplayName("최신 인증 이미지는 90일 전까지만 임시 URL을 제공한다")
+    void latestVerificationImageServesTemporaryUrlUntil90Days() {
         QuestVO quest = row(55L, QuestStatus.PENDING);
         QuestVerificationVO verification = QuestVerificationVO.builder()
                 .id(7L)
@@ -156,7 +165,8 @@ class QuestQueryServiceTest {
     }
 
     @Test
-    void 업로드_90일이_되면_이미지를_노출하지_않는다() {
+    @DisplayName("업로드 90일이 되면 이미지를 노출하지 않는다")
+    void hidesImageOnceUploadReaches90Days() {
         QuestVO quest = row(55L, QuestStatus.PENDING);
         QuestVerificationVO verification = QuestVerificationVO.builder()
                 .id(7L)
@@ -177,7 +187,8 @@ class QuestQueryServiceTest {
     }
 
     @Test
-    void 알_수_없는_역할은_조회하지_않는다() {
+    @DisplayName("알 수 없는 역할은 조회하지 않는다")
+    void unknownRoleCannotQuery() {
         assertError(
                 () -> service.getQuests(
                         new MemberPrincipal(9L, "ADMIN"), QuestTab.AVAILABLE, null, null),
