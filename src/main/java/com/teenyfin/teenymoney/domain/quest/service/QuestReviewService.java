@@ -1,7 +1,9 @@
 package com.teenyfin.teenymoney.domain.quest.service;
 
+import com.teenyfin.teenymoney.domain.quest.dto.request.QuestRejectRequestDTO;
 import com.teenyfin.teenymoney.domain.quest.exception.QuestErrorCode;
 import com.teenyfin.teenymoney.domain.quest.mapper.QuestMapper;
+import com.teenyfin.teenymoney.domain.quest.vo.AfterDeadlineAction;
 import com.teenyfin.teenymoney.domain.quest.vo.QuestStatus;
 import com.teenyfin.teenymoney.domain.quest.vo.QuestVO;
 import com.teenyfin.teenymoney.domain.quest.vo.QuestVerificationVO;
@@ -26,6 +28,7 @@ public class QuestReviewService {
 
     private static final String VERIFICATION_PENDING = "PENDING";
     private static final String VERIFICATION_APPROVED = "APPROVED";
+    private static final String VERIFICATION_REJECTED = "REJECTED";
     private static final String QUEST_REWARD_KEY_PREFIX = "QUEST_REWARD:";
 
     private final QuestMapper questMapper;
@@ -85,6 +88,120 @@ public class QuestReviewService {
                 quest.getId(), parentId, now, now) != 1) {
             throw new BusinessException(QuestErrorCode.QUEST_STATUS_CONFLICT);
         }
+    }
+
+    /**
+     * 최신 PENDING 인증을 반려한다. 기회가 남으면 다시 수행 상태로 열고,
+     * 마지막 기회이거나 기한 후 실패를 선택하면 최종 실패로 확정한다.
+     */
+    @Transactional
+    public void reject(
+            MemberPrincipal principal,
+            Long questId,
+            Long verificationId,
+            QuestRejectRequestDTO request) {
+        Long parentId = requireParent(principal);
+        String reason = normalizeReason(request);
+        QuestVO quest = findOwnedPendingForUpdate(questId, parentId);
+        QuestVerificationVO verification =
+                findLatestPendingVerificationForUpdate(
+                        questId, verificationId);
+        LocalDateTime now = now();
+
+        Integer remainingCount = quest.getRemainingCount();
+        if (remainingCount == null || remainingCount <= 0) {
+            throw new BusinessException(
+                    QuestErrorCode.QUEST_VERIFICATION_ATTEMPT_EXCEEDED);
+        }
+        int nextRemainingCount = remainingCount - 1;
+        RejectionDecision decision = decideRejection(
+                quest, request, nextRemainingCount, now);
+
+        if (decision.status == QuestStatus.FAILED
+                && Boolean.TRUE.equals(quest.getTeenyScoreEnabled())) {
+            teenyScoreChangeService.change(
+                    teenyScorePolicyService.questFailed(
+                            quest.getChildId(), quest.getId()));
+        }
+        if (questMapper.updateVerificationReview(
+                verification.getId(),
+                quest.getId(),
+                VERIFICATION_REJECTED,
+                reason,
+                now) != 1) {
+            throw new BusinessException(
+                    QuestErrorCode.QUEST_VERIFICATION_CONFLICT);
+        }
+        if (questMapper.updateAfterRejectionByParent(
+                quest.getId(),
+                parentId,
+                decision.status,
+                nextRemainingCount,
+                decision.deadline,
+                decision.endedAt,
+                now) != 1) {
+            throw new BusinessException(QuestErrorCode.QUEST_STATUS_CONFLICT);
+        }
+    }
+
+    private RejectionDecision decideRejection(
+            QuestVO quest,
+            QuestRejectRequestDTO request,
+            int nextRemainingCount,
+            LocalDateTime now) {
+        // 마지막 인증 반려는 선택값을 해석하지 않고 즉시 최종 실패한다.
+        if (nextRemainingCount == 0) {
+            return RejectionDecision.failed(now);
+        }
+
+        LocalDateTime currentDeadline = quest.getDeadline();
+        if (currentDeadline == null) {
+            throw new BusinessException(
+                    QuestErrorCode.QUEST_REVIEW_REQUEST_INVALID);
+        }
+        boolean afterDeadline = now.isAfter(currentDeadline);
+        AfterDeadlineAction action = request.getAfterDeadlineAction();
+        LocalDateTime extendedDeadline = request.getExtendedDeadline();
+
+        if (!afterDeadline) {
+            if (action != null || extendedDeadline != null) {
+                throw new BusinessException(
+                        QuestErrorCode.QUEST_REVIEW_REQUEST_INVALID);
+            }
+            return RejectionDecision.retry(null);
+        }
+
+        if (action == null) {
+            throw new BusinessException(
+                    QuestErrorCode.QUEST_REVIEW_REQUEST_INVALID);
+        }
+        if (action == AfterDeadlineAction.FAIL) {
+            if (extendedDeadline != null) {
+                throw new BusinessException(
+                        QuestErrorCode.QUEST_REVIEW_REQUEST_INVALID);
+            }
+            return RejectionDecision.failed(now);
+        }
+        if (extendedDeadline == null
+                || !extendedDeadline.isAfter(now)
+                || extendedDeadline.isAfter(now.plusYears(1))) {
+            throw new BusinessException(
+                    QuestErrorCode.QUEST_EXTENDED_DEADLINE_INVALID);
+        }
+        return RejectionDecision.retry(extendedDeadline);
+    }
+
+    private String normalizeReason(QuestRejectRequestDTO request) {
+        if (request == null || request.getReason() == null) {
+            throw new BusinessException(
+                    QuestErrorCode.QUEST_REVIEW_REQUEST_INVALID);
+        }
+        String reason = request.getReason().trim();
+        if (reason.isEmpty() || reason.length() > 500) {
+            throw new BusinessException(
+                    QuestErrorCode.QUEST_REVIEW_REQUEST_INVALID);
+        }
+        return reason;
     }
 
     private void applyRewardIfPresent(QuestVO quest) {
@@ -153,5 +270,30 @@ public class QuestReviewService {
 
     private LocalDateTime now() {
         return LocalDateTime.now(clock).truncatedTo(ChronoUnit.SECONDS);
+    }
+
+    private static class RejectionDecision {
+        private final QuestStatus status;
+        private final LocalDateTime deadline;
+        private final LocalDateTime endedAt;
+
+        private RejectionDecision(
+                QuestStatus status,
+                LocalDateTime deadline,
+                LocalDateTime endedAt) {
+            this.status = status;
+            this.deadline = deadline;
+            this.endedAt = endedAt;
+        }
+
+        private static RejectionDecision retry(LocalDateTime deadline) {
+            return new RejectionDecision(
+                    QuestStatus.IN_PROGRESS, deadline, null);
+        }
+
+        private static RejectionDecision failed(LocalDateTime endedAt) {
+            return new RejectionDecision(
+                    QuestStatus.FAILED, null, endedAt);
+        }
     }
 }
