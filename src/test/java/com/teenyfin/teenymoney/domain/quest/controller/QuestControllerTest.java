@@ -3,11 +3,14 @@ package com.teenyfin.teenymoney.domain.quest.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.teenyfin.teenymoney.domain.quest.dto.request.QuestCreateRequestDTO;
+import com.teenyfin.teenymoney.domain.quest.dto.request.QuestDeclineRequestDTO;
 import com.teenyfin.teenymoney.domain.quest.dto.request.QuestUpdateRequestDTO;
 import com.teenyfin.teenymoney.domain.quest.dto.response.QuestDetailResponseDTO;
 import com.teenyfin.teenymoney.domain.quest.dto.response.QuestListResponseDTO;
 import com.teenyfin.teenymoney.domain.quest.service.QuestCreationService;
+import com.teenyfin.teenymoney.domain.quest.service.QuestProgressService;
 import com.teenyfin.teenymoney.domain.quest.service.QuestQueryService;
+import com.teenyfin.teenymoney.domain.quest.vo.DeclineReasonCode;
 import com.teenyfin.teenymoney.domain.quest.vo.QuestStatus;
 import com.teenyfin.teenymoney.domain.quest.vo.QuestTab;
 import com.teenyfin.teenymoney.domain.quest.vo.QuestVO;
@@ -16,7 +19,9 @@ import com.teenyfin.teenymoney.global.exception.GlobalExceptionAdvice;
 import com.teenyfin.teenymoney.global.security.MemberPrincipal;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -33,6 +38,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -46,6 +52,7 @@ class QuestControllerTest {
 
     private static final String REQUEST_KEY = "11111111-1111-1111-1111-111111111111";
 
+    private final QuestProgressService questProgressService = mock(QuestProgressService.class);
     private final QuestCreationService creationService = mock(QuestCreationService.class);
     private final QuestQueryService queryService = mock(QuestQueryService.class);
     private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
@@ -54,7 +61,7 @@ class QuestControllerTest {
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(
-                        new QuestController(creationService, queryService))
+                        new QuestController(questProgressService, creationService, queryService))
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .setMessageConverters(new MappingJackson2HttpMessageConverter(objectMapper))
                 .setControllerAdvice(new GlobalExceptionAdvice())
@@ -70,7 +77,8 @@ class QuestControllerTest {
     }
 
     @Test
-    void 생성은_인증된_부모와_요청_키와_본문을_서비스에_전달한다() throws Exception {
+    @DisplayName("생성은 인증된 부모와 요청 키와 본문을 서비스에 전달한다")
+    void createPassesPrincipalRequestKeyAndBodyToService() throws Exception {
         given(creationService.create(any(), any(), eq(REQUEST_KEY)))
                 .willReturn(List.of(101L, 102L));
 
@@ -88,7 +96,8 @@ class QuestControllerTest {
     }
 
     @Test
-    void 생성_요청_키가_없으면_400이다() throws Exception {
+    @DisplayName("생성 요청 키가 없으면 400이다")
+    void createWithoutRequestKeyReturns400() throws Exception {
         var response = mockMvc.perform(post("/quests")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(createRequest())))
@@ -99,7 +108,8 @@ class QuestControllerTest {
     }
 
     @Test
-    void 잘못된_생성_본문은_필드_오류와_함께_400이다() throws Exception {
+    @DisplayName("잘못된 생성 본문은 필드 오류와 함께 400이다")
+    void invalidCreateBodyReturns400WithFieldErrors() throws Exception {
         var response = mockMvc.perform(post("/quests")
                         .header("X-Creation-Request-Key", REQUEST_KEY)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -113,7 +123,8 @@ class QuestControllerTest {
     }
 
     @Test
-    void 목록은_탭과_선택_필터를_서비스에_전달한다() throws Exception {
+    @DisplayName("목록은 탭과 선택 필터를 서비스에 전달한다")
+    void listPassesTabAndOptionalFiltersToService() throws Exception {
         given(queryService.getQuests(any(), eq(QuestTab.AVAILABLE), eq(2L), eq("cursor")))
                 .willReturn(new QuestListResponseDTO(List.of(), null));
 
@@ -132,7 +143,8 @@ class QuestControllerTest {
     }
 
     @Test
-    void 수정은_저장한_뒤_최신_상세를_반환한다() throws Exception {
+    @DisplayName("수정은 저장한 뒤 최신 상세를 반환한다")
+    void updateReturnsFreshDetailAfterSaving() throws Exception {
         QuestDetailResponseDTO detail = detail();
         given(queryService.getQuest(any(), eq(55L))).willReturn(detail);
 
@@ -151,7 +163,8 @@ class QuestControllerTest {
     }
 
     @Test
-    void 삭제는_data_null로_응답한다() throws Exception {
+    @DisplayName("삭제는 data null로 응답한다")
+    void deleteRespondsWithNullData() throws Exception {
         var response = mockMvc.perform(delete("/quests/55"))
                 .andReturn().getResponse();
         String body = response.getContentAsString(StandardCharsets.UTF_8);
@@ -160,6 +173,108 @@ class QuestControllerTest {
         assertTrue(body.contains("\"data\":null"), body);
 
         verify(creationService).delete(new MemberPrincipal(1L, "PARENT"), 55L);
+    }
+
+    @Test
+    @DisplayName("수락은 자녀와 퀘스트 ID를 서비스에 전달하고 최신 상세를 반환한다")
+    void acceptPassesChildAndQuestIdToServiceAndReturnsFreshDetail() throws Exception {
+        asChild();
+        given(queryService.getQuest(any(), eq(55L))).willReturn(detail());
+
+        var response = mockMvc.perform(patch("/quests/55/accept"))
+                .andReturn().getResponse();
+        String body = response.getContentAsString(StandardCharsets.UTF_8);
+        assertEquals(200, response.getStatus(), body);
+        assertTrue(body.contains("\"questId\":55"), body);
+
+        verify(questProgressService).accept(new MemberPrincipal(2L, "CHILD"), 55L);
+        verify(queryService).getQuest(new MemberPrincipal(2L, "CHILD"), 55L);
+    }
+
+    @Test
+    @DisplayName("수락은 본문을 받지 않는다")
+    void acceptTakesNoRequestBody() throws Exception {
+        asChild();
+        given(queryService.getQuest(any(), eq(55L))).willReturn(detail());
+
+        var response = mockMvc.perform(patch("/quests/55/accept")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"COMPLETED\"}"))
+                .andReturn().getResponse();
+
+        // 본문을 보내도 무시된다. 상태는 서버가 정하지 클라이언트가 지정하지 못한다.
+        assertEquals(200, response.getStatus(),
+                response.getContentAsString(StandardCharsets.UTF_8));
+        verify(questProgressService).accept(new MemberPrincipal(2L, "CHILD"), 55L);
+    }
+
+    @Test
+    @DisplayName("거절은 사유를 서비스에 전달하고 최신 상세를 반환한다")
+    void declinePassesReasonToServiceAndReturnsFreshDetail() throws Exception {
+        asChild();
+        given(queryService.getQuest(any(), eq(55L))).willReturn(detail());
+        ArgumentCaptor<QuestDeclineRequestDTO> captor =
+                ArgumentCaptor.forClass(QuestDeclineRequestDTO.class);
+
+        var response = mockMvc.perform(patch("/quests/55/decline")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(QuestDeclineRequestDTO.builder()
+                                .reasonCode(DeclineReasonCode.NOT_ENOUGH_TIME)
+                                .reasonDetail("학원이 있어요")
+                                .build())))
+                .andReturn().getResponse();
+        String body = response.getContentAsString(StandardCharsets.UTF_8);
+        assertEquals(200, response.getStatus(), body);
+        assertTrue(body.contains("\"questId\":55"), body);
+
+        verify(questProgressService).decline(
+                eq(new MemberPrincipal(2L, "CHILD")), eq(55L), captor.capture());
+        assertEquals(DeclineReasonCode.NOT_ENOUGH_TIME, captor.getValue().getReasonCode());
+        assertEquals("학원이 있어요", captor.getValue().getReasonDetail());
+    }
+
+    @Test
+    @DisplayName("사유 코드가 없는 거절은 필드 오류와 함께 400이고 서비스를 부르지 않는다")
+    void declineWithoutReasonCodeReturns400WithFieldError() throws Exception {
+        asChild();
+
+        var response = mockMvc.perform(patch("/quests/55/decline")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andReturn().getResponse();
+        String body = response.getContentAsString(StandardCharsets.UTF_8);
+        assertEquals(400, response.getStatus(), body);
+        assertTrue(body.contains("\"code\":\"COMMON_INVALID_INPUT\""), body);
+        // @Valid 가 붙어 있어야 어느 필드가 문제인지 응답에 담긴다.
+        assertTrue(body.contains("\"reasonCode\""), body);
+
+        verify(questProgressService, never()).decline(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("상세 사유가 500자를 넘으면 400이다")
+    void declineWithTooLongDetailReturns400() throws Exception {
+        asChild();
+
+        var response = mockMvc.perform(patch("/quests/55/decline")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(QuestDeclineRequestDTO.builder()
+                                .reasonCode(DeclineReasonCode.OTHER)
+                                .reasonDetail("가".repeat(501))
+                                .build())))
+                .andReturn().getResponse();
+        String body = response.getContentAsString(StandardCharsets.UTF_8);
+        assertEquals(400, response.getStatus(), body);
+        assertTrue(body.contains("\"reasonDetail\""), body);
+
+        verify(questProgressService, never()).decline(any(), any(), any());
+    }
+
+    /** 수락·거절은 자녀 전용이라 setUp 의 PARENT 인증을 CHILD 로 바꾼다. */
+    private void asChild() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(
+                        new MemberPrincipal(2L, "CHILD"), null, List.of()));
     }
 
     private QuestCreateRequestDTO createRequest() {

@@ -1,10 +1,12 @@
 package com.teenyfin.teenymoney.domain.quest.controller;
 
 import com.teenyfin.teenymoney.domain.quest.dto.request.QuestCreateRequestDTO;
+import com.teenyfin.teenymoney.domain.quest.dto.request.QuestDeclineRequestDTO;
 import com.teenyfin.teenymoney.domain.quest.dto.request.QuestUpdateRequestDTO;
 import com.teenyfin.teenymoney.domain.quest.dto.response.QuestDetailResponseDTO;
 import com.teenyfin.teenymoney.domain.quest.dto.response.QuestListResponseDTO;
 import com.teenyfin.teenymoney.domain.quest.service.QuestCreationService;
+import com.teenyfin.teenymoney.domain.quest.service.QuestProgressService;
 import com.teenyfin.teenymoney.domain.quest.service.QuestQueryService;
 import com.teenyfin.teenymoney.domain.quest.vo.QuestTab;
 import com.teenyfin.teenymoney.global.response.ApiResponse;
@@ -29,12 +31,13 @@ import org.springframework.web.bind.annotation.RestController;
 import javax.validation.Valid;
 import java.util.List;
 
-@Api(tags = "퀘스트", description = "퀘스트 생성·조회·수정·삭제 API")
+@Api(tags = "퀘스트", description = "퀘스트 생성·조회·수정·삭제·수락·거절 API")
 @RestController
 @RequestMapping("/quests")
 @RequiredArgsConstructor
 public class QuestController {
 
+    private final QuestProgressService questProgressService;
     private final QuestCreationService questCreationService;
     private final QuestQueryService questQueryService;
 
@@ -99,5 +102,30 @@ public class QuestController {
             @PathVariable Long questId) {
         questCreationService.delete(principal, questId);
         return ApiResponse.ok();
+    }
+
+    @ApiOperation(
+            value = "퀘스트 수락",
+            notes = "AVAILABLE 상태이며 기한이 지나지 않은 본인 퀘스트를 IN_PROGRESS로 바꿉니다.")
+    @PreAuthorize("hasRole('CHILD')")
+    @PatchMapping("/{questId}/accept")
+    public ApiResponse<QuestDetailResponseDTO> acceptQuest(
+            @AuthenticationPrincipal MemberPrincipal principal,
+            @PathVariable Long questId) {
+        questProgressService.accept(principal, questId);
+        return ApiResponse.ok(questQueryService.getQuest(principal, questId));
+    }
+
+    @ApiOperation(
+            value = "퀘스트 거절",
+            notes = "AVAILABLE 상태인 본인 퀘스트를 사유와 함께 DECLINED로 바꿉니다. 티니점수는 차감하지 않습니다.")
+    @PreAuthorize("hasRole('CHILD')")
+    @PatchMapping("/{questId}/decline")
+    public ApiResponse<QuestDetailResponseDTO> declineQuest(
+            @AuthenticationPrincipal MemberPrincipal principal,
+            @PathVariable Long questId,
+            @RequestBody @Valid QuestDeclineRequestDTO request) {
+        questProgressService.decline(principal, questId, request);
+        return ApiResponse.ok(questQueryService.getQuest(principal, questId));
     }
 }

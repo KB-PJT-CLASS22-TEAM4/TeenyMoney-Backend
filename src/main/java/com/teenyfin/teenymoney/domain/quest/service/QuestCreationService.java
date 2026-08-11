@@ -32,7 +32,7 @@ public class QuestCreationService {
 
     // 퀘스트 DB 조회, 생성, 삭제
     private final QuestMapper questMapper;
-    // 부모 행을 잠가 같은 생서 요청이 동시에 처리되지 않도록 한다.
+    // 부모 행을 잠가 같은 생성 요청이 동시에 처리되지 않도록 한다.
     private final MemberMapper memberMapper;
     // 부모와 자녀가 실제 연결된 가족인지 확인
     private final FamilyAccessService familyAccessService;

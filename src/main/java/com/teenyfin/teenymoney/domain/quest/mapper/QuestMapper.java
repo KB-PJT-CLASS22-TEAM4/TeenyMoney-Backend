@@ -1,5 +1,6 @@
 package com.teenyfin.teenymoney.domain.quest.mapper;
 
+import com.teenyfin.teenymoney.domain.quest.vo.DeclineReasonCode;
 import com.teenyfin.teenymoney.domain.quest.vo.QuestVO;
 import com.teenyfin.teenymoney.domain.quest.vo.QuestStatus;
 import com.teenyfin.teenymoney.domain.quest.vo.QuestVerificationVO;
@@ -16,6 +17,10 @@ public interface QuestMapper {
             @Param("parentId") Long parentId,
             @Param("creationRequestKey") String creationRequestKey);
 
+    QuestVO selectByIdForUpdateByChild(
+            @Param("questId") Long questId,
+            @Param("childId") Long childId);
+
     QuestVO selectByIdForUpdateByParent(
             @Param("questId") Long questId,
             @Param("parentId") Long parentId);
@@ -23,6 +28,20 @@ public interface QuestMapper {
     int insert(QuestVO quest);
 
     int updateAvailable(QuestVO quest);
+
+    int updateStatusByChild(
+            @Param("questId") Long questId,
+            @Param("childId") Long childId,
+            @Param("fromStatus") QuestStatus fromStatus,
+            @Param("toStatus") QuestStatus toStatus,
+            @Param("updatedAt") LocalDateTime updatedAt);
+
+    int updateDeclineByChild(
+            @Param("questId") Long questId,
+            @Param("childId") Long childId,
+            @Param("reasonCode") DeclineReasonCode reasonCode,
+            @Param("reasonDetail") String reasonDetail,
+            @Param("endedAt") LocalDateTime endedAt);
 
     int deleteAvailable(
             @Param("questId") Long questId,
