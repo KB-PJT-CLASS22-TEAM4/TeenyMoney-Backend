@@ -1,5 +1,6 @@
 package com.teenyfin.teenymoney.domain.allowance.service;
 
+import com.teenyfin.teenymoney.config.LazyBeanInitializer;
 import com.teenyfin.teenymoney.config.RootConfig;
 import com.teenyfin.teenymoney.domain.allowance.dto.response.AllowanceSendResponseDTO;
 import com.teenyfin.teenymoney.domain.family.service.FamilyAccessService;
@@ -36,7 +37,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @ExtendWith(SpringExtension.class)
 // RootConfig에 등록된 빈들(DataSource, MyBatis 매퍼들)만 띄웁니다. AllowanceService 자체는
 // @Service라서 이 root 전용 컨텍스트엔 없기 때문에, 아래 setUp()에서 직접 new로 조립합니다.
-@ContextConfiguration(classes = RootConfig.class)
+@ContextConfiguration(classes = RootConfig.class, initializers = LazyBeanInitializer.class)
 // 이 3개의 환경변수(DB_URL/DB_USERNAME/DB_PASSWORD)가 없으면 이 클래스 전체가 "건너뛰기"
 // 처리됩니다. 그래야 로컬 DB 설정 없이 ./gradlew test 돌리는 사람 PC에서도 빌드가 깨지지 않습니다.
 @EnabledIfEnvironmentVariable(named = "DB_URL", matches = ".+")

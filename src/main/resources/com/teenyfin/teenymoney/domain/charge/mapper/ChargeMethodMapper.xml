@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.teenyfin.teenymoney.domain.charge.mapper.ChargeMethodMapper">
+
+    <!-- resultMap: DB 컬럼명(스네이크케이스) <-> 자바 필드명(카멜케이스)을 연결해주는 규칙.
+               <select>가 이 resultMap을 쓰면, 조회 결과를 자동으로 PaymentMethodVO 객체에 채워줌. -->
+
+    <resultMap id="chargeMethodResultMap" type="com.teenyfin.teenymoney.domain.charge.vo.ChargeMethodVO">
+        <id property="id" column="id"/>
+        <result property="parentId" column="parent_id"/>
+        <result property="billingKey" column="billing_key"/>
+        <result property="type" column="type"/>
+        <result property="cardCompany" column="card_company"/>
+        <result property="maskedCardNumber" column="masked_card_number"/>
+        <result property="accountBankName" column="account_bank_name"/>
+        <result property="accountNumber" column="account_number"/>
+        <result property="primary" column="is_primary"/>
+        <result property="status" column="status"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <!-- 새 결제수단 row를 INSERT한다.
+           status는 INSERT 목록에서 뺐음 - DB 컬럼에 DEFAULT 'ACTIVE'가 걸려있어서 자동으로 채워짐
+           (TransferMapper.xml의 insertTransfer가 status를 뺀 것과 같은 이유).
+           is_primary도 DEFAULT FALSE라 마찬가지로 뺐음 - 새로 등록되는 결제수단은
+           일단 주거래가 아닌 상태로 시작하고, 필요하면 나중에 별도 API로 주거래 지정함.
+           useGeneratedKeys="true" keyProperty="id": INSERT 직후 DB가 만든 auto_increment id가
+           파라미터로 넘긴 PaymentMethodVO 객체의 id 필드에 자동으로 다시 채워짐. -->
+
+    <insert id="insert" parameterType="com.teenyfin.teenymoney.domain.charge.vo.ChargeMethodVO" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO T_PAY_METHOD_M
+        (parent_id, billing_key, type, card_company, masked_card_number, account_bank_name, account_number)
+        VALUES
+        (#{parentId}, #{billingKey}, #{type}, #{cardCompany}, #{maskedCardNumber}, #{accountBankName}, #{accountNumber})
+    </insert>
+
+    <!-- 특정 부모의 결제수단 전체 목록 조회. 최신 등록 순으로 보여주는 게 자연스러워서 정렬을 추가함. -->
+    <select id="selectByParentId" resultMap="chargeMethodResultMap">
+        SELECT id, parent_id, billing_key, type, card_company, masked_card_number,
+        account_bank_name, account_number, is_primary, status, created_at, updated_at
+        FROM T_PAY_METHOD_M
+        WHERE parent_id = #{parentId}
+        ORDER BY created_at DESC
+    </select>
+
+    <!-- id 하나로 결제수단 단건 조회. -->
+    <select id="selectById" resultMap="chargeMethodResultMap">
+        SELECT id, parent_id, billing_key, type, card_company, masked_card_number,
+        account_bank_name, account_number, is_primary, status, created_at, updated_at
+        FROM T_PAY_METHOD_M
+        WHERE id = #{id}
+    </select>
+
+    <!-- 특정 부모의 모든 결제수단을 주거래 아님(false)으로 내린다.
+     setPrimary()보다 먼저 호출해야 "주거래는 항상 1개"가 지켜짐. -->
+    <update id="clearPrimaryByParentId">
+        UPDATE T_PAY_METHOD_M
+        SET is_primary = FALSE, updated_at = NOW()
+        WHERE parent_id = #{parentId}
+    </update>
+
+    <!-- 결제수단 하나를 주거래로 올린다. -->
+    <update id="setPrimary">
+        UPDATE T_PAY_METHOD_M
+        SET is_primary = TRUE, updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+
+    <!-- 상태 변경 (삭제 처리는 status='INACTIVE'로 이걸 호출하는 방식으로 구현할 예정). -->
+    <update id="updateStatus">
+        UPDATE T_PAY_METHOD_M
+        SET status = #{status}, updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+
+
+</mapper>

@@ -15,7 +15,8 @@ public class WebConfig extends AbstractAnnotationConfigDispatcherServletInitiali
                 RootConfig.class,
                 RedisConfig.class,
                 SecurityConfig.class,
-                S3Config.class
+                S3Config.class,
+                RestTemplateConfig.class
         };
     }
 
