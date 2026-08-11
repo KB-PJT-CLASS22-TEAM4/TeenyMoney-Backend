@@ -50,12 +50,14 @@ class QuestMapperContextTest {
                 "insert",
                 "updateAvailable",
                 "updateStatusByChild",
+                "updateDeclineByChild",
                 "deleteAvailable",
                 "selectPageByParent",
                 "selectPageByChild",
                 "selectDetailByParent",
                 "selectDetailByChild",
-                "selectLatestVerification")) {
+                "selectLatestVerification",
+                "insertVerification")) {
             assertTrue(sqlSessionFactory.getConfiguration()
                     .hasStatement(NAMESPACE + "." + statement), statement);
         }

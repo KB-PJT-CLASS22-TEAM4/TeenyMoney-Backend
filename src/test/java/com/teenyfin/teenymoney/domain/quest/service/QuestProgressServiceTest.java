@@ -9,9 +9,11 @@ import com.teenyfin.teenymoney.domain.quest.vo.QuestVO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import com.teenyfin.teenymoney.global.exception.ErrorCode;
 import com.teenyfin.teenymoney.global.security.MemberPrincipal;
+import com.teenyfin.teenymoney.global.storage.S3Storage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -38,9 +40,16 @@ class QuestProgressServiceTest {
     private final QuestMapper questMapper = mock(QuestMapper.class);
     private QuestProgressService service;
 
+    private final S3Storage s3Storage = mock(S3Storage.class);
+
     @BeforeEach
     void setUp() {
-        service = new QuestProgressService(questMapper, new QuestStatePolicy(), CLOCK);
+        service = new QuestProgressService(
+                questMapper,
+                new QuestStatePolicy(),
+                s3Storage,
+                mock(PlatformTransactionManager.class),
+                CLOCK);
     }
 
     @Test

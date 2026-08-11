@@ -8,24 +8,42 @@ import com.teenyfin.teenymoney.domain.quest.vo.QuestStatus;
 import com.teenyfin.teenymoney.domain.quest.vo.QuestVO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import com.teenyfin.teenymoney.global.security.MemberPrincipal;
-import lombok.RequiredArgsConstructor;
+import com.teenyfin.teenymoney.global.storage.S3Storage;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 
 @Service
-@RequiredArgsConstructor
 public class QuestProgressService {
 
-    // 잠금 조회, UPDATE
+    private static final String IMAGE_KEY_PREFIX = "quest-verifications/";
+    private static final int MAX_CONTENT_LENGTH = 500;
+    private static final String VERIFICATION_PENDING = "PENDING";
+
     private final QuestMapper questMapper;
-    // 상태, 기한 검사
     private final QuestStatePolicy questStatePolicy;
-    // now()사용 목적
+    private final S3Storage s3Storage;
+
+    // 인증 제출은 S3 업로드를 트랜잭션 밖에 둬야 해서 @Transactional 로 경계를 잡을 수 없다.
+    private final TransactionTemplate transactionTemplate;
     private final Clock clock;
+
+    public QuestProgressService(QuestMapper questMapper,
+                                QuestStatePolicy questStatePolicy,
+                                S3Storage s3Storage,
+                                PlatformTransactionManager transactionManager,
+                                Clock clock) {
+        this.questMapper = questMapper;
+        this.questStatePolicy = questStatePolicy;
+        this.s3Storage = s3Storage;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.clock = clock;
+    }
 
     // 자녀가 퀘스트를 수락한다.
     @Transactional

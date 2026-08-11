@@ -148,6 +148,23 @@
             #{createdAt}
         )
     </insert>
+    <insert id="insertVerification" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO T_QST_VERIFY_L (
+            quest_id,
+            attempt_no,
+            image_key,
+            content,
+            status,
+            created_at
+        ) VALUES (
+                     #{questId},
+                     #{attemptNo},
+                     #{imageKey},
+                     #{content},
+                     #{status},
+                     #{createdAt}
+                 )
+    </insert>
 
     <update id="updateAvailable">
         UPDATE T_QST_BASE_M

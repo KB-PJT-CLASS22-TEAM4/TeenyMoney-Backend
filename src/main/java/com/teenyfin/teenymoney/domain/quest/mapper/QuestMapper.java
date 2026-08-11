@@ -73,4 +73,6 @@ public interface QuestMapper {
             @Param("memberId") Long memberId);
 
     QuestVerificationVO selectLatestVerification(@Param("questId") Long questId);
+
+    int insertVerification(QuestVerificationVO verification);
 }
