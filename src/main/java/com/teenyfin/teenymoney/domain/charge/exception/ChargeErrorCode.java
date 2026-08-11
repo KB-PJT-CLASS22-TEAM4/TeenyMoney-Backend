@@ -38,7 +38,22 @@ public enum ChargeErrorCode implements ErrorCode {
     TOSS_REQUEST_IN_PROGRESS(
             HttpStatus.CONFLICT, "이전 요청이 아직 처리 중입니다. 잠시 후 다시 확인해주세요."),
     CHARGE_NOT_FOUND(
-            HttpStatus.NOT_FOUND, "충전 시도를 찾을 수 없습니다.");
+            HttpStatus.NOT_FOUND, "충전 시도를 찾을 수 없습니다."),
+    INVALID_CHARGE_AMOUNT(
+            HttpStatus.BAD_REQUEST, "충전 금액은 0보다 커야 합니다."),
+    INVALID_IDEMPOTENCY_KEY(
+            HttpStatus.BAD_REQUEST, "멱등성 키가 필요합니다."),
+    // idempotencyKey는 같은데 walletId/paymentMethodId/amount 중 하나라도 다른 요청이 온 경우.
+    // "이 키는 이미 다른 내용으로 쓰였다"는 뜻 - TransferService의 같은 이름 에러코드와 같은 개념.
+    IDEMPOTENCY_KEY_CONFLICT(
+            HttpStatus.CONFLICT, "이미 다른 내용으로 사용된 멱등성 키입니다."),
+    CHARGE_ALREADY_PROCESSING(
+            HttpStatus.CONFLICT, "이미 처리 중인 충전입니다."),
+    // DUPLICATED_ORDER_ID를 받았는데 우리 DB엔 아직 SUCCESS로 안 남아있는 이상 상태.
+    // 멱등키를 실수로 다르게 보낸 버그일 가능성이 있어 운영자 확인이 필요함.
+    CHARGE_STATE_CONFLICT(
+            HttpStatus.CONFLICT, "충전 상태를 확인할 수 없습니다. 잠시 후 다시 시도해주세요.");
+
 
     private final HttpStatus status;
     private final String message;
