@@ -3,10 +3,9 @@ package com.teenyfin.teenymoney.domain.quest.service;
 import com.teenyfin.teenymoney.domain.quest.dto.request.QuestDeclineRequestDTO;
 import com.teenyfin.teenymoney.domain.quest.exception.QuestErrorCode;
 import com.teenyfin.teenymoney.domain.quest.mapper.QuestMapper;
-import com.teenyfin.teenymoney.domain.quest.vo.DeclineReasonCode;
-import com.teenyfin.teenymoney.domain.quest.vo.QuestStatus;
-import com.teenyfin.teenymoney.domain.quest.vo.QuestVO;
+import com.teenyfin.teenymoney.domain.quest.vo.*;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
+import com.teenyfin.teenymoney.global.exception.CommonErrorCode;
 import com.teenyfin.teenymoney.global.security.MemberPrincipal;
 import com.teenyfin.teenymoney.global.storage.S3Storage;
 import org.springframework.stereotype.Service;
@@ -78,9 +77,40 @@ public class QuestProgressService {
         }
     }
 
-    /**
-     * 공백만 있는 값은 없는 것으로 본다. DB에 "   "가 들어가면 설명이 있는 것처럼 보인다.
-     */
+    // IN_PROGRESS -> PENDING. 시도마다 새 인증 행을 넣고 이전 시도는 건드리지 않는다.
+    @Transactional
+    public void submitVerification(MemberPrincipal principal, Long questId, String rawContent) {
+        Long childId = requireChild(principal);
+        String content = normalizeText(rawContent);
+        // multipart 파라미터라 @Size 를 걸 DTO 가 없다. 컬럼이 VARCHAR(500) 이므로 여기서 막는다.
+        if (content != null && content.length() > MAX_CONTENT_LENGTH) {
+            throw new BusinessException(CommonErrorCode.COMMON_INVALID_INPUT);
+        }
+
+        QuestVO quest = findOwnedForUpdate(questId, childId);
+        LocalDateTime now = now();
+        requireSubmittable(quest, content != null, false, now);
+
+        // 최신 시도를 재사용해 번호를 매긴다. (quest_id, attempt_no) UNIQUE 가 경합의 마지막 방어선이다.
+        QuestVerificationVO latest = questMapper.selectLatestVerification(questId);
+        QuestVerificationVO verification = QuestVerificationVO.builder()
+                .questId(questId)
+                .attemptNo(latest == null ? 1 : latest.getAttemptNo() + 1)
+                .content(content)
+                .status(VERIFICATION_PENDING)
+                .createdAt(now)
+                .build();
+        if (questMapper.insertVerification(verification) != 1) {
+            throw new IllegalStateException("인증 이력 생성 결과가 올바르지 않습니다.");
+        }
+        if (questMapper.updateStatusByChild(
+                questId, childId, QuestStatus.IN_PROGRESS, QuestStatus.PENDING, now) != 1) {
+            throw new BusinessException(QuestErrorCode.QUEST_STATUS_CONFLICT);
+        }
+    }
+
+
+    // 공백만 있는 값은 없는 것으로 본다. DB에 "   "가 들어가면 설명이 있는 것처럼 보인다.
     private String normalizeText(String value) {
         if (value == null) {
             return null;
@@ -110,6 +140,39 @@ public class QuestProgressService {
 
     private LocalDateTime now() {
         return LocalDateTime.now(clock).truncatedTo(ChronoUnit.SECONDS);
+    }
+
+    /**
+     * 제출 가능한 상태인지 본다.
+     * IN_PROGRESS 조건이 "동시에 하나의 PENDING 인증만"(불변식 7)을 대신 지킨다.
+     * 첫 제출이 퀘스트를 PENDING 으로 바꾸므로 중복 제출은 여기서 상태 충돌로 걸린다.
+     */
+    private void requireSubmittable(QuestVO quest, boolean hasText, boolean hasImage, LocalDateTime now) {
+        questStatePolicy.requireStatusBeforeDeadline(quest, QuestStatus.IN_PROGRESS, now);
+        if (quest.getRemainingCount() == null || quest.getRemainingCount() <= 0) {
+            throw new BusinessException(QuestErrorCode.QUEST_VERIFICATION_ATTEMPT_EXCEEDED);
+        }
+        if (!meetsRequirement(quest.getVerificationRequirement(), hasText, hasImage)) {
+            throw new BusinessException(QuestErrorCode.QUEST_VERIFICATION_REQUIREMENT_UNMET);
+        }
+    }
+
+    private boolean meetsRequirement(VerificationRequirement requirement, boolean hasText, boolean hasImage) {
+        if (requirement == null) {
+            return false;
+        }
+        switch (requirement) {
+            case FREE:
+                return true;
+            case PHOTO_REQUIRED:
+                return hasImage;
+            case TEXT_REQUIRED:
+                return hasText;
+            case ANY_REQUIRED:
+                return hasText || hasImage;
+            default:
+                return false;
+        }
     }
 }
 
