@@ -76,6 +76,9 @@
         <result property="productType" column="product_type"/>
         <result property="financialCompanyName" column="financial_company_name"/>
         <result property="productName" column="product_name"/>
+        <result property="description" column="description"/>
+        <result property="savingsType" column="savings_type"/>
+        <result property="interestCalculationType" column="interest_calculation_type"/>
         <result property="status" column="enrollment_status"/>
         <result property="appliedRate" column="applied_rate"/>
         <result property="appliedEarlyTerminationRate" column="applied_early_termination_rate"/>
@@ -157,6 +160,8 @@
                'DEPOSIT' AS product_type,
                product.kor_co_nm AS financial_company_name,
                product.name AS product_name,
+               product.description,
+               product.interest_calculation_type,
                enrollment.status AS enrollment_status,
                enrollment.applied_rate,
                enrollment.applied_early_termination_rate,
@@ -183,6 +188,9 @@
                'SAVING' AS product_type,
                product.kor_co_nm AS financial_company_name,
                product.name AS product_name,
+               product.description,
+               product.savings_type,
+               product.interest_calculation_type,
                enrollment.status AS enrollment_status,
                enrollment.applied_rate,
                enrollment.applied_early_termination_rate,
@@ -216,6 +224,7 @@
                product.id AS product_id,
                'LOAN' AS product_type,
                product.name AS product_name,
+               product.description,
                enrollment.status AS enrollment_status,
                enrollment.applied_rate,
                enrollment.applied_late_fee_rate,
@@ -246,6 +255,8 @@
                'DEPOSIT' AS product_type,
                product.kor_co_nm AS financial_company_name,
                product.name AS product_name,
+               product.description,
+               product.interest_calculation_type,
                enrollment.status AS enrollment_status,
                enrollment.applied_rate,
                enrollment.applied_early_termination_rate,
@@ -272,6 +283,9 @@
                'SAVING' AS product_type,
                product.kor_co_nm AS financial_company_name,
                product.name AS product_name,
+               product.description,
+               product.savings_type,
+               product.interest_calculation_type,
                enrollment.status AS enrollment_status,
                enrollment.applied_rate,
                enrollment.applied_early_termination_rate,
@@ -305,6 +319,7 @@
                product.id AS product_id,
                'LOAN' AS product_type,
                product.name AS product_name,
+               product.description,
                enrollment.status AS enrollment_status,
                enrollment.applied_rate,
                enrollment.applied_late_fee_rate,
@@ -366,6 +381,7 @@
             rate_3m = VALUES(rate_3m),
             rate_6m = VALUES(rate_6m),
             rate_12m = VALUES(rate_12m),
+            description = VALUES(description),
             updated_at = CURRENT_TIMESTAMP
     </insert>
 
@@ -393,6 +409,7 @@
             rate_3m = VALUES(rate_3m),
             rate_6m = VALUES(rate_6m),
             rate_12m = VALUES(rate_12m),
+            description = VALUES(description),
             updated_at = CURRENT_TIMESTAMP
     </insert>
 

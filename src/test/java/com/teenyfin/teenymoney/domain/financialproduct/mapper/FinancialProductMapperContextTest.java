@@ -72,4 +72,52 @@ class FinancialProductMapperContextTest {
         assertTrue(detailSql.contains("enrollment.id = ?"));
         assertFalse(detailSql.contains("product.id = ?"));
     }
+
+    @Test
+    void savingEnrollmentQueriesIncludeProductClassification() {
+        String namespace = FinancialProductMapper.class.getName();
+        String listSql = sqlSessionFactory.getConfiguration()
+                .getMappedStatement(namespace
+                        + ".selectSavingEnrollmentsByChildId")
+                .getBoundSql(Map.of("childId", 2L))
+                .getSql()
+                .replaceAll("\\s+", " ")
+                .trim();
+        String detailSql = sqlSessionFactory.getConfiguration()
+                .getMappedStatement(namespace
+                        + ".selectSavingEnrollmentByChildIdAndId")
+                .getBoundSql(Map.of(
+                        "childId", 2L,
+                        "enrollmentId", 31L))
+                .getSql()
+                .replaceAll("\\s+", " ")
+                .trim();
+
+        assertTrue(listSql.contains("product.savings_type"));
+        assertTrue(detailSql.contains("product.savings_type"));
+        assertTrue(listSql.contains("product.interest_calculation_type"));
+        assertTrue(detailSql.contains("product.interest_calculation_type"));
+    }
+
+    @Test
+    void productSyncUpdatesExistingDescriptions() {
+        String namespace = FinancialProductMapper.class.getName();
+        String depositSql = sqlSessionFactory.getConfiguration()
+                .getMappedStatement(namespace + ".upsertDepositProduct")
+                .getBoundSql(new Object())
+                .getSql()
+                .replaceAll("\\s+", " ")
+                .trim();
+        String savingSql = sqlSessionFactory.getConfiguration()
+                .getMappedStatement(namespace + ".upsertSavingProduct")
+                .getBoundSql(new Object())
+                .getSql()
+                .replaceAll("\\s+", " ")
+                .trim();
+
+        assertTrue(depositSql.contains(
+                "description = VALUES(description)"));
+        assertTrue(savingSql.contains(
+                "description = VALUES(description)"));
+    }
 }

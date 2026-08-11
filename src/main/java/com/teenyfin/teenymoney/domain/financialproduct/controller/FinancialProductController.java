@@ -1,6 +1,7 @@
 package com.teenyfin.teenymoney.domain.financialproduct.controller;
 
 import com.teenyfin.teenymoney.domain.financialproduct.dto.response.FinancialProductDetailResponseDTO;
+import com.teenyfin.teenymoney.domain.financialproduct.dto.response.FinancialProductEnrollmentListResponseDTO;
 import com.teenyfin.teenymoney.domain.financialproduct.dto.response.FinancialProductEnrollmentResponseDTO;
 import com.teenyfin.teenymoney.domain.financialproduct.dto.response.FinancialProductListResponseDTO;
 import com.teenyfin.teenymoney.domain.financialproduct.service.FinancialProductService;
@@ -60,7 +61,7 @@ public class FinancialProductController {
     @GetMapping("/children/{childId}")
     @ApiOperation(value = "자녀가 가입한 전체 금융상품 목록 조회",
             notes = "부모가 본인 자녀의 예금·적금·대출 가입상품을 조회합니다. 거절된 신청은 제외합니다.")
-    public ApiResponse<List<FinancialProductEnrollmentResponseDTO>>
+    public ApiResponse<List<FinancialProductEnrollmentListResponseDTO>>
             getProductsByChildId(
                     @AuthenticationPrincipal MemberPrincipal principal,
                     @ApiParam(value = "자녀 회원 ID", example = "2")
@@ -72,7 +73,7 @@ public class FinancialProductController {
 
     @GetMapping("/children/{childId}/deposit")
     @ApiOperation(value = "자녀가 가입한 예금상품 목록 조회")
-    public ApiResponse<List<FinancialProductEnrollmentResponseDTO>>
+    public ApiResponse<List<FinancialProductEnrollmentListResponseDTO>>
             getDepositProductsByChildId(
                     @AuthenticationPrincipal MemberPrincipal principal,
                     @PathVariable Long childId) {
@@ -83,7 +84,7 @@ public class FinancialProductController {
 
     @GetMapping("/children/{childId}/saving")
     @ApiOperation(value = "자녀가 가입한 적금상품 목록 조회")
-    public ApiResponse<List<FinancialProductEnrollmentResponseDTO>>
+    public ApiResponse<List<FinancialProductEnrollmentListResponseDTO>>
             getSavingProductsByChildId(
                     @AuthenticationPrincipal MemberPrincipal principal,
                     @PathVariable Long childId) {
@@ -94,7 +95,7 @@ public class FinancialProductController {
 
     @GetMapping("/children/{childId}/loan")
     @ApiOperation(value = "자녀가 가입한 대출상품 목록 조회")
-    public ApiResponse<List<FinancialProductEnrollmentResponseDTO>>
+    public ApiResponse<List<FinancialProductEnrollmentListResponseDTO>>
             getLoanProductsByChildId(
                     @AuthenticationPrincipal MemberPrincipal principal,
                     @PathVariable Long childId) {
@@ -167,6 +168,42 @@ public class FinancialProductController {
         return ApiResponse.ok(
                 financialProductService.getProductDetailByChildId(
                         principal, childId, "loan", enrollmentId));
+    }
+
+    @GetMapping("/me/enrollments")
+    @ApiOperation(value = "자녀 본인의 전체 금융상품 가입계약 목록 조회")
+    public ApiResponse<List<FinancialProductEnrollmentListResponseDTO>>
+            getMyEnrollments(
+                    @AuthenticationPrincipal MemberPrincipal principal) {
+        return ApiResponse.ok(
+                financialProductService.getMyEnrollments(principal));
+    }
+
+    @GetMapping("/me/enrollments/deposit")
+    @ApiOperation(value = "자녀 본인의 예금 가입계약 목록 조회")
+    public ApiResponse<List<FinancialProductEnrollmentListResponseDTO>>
+            getMyDepositEnrollments(
+                    @AuthenticationPrincipal MemberPrincipal principal) {
+        return ApiResponse.ok(
+                financialProductService.getMyDepositEnrollments(principal));
+    }
+
+    @GetMapping("/me/enrollments/saving")
+    @ApiOperation(value = "자녀 본인의 적금 가입계약 목록 조회")
+    public ApiResponse<List<FinancialProductEnrollmentListResponseDTO>>
+            getMySavingEnrollments(
+                    @AuthenticationPrincipal MemberPrincipal principal) {
+        return ApiResponse.ok(
+                financialProductService.getMySavingEnrollments(principal));
+    }
+
+    @GetMapping("/me/enrollments/loan")
+    @ApiOperation(value = "자녀 본인의 대출 가입계약 목록 조회")
+    public ApiResponse<List<FinancialProductEnrollmentListResponseDTO>>
+            getMyLoanEnrollments(
+                    @AuthenticationPrincipal MemberPrincipal principal) {
+        return ApiResponse.ok(
+                financialProductService.getMyLoanEnrollments(principal));
     }
 
 }

@@ -1,7 +1,7 @@
 package com.teenyfin.teenymoney.domain.financialproduct.service;
 
 import com.teenyfin.teenymoney.domain.financialproduct.dto.response.FinancialProductDetailResponseDTO;
-import com.teenyfin.teenymoney.domain.financialproduct.dto.response.FinancialProductEnrollmentResponseDTO;
+import com.teenyfin.teenymoney.domain.financialproduct.dto.response.FinancialProductEnrollmentListResponseDTO;
 import com.teenyfin.teenymoney.domain.financialproduct.dto.response.FinancialProductListResponseDTO;
 import com.teenyfin.teenymoney.domain.financialproduct.exception.FinancialProductErrorCode;
 import com.teenyfin.teenymoney.domain.financialproduct.mapper.FinancialProductMapper;
@@ -210,7 +210,7 @@ class FinancialProductServiceTest {
         when(mapper.selectDepositEnrollmentsByChildId(2L)).thenReturn(
                 List.of(depositEnrollment()));
 
-        FinancialProductEnrollmentResponseDTO response =
+        FinancialProductEnrollmentListResponseDTO response =
                 service.getProductsByChildId(parent, 2L).get(0);
 
         verify(familyAccessService).requireChildAccess(parent, 2L);
@@ -220,7 +220,7 @@ class FinancialProductServiceTest {
         assertEquals(11L, response.getEnrollmentId());
         assertEquals("ACTIVE", response.getStatus());
         assertEquals(new BigDecimal("4.50"), response.getAppliedRate());
-        assertEquals(100_000L, response.getDepositAmount());
+        assertEquals(100_000L, response.getCurrentAmount());
     }
 
     @Test
@@ -247,7 +247,7 @@ class FinancialProductServiceTest {
         when(mapper.selectDepositEnrollmentsByChildId(2L))
                 .thenReturn(List.of(first, second));
 
-        List<FinancialProductEnrollmentResponseDTO> response =
+        List<FinancialProductEnrollmentListResponseDTO> response =
                 service.getDepositProductsByChildId(parent, 2L);
 
         assertEquals(2, response.size());
@@ -265,6 +265,48 @@ class FinancialProductServiceTest {
 
         assertEquals(
                 FinancialProductErrorCode.FINANCIAL_PRODUCT_PARENT_ONLY,
+                exception.getErrorCode());
+    }
+
+    @Test
+    @DisplayName("자녀 본인 계약 목록은 로그인한 자녀 ID로 조회하고 금액을 currentAmount로 반환한다")
+    void childReadsOwnEnrollmentListWithCurrentAmount() {
+        FinancialProductEnrollmentVO saving = new FinancialProductEnrollmentVO();
+        saving.setEnrollmentId(31L);
+        saving.setProductId(3L);
+        saving.setProductType(FinancialProductType.SAVING);
+        saving.setProductName("정액적금");
+        saving.setDescription("매월 자동으로 모으는 목표 적금");
+        saving.setSavingsType("FIXED");
+        saving.setInterestCalculationType("SIMPLE");
+        saving.setStartDate(LocalDate.of(2026, 8, 1));
+        saving.setMonthlyAmount(30_000L);
+        saving.setAccumulatedAmount(90_000L);
+        when(mapper.selectSavingEnrollmentsByChildId(CHILD.memberId()))
+                .thenReturn(List.of(saving));
+
+        FinancialProductEnrollmentListResponseDTO response =
+                service.getMySavingEnrollments(CHILD).get(0);
+
+        verify(mapper).selectSavingEnrollmentsByChildId(CHILD.memberId());
+        assertEquals("FIXED", response.getSavingsType());
+        assertEquals("SIMPLE", response.getInterestCalculationType());
+        assertEquals("매월 자동으로 모으는 목표 적금",
+                response.getDescription());
+        assertEquals(LocalDate.of(2026, 8, 1), response.getStartDate());
+        assertEquals(30_000L, response.getMonthlyAmount());
+        assertEquals(90_000L, response.getCurrentAmount());
+    }
+
+    @Test
+    @DisplayName("부모는 자녀 본인용 계약 조회 API를 사용할 수 없다")
+    void parentCannotUseChildOwnEnrollmentEndpoint() {
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service.getMyEnrollments(
+                        new MemberPrincipal(1L, "PARENT")));
+
+        assertEquals(FinancialProductErrorCode.FINANCIAL_PRODUCT_CHILD_ONLY,
                 exception.getErrorCode());
     }
 

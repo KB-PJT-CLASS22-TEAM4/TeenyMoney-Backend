@@ -104,7 +104,8 @@ public class FinancialProductSyncService {
                 || base.getMaximumLimit() <= DEFAULT_DEPOSIT_MIN_AMOUNT
                 ? DEFAULT_DEPOSIT_MAX_AMOUNT : base.getMaximumLimit();
         product.setMaxAmount(maximum);
-        product.setDescription("금융감독원 금융상품통합비교공시 연동 상품");
+        product.setDescription(depositDescription(
+                product.getInterestCalculationType()));
         product.setActive(true);
         return product;
     }
@@ -133,7 +134,9 @@ public class FinancialProductSyncService {
         product.setEarlyTerminationRate(DEFAULT_SAVING_TERMINATION_RATE);
         product.setMinMonthAmount(DEFAULT_SAVING_MIN_AMOUNT);
         product.setMaxMonthAmount(DEFAULT_SAVING_MAX_AMOUNT);
-        product.setDescription("금융감독원 금융상품통합비교공시 연동 상품");
+        product.setDescription(savingDescription(
+                product.getSavingsType(),
+                product.getInterestCalculationType()));
         product.setActive(true);
         return product;
     }
@@ -195,6 +198,27 @@ public class FinancialProductSyncService {
 
     private String interestCalculationType(String interestRateType) {
         return "M".equals(interestRateType) ? "COMPOUND" : "SIMPLE";
+    }
+
+    private String depositDescription(String interestCalculationType) {
+        if ("COMPOUND".equals(interestCalculationType)) {
+            return "발생한 이자가 원금에 더해져 다음 이자에 반영되는 복리 예금";
+        }
+        return "이자를 원금에 합산하지 않고 계산하는 단리 예금";
+    }
+
+    private String savingDescription(
+            String savingsType,
+            String interestCalculationType) {
+        String paymentDescription = "FIXED".equals(savingsType)
+                ? "매월 정해진 금액을 납입하는"
+                : "원하는 금액을 자유롭게 납입하는";
+        String interestDescription = "COMPOUND".equals(
+                interestCalculationType) ? "복리" : "단리";
+        String typeDescription = "FIXED".equals(savingsType)
+                ? "정액적금" : "자유적금";
+        return paymentDescription + " " + interestDescription
+                + " " + typeDescription;
     }
 
     private Map<String, List<FinlifeProductOptionDTO>> groupOptions(

@@ -18,6 +18,8 @@ public enum FinancialProductErrorCode implements ErrorCode {
             HttpStatus.FORBIDDEN, "부모 또는 자녀 회원만 금융상품을 조회할 수 있습니다."),
     FINANCIAL_PRODUCT_PARENT_ONLY(
             HttpStatus.FORBIDDEN, "부모 회원만 자녀의 금융상품 계약을 조회할 수 있습니다."),
+    FINANCIAL_PRODUCT_CHILD_ONLY(
+            HttpStatus.FORBIDDEN, "자녀 회원만 본인의 금융상품 계약을 조회할 수 있습니다."),
     FINLIFE_API_KEY_MISSING(
             HttpStatus.SERVICE_UNAVAILABLE, "금감원 API 설정이 필요합니다."),
     FINLIFE_API_UNAVAILABLE(

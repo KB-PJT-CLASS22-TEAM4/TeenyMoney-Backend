@@ -1,7 +1,7 @@
 package com.teenyfin.teenymoney.domain.financialproduct.controller;
 
 import com.teenyfin.teenymoney.domain.financialproduct.dto.response.FinancialProductDetailResponseDTO;
-import com.teenyfin.teenymoney.domain.financialproduct.dto.response.FinancialProductEnrollmentResponseDTO;
+import com.teenyfin.teenymoney.domain.financialproduct.dto.response.FinancialProductEnrollmentListResponseDTO;
 import com.teenyfin.teenymoney.domain.financialproduct.dto.response.FinancialProductListResponseDTO;
 import com.teenyfin.teenymoney.domain.financialproduct.service.FinancialProductService;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductType;
@@ -16,6 +16,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -131,15 +132,17 @@ class FinancialProductControllerTest {
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(
                         parent, null, List.of()));
-        FinancialProductEnrollmentResponseDTO enrollment =
-                FinancialProductEnrollmentResponseDTO.builder()
+        FinancialProductEnrollmentListResponseDTO enrollment =
+                FinancialProductEnrollmentListResponseDTO.builder()
                         .enrollmentId(11L)
                         .productId(1L)
                         .productType(FinancialProductType.DEPOSIT)
                         .productName("Deposit")
+                        .description("Deposit description")
                         .status("ACTIVE")
                         .appliedRate(new BigDecimal("4.50"))
-                        .depositAmount(100_000L)
+                        .currentAmount(100_000L)
+                        .startDate(LocalDate.of(2026, 8, 1))
                         .build();
         when(service.getProductsByChildId(parent, 2L))
                 .thenReturn(List.of(enrollment));
@@ -154,6 +157,10 @@ class FinancialProductControllerTest {
                 .contains("\"enrollmentId\":11"));
         assertTrue(response.getContentAsString()
                 .contains("\"appliedRate\":4.50"));
+        assertTrue(response.getContentAsString()
+                .contains("\"description\":\"Deposit description\""));
+        assertTrue(response.getContentAsString()
+                .contains("\"startDate\":\"2026-08-01\""));
         verify(service).getProductsByChildId(parent, 2L);
     }
 }

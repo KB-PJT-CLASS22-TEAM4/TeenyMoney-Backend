@@ -1,6 +1,7 @@
 package com.teenyfin.teenymoney.domain.financialproduct.service;
 
 import com.teenyfin.teenymoney.domain.financialproduct.dto.response.FinancialProductDetailResponseDTO;
+import com.teenyfin.teenymoney.domain.financialproduct.dto.response.FinancialProductEnrollmentListResponseDTO;
 import com.teenyfin.teenymoney.domain.financialproduct.dto.response.FinancialProductEnrollmentResponseDTO;
 import com.teenyfin.teenymoney.domain.financialproduct.dto.response.FinancialProductListResponseDTO;
 import com.teenyfin.teenymoney.domain.financialproduct.dto.response.ProductRateResponseDTO;
@@ -89,56 +90,105 @@ public class FinancialProductService {
     }
 
     @Transactional(readOnly = true)
-    public List<FinancialProductEnrollmentResponseDTO> getProductsByChildId(
+    public List<FinancialProductEnrollmentListResponseDTO> getProductsByChildId(
             MemberPrincipal principal,
             Long childId) {
         requireParentChildAccess(principal, childId);
-        List<FinancialProductEnrollmentResponseDTO> enrollments =
+        List<FinancialProductEnrollmentListResponseDTO> enrollments =
                 new ArrayList<>();
         financialProductMapper.selectDepositEnrollmentsByChildId(childId)
-                .stream().map(FinancialProductEnrollmentResponseDTO::of)
+                .stream().map(FinancialProductEnrollmentListResponseDTO::of)
                 .forEach(enrollments::add);
         financialProductMapper.selectSavingEnrollmentsByChildId(childId)
-                .stream().map(FinancialProductEnrollmentResponseDTO::of)
+                .stream().map(FinancialProductEnrollmentListResponseDTO::of)
                 .forEach(enrollments::add);
         financialProductMapper.selectLoanEnrollmentsByChildId(childId)
-                .stream().map(FinancialProductEnrollmentResponseDTO::of)
+                .stream().map(FinancialProductEnrollmentListResponseDTO::of)
                 .forEach(enrollments::add);
         return enrollments;
     }
 
     @Transactional(readOnly = true)
-    public List<FinancialProductEnrollmentResponseDTO>
+    public List<FinancialProductEnrollmentListResponseDTO>
             getDepositProductsByChildId(
             MemberPrincipal principal,
             Long childId) {
         requireParentChildAccess(principal, childId);
         return financialProductMapper.selectDepositEnrollmentsByChildId(childId)
                 .stream()
-                .map(FinancialProductEnrollmentResponseDTO::of)
+                .map(FinancialProductEnrollmentListResponseDTO::of)
                 .toList();
     }
 
     @Transactional(readOnly = true)
-    public List<FinancialProductEnrollmentResponseDTO>
+    public List<FinancialProductEnrollmentListResponseDTO>
             getSavingProductsByChildId(
             MemberPrincipal principal,
             Long childId) {
         requireParentChildAccess(principal, childId);
         return financialProductMapper.selectSavingEnrollmentsByChildId(childId)
                 .stream()
-                .map(FinancialProductEnrollmentResponseDTO::of)
+                .map(FinancialProductEnrollmentListResponseDTO::of)
                 .toList();
     }
 
     @Transactional(readOnly = true)
-    public List<FinancialProductEnrollmentResponseDTO> getLoanProductsByChildId(
+    public List<FinancialProductEnrollmentListResponseDTO>
+            getLoanProductsByChildId(
             MemberPrincipal principal,
             Long childId) {
         requireParentChildAccess(principal, childId);
         return financialProductMapper.selectLoanEnrollmentsByChildId(childId)
                 .stream()
-                .map(FinancialProductEnrollmentResponseDTO::of)
+                .map(FinancialProductEnrollmentListResponseDTO::of)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<FinancialProductEnrollmentListResponseDTO> getMyEnrollments(
+            MemberPrincipal principal) {
+        Long childId = requireChild(principal);
+        List<FinancialProductEnrollmentListResponseDTO> enrollments =
+                new ArrayList<>();
+        financialProductMapper.selectDepositEnrollmentsByChildId(childId)
+                .stream().map(FinancialProductEnrollmentListResponseDTO::of)
+                .forEach(enrollments::add);
+        financialProductMapper.selectSavingEnrollmentsByChildId(childId)
+                .stream().map(FinancialProductEnrollmentListResponseDTO::of)
+                .forEach(enrollments::add);
+        financialProductMapper.selectLoanEnrollmentsByChildId(childId)
+                .stream().map(FinancialProductEnrollmentListResponseDTO::of)
+                .forEach(enrollments::add);
+        return enrollments;
+    }
+
+    @Transactional(readOnly = true)
+    public List<FinancialProductEnrollmentListResponseDTO>
+            getMyDepositEnrollments(MemberPrincipal principal) {
+        return financialProductMapper
+                .selectDepositEnrollmentsByChildId(requireChild(principal))
+                .stream()
+                .map(FinancialProductEnrollmentListResponseDTO::of)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<FinancialProductEnrollmentListResponseDTO>
+            getMySavingEnrollments(MemberPrincipal principal) {
+        return financialProductMapper
+                .selectSavingEnrollmentsByChildId(requireChild(principal))
+                .stream()
+                .map(FinancialProductEnrollmentListResponseDTO::of)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<FinancialProductEnrollmentListResponseDTO>
+            getMyLoanEnrollments(MemberPrincipal principal) {
+        return financialProductMapper
+                .selectLoanEnrollmentsByChildId(requireChild(principal))
+                .stream()
+                .map(FinancialProductEnrollmentListResponseDTO::of)
                 .toList();
     }
 
@@ -183,6 +233,13 @@ public class FinancialProductService {
             String productType,
             Long enrollmentId) {
         requireParentChildAccess(principal, childId);
+        return enrollmentDetail(childId, productType, enrollmentId);
+    }
+
+    private FinancialProductEnrollmentResponseDTO enrollmentDetail(
+            Long childId,
+            String productType,
+            Long enrollmentId) {
         FinancialProductEnrollmentVO enrollment = switch (
                 FinancialProductType.from(productType)) {
             case DEPOSIT -> financialProductMapper
@@ -235,6 +292,14 @@ public class FinancialProductService {
                     FinancialProductErrorCode.FINANCIAL_PRODUCT_PARENT_ONLY);
         }
         familyAccessService.requireChildAccess(principal, childId);
+    }
+
+    private Long requireChild(MemberPrincipal principal) {
+        if (principal == null || !"CHILD".equals(principal.role())) {
+            throw new BusinessException(
+                    FinancialProductErrorCode.FINANCIAL_PRODUCT_CHILD_ONLY);
+        }
+        return principal.memberId();
     }
 
     private DepositProductVO findDeposit(Long id) {

@@ -17,6 +17,9 @@ public class FinancialProductEnrollmentVO {
     private FinancialProductType productType;
     private String financialCompanyName;
     private String productName;
+    private String description;
+    private String savingsType;
+    private String interestCalculationType;
     private String status;
     private BigDecimal appliedRate;
     private BigDecimal appliedEarlyTerminationRate;

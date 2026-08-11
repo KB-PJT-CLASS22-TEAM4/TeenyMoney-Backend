@@ -47,3 +47,24 @@ ALTER TABLE `T_LON_PROD_M`
         REFERENCES `T_TNY_GRADE_A` (`grade_id`)
         ON DELETE RESTRICT,
     DROP COLUMN `min_teeny_score`;
+
+-- 기존 점수 기준 설명을 월간 요구등급과 상환 방식 기준 설명으로 변경한다.
+-- 요구등급명은 등급 테이블에서 가져오고, 상환 방식별로 자녀가 이해하기 쉬운 문구를 사용한다.
+UPDATE `T_LON_PROD_M` product
+INNER JOIN `T_TNY_GRADE_A` grade
+        ON product.`required_grade_id` = grade.`grade_id`
+SET product.`description` = CONCAT(
+        grade.`grade_name`,
+        ' 이상 가입 가능하며, ',
+        CASE product.`repayment_type`
+            WHEN 'EQUAL_PRINCIPAL_INTEREST'
+                THEN '매달 원금과 이자를 합한 비슷한 금액을 갚는 대출'
+            WHEN 'EQUAL_PRINCIPAL'
+                THEN '원금을 매달 동일하게 나누고 남은 원금의 이자를 함께 갚는 대출'
+            WHEN 'BULLET'
+                THEN '기간 중 이자를 납부하고 만기에 원금을 한 번에 갚는 대출'
+        END
+    ),
+    product.`updated_at` = CURRENT_TIMESTAMP
+-- MySQL Workbench의 safe update mode에서도 실행되도록 PK 조건을 명시한다.
+WHERE product.`id` > 0;
