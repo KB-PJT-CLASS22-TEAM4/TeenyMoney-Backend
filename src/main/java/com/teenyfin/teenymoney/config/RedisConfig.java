@@ -1,6 +1,8 @@
 package com.teenyfin.teenymoney.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.teenyfin.teenymoney.domain.payment.service.OrderStore;
 import com.teenyfin.teenymoney.global.auth.RefreshTokenStore;
 import org.springframework.beans.factory.annotation.Value;
@@ -55,5 +57,13 @@ public class RedisConfig {
             StringRedisTemplate stringRedisTemplate,
             ObjectMapper objectMapper) {
         return new OrderStore(stringRedisTemplate, objectMapper);
+    }
+
+    @Bean
+    public ObjectMapper objectMapper() {
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.registerModule(new JavaTimeModule());
+        objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        return objectMapper;
     }
 }
