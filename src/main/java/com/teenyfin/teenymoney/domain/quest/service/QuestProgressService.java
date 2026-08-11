@@ -7,11 +7,13 @@ import com.teenyfin.teenymoney.domain.quest.vo.*;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import com.teenyfin.teenymoney.global.exception.CommonErrorCode;
 import com.teenyfin.teenymoney.global.security.MemberPrincipal;
+import com.teenyfin.teenymoney.global.storage.ImageFile;
 import com.teenyfin.teenymoney.global.storage.S3Storage;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -58,8 +60,8 @@ public class QuestProgressService {
 
     // 자녀가 퀘스트를 거절한다.
     @Transactional
-    public void decline(MemberPrincipal principal, Long questId,
-                        QuestDeclineRequestDTO request) {
+    public void decline(
+            MemberPrincipal principal, Long questId, QuestDeclineRequestDTO request) {
         Long childId = requireChild(principal);
 
         // DB를 건드리기 전에 입력부터 확인. 틀린 요청 때문에 행을 잠글 필요 없으니까.
@@ -77,9 +79,15 @@ public class QuestProgressService {
         }
     }
 
-    // IN_PROGRESS -> PENDING. 시도마다 새 인증 행을 넣고 이전 시도는 건드리지 않는다.
-    @Transactional
-    public void submitVerification(MemberPrincipal principal, Long questId, String rawContent) {
+    /**
+     * IN_PROGRESS -> PENDING. 시도마다 새 인증 행을 넣고 이전 시도는 건드리지 않는다.
+     * <p>
+     * S3 업로드는 DB 트랜잭션과 묶을 수 없다. 업로드를 먼저 하고 DB를 나중에 하되,
+     * 롤백되면 키를 저장하지 않으므로 그 오브젝트는 어떤 화면에도 나타나지 않는다.
+     * 남은 고아 객체는 90일 Lifecycle 이 지운다(우리에겐 s3:DeleteObject 권한이 없다).
+     */
+    public void submitVerification(
+            MemberPrincipal principal, Long questId, String rawContent, MultipartFile image) {
         Long childId = requireChild(principal);
         String content = normalizeText(rawContent);
         // multipart 파라미터라 @Size 를 걸 DTO 가 없다. 컬럼이 VARCHAR(500) 이므로 여기서 막는다.
@@ -87,15 +95,35 @@ public class QuestProgressService {
             throw new BusinessException(CommonErrorCode.COMMON_INVALID_INPUT);
         }
 
+        // 이미지가 있을 때만 사전 검증 필요 (transaction이 안되기 때문). 상태가 이미 틀렸는데 올리면 지울수 없는(90일간) 오브젝트가 남는다.
+        String imageKey = null;
+        if (image != null && !image.isEmpty()) {
+            ImageFile validated = ImageFile.validate(image);
+            QuestVO preview = questMapper.selectDetailByChild(questId, childId);
+            if (preview == null) {
+                throw new BusinessException(QuestErrorCode.QUEST_NOT_FOUND_OR_ACCESS_DENIED);
+            }
+            requireSubmittable(preview, content != null, true, now());
+            imageKey = s3Storage.upload(IMAGE_KEY_PREFIX + questId, validated);
+        }
+        // 람다가 잡는 값은 effectively final 이어야 한다.
+        String storedKey = imageKey;
+        transactionTemplate.executeWithoutResult(
+                status -> recordSubmission(questId, childId, content, storedKey));
+    }
+
+    // transactionTemplate 안에서만 호출한다. @Transactional 을 붙여도 자기호출이라 무시된다.
+    private void recordSubmission(Long questId, Long childId, String content, String imageKey) {
         QuestVO quest = findOwnedForUpdate(questId, childId);
         LocalDateTime now = now();
-        requireSubmittable(quest, content != null, false, now);
+        requireSubmittable(quest, content != null, imageKey != null, now);
 
         // 최신 시도를 재사용해 번호를 매긴다. (quest_id, attempt_no) UNIQUE 가 경합의 마지막 방어선이다.
         QuestVerificationVO latest = questMapper.selectLatestVerification(questId);
         QuestVerificationVO verification = QuestVerificationVO.builder()
                 .questId(questId)
                 .attemptNo(latest == null ? 1 : latest.getAttemptNo() + 1)
+                .imageKey(imageKey)
                 .content(content)
                 .status(VERIFICATION_PENDING)
                 .createdAt(now)

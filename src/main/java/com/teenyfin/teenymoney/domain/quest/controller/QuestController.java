@@ -15,6 +15,7 @@ import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -27,11 +28,12 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.validation.Valid;
 import java.util.List;
 
-@Api(tags = "퀘스트", description = "퀘스트 생성·조회·수정·삭제·수락·거절 API")
+@Api(tags = "퀘스트", description = "퀘스트 생성·조회·수정·삭제·수락·거절·인증 제출 API")
 @RestController
 @RequestMapping("/quests")
 @RequiredArgsConstructor
@@ -126,6 +128,23 @@ public class QuestController {
             @PathVariable Long questId,
             @RequestBody @Valid QuestDeclineRequestDTO request) {
         questProgressService.decline(principal, questId, request);
+        return ApiResponse.ok(questQueryService.getQuest(principal, questId));
+    }
+
+    @ApiOperation(
+            value = "퀘스트 인증 제출",
+            notes = "IN_PROGRESS 상태인 본인 퀘스트에 새 인증 시도를 추가하고 PENDING으로 바꿉니다. "
+                    + "이전 시도는 덮어쓰지 않습니다. 사진은 시도당 한 장이며 jpg, jpeg, png, webp 5MB 이하만 됩니다.")
+    @PreAuthorize("hasRole('CHILD')")
+    @PostMapping(value = "/{questId}/verifications", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<QuestDetailResponseDTO> submitVerification(
+            @AuthenticationPrincipal MemberPrincipal principal,
+            @PathVariable Long questId,
+            @ApiParam(value = "인증 글. 공백만 있으면 없는 것으로 처리합니다.")
+            @RequestParam(value = "content", required = false) String content,
+            @ApiParam(value = "인증 사진 한 장")
+            @RequestParam(value = "image", required = false) MultipartFile image) {
+        questProgressService.submitVerification(principal, questId, content, image);
         return ApiResponse.ok(questQueryService.getQuest(principal, questId));
     }
 }

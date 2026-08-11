@@ -23,6 +23,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -45,6 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
@@ -270,7 +272,42 @@ class QuestControllerTest {
         verify(questProgressService, never()).decline(any(), any(), any());
     }
 
-    /** 수락·거절은 자녀 전용이라 setUp 의 PARENT 인증을 CHILD 로 바꾼다. */
+    @Test
+    @DisplayName("인증 제출은 글과 사진을 서비스에 전달하고 최신 상세를 반환한다")
+    void submitVerificationPassesContentAndImageToService() throws Exception {
+        asChild();
+        given(queryService.getQuest(any(), eq(55L))).willReturn(detail());
+        MockMultipartFile image = new MockMultipartFile(
+                "image", "proof.png", "image/png", new byte[] {1, 2, 3});
+
+        var response = mockMvc.perform(multipart("/quests/55/verifications")
+                        .file(image)
+                        .param("content", "다 했어요"))
+                .andReturn().getResponse();
+        String body = response.getContentAsString(StandardCharsets.UTF_8);
+        assertEquals(200, response.getStatus(), body);
+        assertTrue(body.contains("\"questId\":55"), body);
+
+        verify(questProgressService).submitVerification(
+                eq(new MemberPrincipal(2L, "CHILD")), eq(55L), eq("다 했어요"), eq(image));
+    }
+
+    @Test
+    @DisplayName("인증 제출은 글도 사진도 없이 컨트롤러를 통과한다")
+    void submitVerificationAllowsEmptyPartsAtControllerLevel() throws Exception {
+        asChild();
+        given(queryService.getQuest(any(), eq(55L))).willReturn(detail());
+
+        var response = mockMvc.perform(multipart("/quests/55/verifications"))
+                .andReturn().getResponse();
+        assertEquals(200, response.getStatus(), response.getContentAsString(StandardCharsets.UTF_8));
+
+        // 무엇이 필수인지는 퀘스트마다 다르므로 컨트롤러가 아니라 서비스가 판단한다.
+        verify(questProgressService).submitVerification(
+                new MemberPrincipal(2L, "CHILD"), 55L, null, null);
+    }
+
+    /** 수락·거절·인증 제출은 자녀 전용이라 setUp 의 PARENT 인증을 CHILD 로 바꾼다. */
     private void asChild() {
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(
