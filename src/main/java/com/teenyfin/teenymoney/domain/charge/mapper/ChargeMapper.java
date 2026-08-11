@@ -40,5 +40,12 @@ public interface ChargeMapper {
     // 실패 사유를 남기며 FAILED로 표시한다. TransferMapper.markFailed와 같은 이유로
     // 이미 SUCCESS로 확정된 행은 절대 덮어쓰지 않는다 (XML에서 조건으로 막음).
     void markFailed(@Param("id") Long id, @Param("failureReason") String failureReason);
+
+    // 토스와 통신 자체가 실패했거나(타임아웃 등), 토스가 "아직 처리 중"이라고 응답한 경우
+    // PROCESSING을 PENDING으로 되돌린다. 이래야 다음 재시도가 claimForProcessing()으로
+    // 다시 선점하고, 같은 orderId+Idempotency-Key로 토스를 다시 부를 수 있다.
+    // (되돌리지 않으면 claimForProcessing()이 PENDING일 때만 통과시켜서 재시도 자체가 영원히 막힘.)
+    // 이미 SUCCESS/FAILED로 확정된 행은 절대 되돌리지 않는다.
+    void revertToPending(@Param("id") Long id);
 }
 

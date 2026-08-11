@@ -60,4 +60,10 @@
         WHERE id = #{id} AND status &lt;&gt; 'SUCCESS'
     </update>
 
+    <update id="revertToPending">
+        UPDATE T_WLT_CHARGE_L
+        SET status = 'PENDING', updated_at = NOW()
+        WHERE id = #{id} AND status = 'PROCESSING'
+    </update>
+
 </mapper>

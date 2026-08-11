@@ -162,8 +162,9 @@ public class ChargeService {
                     charge.getOrderId(), "TeenyMoney 충전"), charge.getOrderId());
         } catch(BusinessException e) {
             if (e.getErrorCode() == ChargeErrorCode.TOSS_REQUEST_IN_PROGRESS) {
+                chargeMapper.revertToPending(chargeId);
                 // 성공도 실패도 아닌 "아직 처리 중" 상태 - markFailed() 부르면 안 되고,
-                // PROCESSING 그대로 두고 그대로 위로 던진다.
+                // PENDING으로 되돌려서 다음 재시도가 다시 선점하고 토스를 다시 부를 수 있게 한다.
                 throw e;
             }
             if (e.getErrorCode() == ChargeErrorCode.TOSS_ORDER_ID_DUPLICATED) {
@@ -180,9 +181,10 @@ public class ChargeService {
         } catch (RestClientException e) {
             // approveBillingPayment()가 못 잡는 케이스: 연결이 아예 안 되거나 타임아웃나서
             // 토스 응답 자체를 못 받은 상황. 실제로 승인이 됐는지 안 됐는지 우리도 모르므로
-            // 실패로 단정하지 않는다 - PROCESSING 그대로 두고, 나중에 같은 orderId+
-            // Idempotency-Key로 재시도하는 절차(지금은 미구현, 추후 과제)로 복구해야 한다.
+            // 실패로 단정하지 않는다 - PENDING으로 되돌려서 다음 재시도가 다시 선점하고
+            // 같은 orderId+Idempotency-Key로 토스를 다시 부를 수 있게 한다.
             log.warn("토스 자동결제 승인 통신 실패 - chargeId={}, orderId={}", chargeId, charge.getOrderId(), e);
+            chargeMapper.revertToPending(chargeId);
             throw new BusinessException(ChargeErrorCode.TOSS_REQUEST_IN_PROGRESS);
 
         }
