@@ -26,9 +26,28 @@ WAR 하나를 로컬과 EC2 양쪽에서 돌립니다. **빌드 산출물은 동
 | `AWS_S3_PRESIGN_TTL_SECONDS` | 600 | 그대로 | 그대로 | 기본값 사용 |
 | `AWS_ACCESS_KEY_ID` | **없음** | IAM 사용자 키 | **설정하지 않음** | 첫 업로드에서 실패 |
 | `AWS_SECRET_ACCESS_KEY` | **없음** | 〃 | **설정하지 않음** | 〃 |
+| `CHARGE_BILLING_KEY_ENCRYPTION_KEY` | **없음** | Base64 32바이트 | 운영 고정 키 | **기동 실패** |
+| `TOSS_SECRET_KEY` | **없음** | 토스 테스트 키 | 운영 키 | 결제수단 등록 첫 호출에서 실패 |
+| `TOSS_BASE_URL` | `https://api.tosspayments.com` | 그대로 | 그대로 | 기본값 사용 |
 
-**실질적으로 다른 것은 다섯 개뿐입니다**: DB/Redis 접속 지점, `JWT_SECRET`,
-`COOKIE_SECURE`, 그리고 AWS 자격증명. 나머지는 양쪽 동일합니다.
+**실질적으로 다른 것은 여섯 개뿐입니다**: DB/Redis 접속 지점, `JWT_SECRET`,
+`COOKIE_SECURE`, AWS 자격증명, 그리고 토스·빌링키 관련 두 값. 나머지는 양쪽 동일합니다.
+
+### 기동을 막는 값과 나중에 터지는 값
+
+`없으면` 열을 반드시 확인하세요. 두 부류의 증상이 완전히 다릅니다.
+
+**기동 실패** — `DB_URL`·`DB_USERNAME`·`DB_PASSWORD`, `JWT_SECRET`, `COOKIE_SECURE`,
+`AWS_S3_BUCKET`, `CHARGE_BILLING_KEY_ENCRYPTION_KEY`. 배포 직후 바로 드러납니다.
+
+`CHARGE_BILLING_KEY_ENCRYPTION_KEY`는 `BillingKeyEncryptor` 생성자가 값을 즉시
+Base64 디코딩하기 때문에, 값이 없으면 치환되지 않은 `${...}` 문자열이 그대로 들어가
+`Illegal base64 character 24`로 컨텍스트 로딩이 깨집니다. 원인이 오류 메시지에
+드러나지 않으므로 이 표를 먼저 보세요.
+
+**기동은 되고 나중에 실패** — `AWS_ACCESS_KEY_ID`·`AWS_SECRET_ACCESS_KEY`(첫 업로드),
+`TOSS_SECRET_KEY`(결제수단 등록), `REDIS_PASSWORD`(첫 Redis 명령).
+배포 후 해당 기능을 한 번씩 실제로 호출해봐야 확인됩니다.
 
 ### AWS 자격증명
 
@@ -204,6 +223,15 @@ export REDIS_PASSWORD='<requirepass 값>'
 
 export JWT_SECRET='<openssl rand -base64 32 결과>'
 export COOKIE_SECURE='true'
+
+export AWS_S3_BUCKET='teenymoney-media-kb22'
+
+# 없으면 기동 실패. JWT_SECRET 과 마찬가지로 재배포마다 새로 만들지 말고 같은 값을 쓴다.
+# 값이 바뀌면 이미 저장된 빌링키를 복호화할 수 없다.
+export CHARGE_BILLING_KEY_ENCRYPTION_KEY='<openssl rand -base64 32 결과>'
+
+# 기동은 되고 결제수단 등록 첫 호출에서 실패한다.
+export TOSS_SECRET_KEY='<토스 시크릿 키>'
 EOF
 
 sudo chown <tomcat실행계정>:<그룹> "$CATALINA_HOME/bin/setenv.sh"
