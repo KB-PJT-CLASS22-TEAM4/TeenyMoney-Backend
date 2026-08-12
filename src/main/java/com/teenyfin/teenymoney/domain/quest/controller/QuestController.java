@@ -167,7 +167,7 @@ public class QuestController {
 
     @ApiOperation(
             value = "퀘스트 인증 반려",
-            notes = "최신 PENDING 인증을 사유와 함께 반려합니다. 기한 전에는 재시도하고, "
+            notes = "최신 PENDING 인증을 선택적 사유와 함께 반려합니다. 기한 전에는 재시도하고, "
                     + "기한 후에는 EXTEND 또는 FAIL을 선택합니다. 마지막 인증 기회 반려는 항상 최종 실패입니다. "
                     + "처리 후 최신 전체 상세를 반환합니다.")
     @PreAuthorize("hasRole('PARENT')")
