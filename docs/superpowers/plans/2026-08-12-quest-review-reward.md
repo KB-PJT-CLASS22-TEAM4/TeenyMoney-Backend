@@ -77,7 +77,7 @@ public TeenyScoreChangeRequestDTO questFailed(Long childId, Long questId) {
 }
 ```
 
-`QuestRejectRequestDTO`는 `@NotBlank`, `@Size(max = 500)` reason과 선택적인 action/deadline을 가진다. 조합 검증은 현재 시간과 시도 횟수가 필요한 서비스에서 수행한다.
+`QuestRejectRequestDTO`는 선택적인 `@Size(max = 500)` reason과 선택적인 action/deadline을 가진다. reason 누락·공백은 `NULL`로 정규화하고, 조합 검증은 현재 시간과 시도 횟수가 필요한 서비스에서 수행한다.
 
 - [ ] **Step 4: Run the focused test and verify GREEN**
 
@@ -98,7 +98,7 @@ git commit -m "feat: add quest review and score contracts"
 - Modify: `src/main/java/com/teenyfin/teenymoney/domain/wallet/service/TransferService.java`
 - Modify: `src/main/java/com/teenyfin/teenymoney/domain/wallet/vo/TransferType.java`
 - Modify: `src/test/java/com/teenyfin/teenymoney/domain/wallet/service/TransferServiceTest.java`
-- Create: `sql/migration/V015__add_quest_reward_transfer_type.sql`
+- Create: `sql/migration/V016__add_quest_reward_transfer_type.sql`
 - Modify: `sql/schema/teenymoney_schema_renamed.sql`
 
 **Interfaces:**
@@ -247,7 +247,7 @@ git commit -m "feat: implement atomic quest approval"
 
 - [ ] **Step 1: Write failing rejection state-machine tests**
 
-Cover before-deadline reopen, after-deadline EXTEND, after-deadline FAIL, third rejection forced failure, invalid action combinations, invalid extension bounds, blank reason, and final-failure score disabled/enabled.
+Cover missing/blank reason normalization to `NULL`, reason length overflow, before-deadline reopen, after-deadline EXTEND, after-deadline FAIL, third rejection forced failure, invalid action combinations, invalid extension bounds, and final-failure score disabled/enabled.
 
 - [ ] **Step 2: Run service test and verify RED**
 
@@ -284,7 +284,7 @@ git commit -m "feat: implement quest rejection state machine"
 
 - [ ] **Step 1: Write failing MockMvc tests**
 
-Assert exact routes, parent principal delegation, reject JSON binding/validation, `QuestDetailResponseDTO` response, and invalid blank reason 400 without service invocation.
+Assert exact routes, parent principal delegation, optional reject reason binding, empty JSON acceptance, reason length validation, and the `QuestDetailResponseDTO` response.
 
 - [ ] **Step 2: Run controller test and verify RED**
 

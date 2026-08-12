@@ -58,7 +58,7 @@ PATCH /quests/{questId}/verifications/{verificationId}/reject
 - 연장 기한은 처리 시각보다 미래이고 최대 1년 이내다.
 - 마지막 기회 반려에서는 전달된 기한 후 선택값을 무시하고 항상 실패한다.
 - 최종 실패 이벤트 키는 `QUEST_FAILED:{questId}`라서 점수 감점은 한 번만 기록된다.
-- 반려 사유는 앞뒤 공백 제거 후 1~500자다.
+- 반려 사유는 선택 사항이다. 값이 없거나 공백뿐이면 `NULL`로 저장하고, 값이 있으면 앞뒤 공백 제거 후 1~500자다.
 
 ### 오류와 경합 처리
 
@@ -138,8 +138,8 @@ PATCH /quests/{questId}/verifications/{verificationId}/reject
 
 | 항목 | 결과 |
 |---|---:|
-| 발견된 테스트 | 499 |
-| 통과 | 445 |
+| 발견된 테스트 | 501 |
+| 통과 | 447 |
 | 실패 | 0 |
 | 오류 | 0 |
 | 조건부 건너뜀 | 54 |
@@ -166,7 +166,7 @@ PATCH /quests/{questId}/verifications/{verificationId}/reject
 
 54개 건너뜀은 `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, Redis 관련 환경이 없는 경우
 원래부터 비활성화되는 저장소의 DB/Redis 통합 테스트다. 이번 기능의 단위 테스트,
-컨트롤러 테스트, MyBatis 문장 로딩 테스트는 모두 실행됐다. 실제 MySQL에 V015를 적용한
+컨트롤러 테스트, MyBatis 문장 로딩 테스트는 모두 실행됐다. 실제 MySQL에 V016·V017을 적용한
 통합 검증은 운영 자격증명 없이 수행하지 않았다.
 
 ## 5. 진행 중 발생한 문제와 해결
@@ -204,7 +204,7 @@ PATCH /quests/{questId}/verifications/{verificationId}/reject
 
 PowerShell 콘솔 일부에서 한국어 테스트명이 깨졌고, 기본 인코딩으로 결과 XML을 읽자 일부
 파일 파싱 경고가 발생했다. 테스트 결과 자체는 정상이었다. XML을 명시적으로 UTF-8로 읽고
-테스트 수를 다시 계산해 `499 / 통과 445 / 건너뜀 54 / 실패 0`을 확인했다.
+테스트 수를 다시 계산해 `501 / 통과 447 / 건너뜀 54 / 실패 0`을 확인했다.
 
 ### 5.7 장문 설계 문서의 예전 명칭
 
@@ -220,8 +220,8 @@ SQL README의 예상 문맥이 실제 마지막 문장과 달라 첫 문서 패�
 ### 5.9 외부 DB·Redis 부재
 
 환경변수가 없어 54개 조건부 통합 테스트는 건너뛰었다. 임의의 운영 DB에 연결하거나 자격증명을
-추측하지 않았다. 대신 전체 컴파일, WAR 패키징, 445개 테스트, MyBatis XML 등록 및 SQL 형태를
-검증했다. 배포 전 실제 MySQL에서 V015 적용과 DB 조건부 테스트 실행이 필요하다.
+추측하지 않았다. 대신 전체 컴파일, WAR 패키징, 447개 테스트, MyBatis XML 등록 및 SQL 형태를
+검증했다. 배포 전 실제 MySQL에서 V016·V017 적용과 DB 조건부 테스트 실행이 필요하다.
 
 ### 5.10 기존 Gradle 경고
 
@@ -234,15 +234,16 @@ SQL README의 예상 문맥이 실제 마지막 문장과 달라 첫 문서 패�
 적용해야 한다.
 
 ```text
-sql/migration/V015__add_quest_reward_transfer_type.sql
+sql/migration/V016__add_quest_reward_transfer_type.sql
+sql/migration/V017__allow_optional_quest_rejection_reason.sql
 ```
 
 권장 순서:
 
-1. 검증용 MySQL에 V015 적용
+1. 검증용 MySQL에 V016과 V017 적용
 2. `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`를 설정
 3. `.\gradlew.bat clean test` 실행
-4. `T_WLT_TRF_L` CHECK에 `QUEST_REWARD`가 포함됐는지 확인
+4. `T_WLT_TRF_L` CHECK에 `QUEST_REWARD`가 포함되고, 사유 없는 `REJECTED` 인증이 허용되는지 확인
 5. 현금 보상 승인 한 건으로 부모·자녀 잔액, 양쪽 원장, 송금 상태, 점수 이력, 퀘스트와 인증 상태 확인
 6. PR #118 기준이 변경됐다면 이 브랜치를 최신 HEAD에 맞춰 충돌 검토
 7. 검토 후 push와 PR 생성

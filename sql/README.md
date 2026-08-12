@@ -62,8 +62,9 @@ migration 번호는 중복되지 않게 순서대로 증가시킵니다. Flyway�
 배포 기록에 남깁니다.
 
 ```text
-sql/migration/V015__add_quest_reward_transfer_type.sql
+sql/migration/V016__add_quest_reward_transfer_type.sql
+sql/migration/V017__allow_optional_quest_rejection_reason.sql
 ```
 
-이 마이그레이션은 기존 송금 유형 CHECK 제약을 같은 이름으로 다시 만들며,
-기존 데이터나 컬럼을 삭제하지 않습니다.
+V016은 기존 송금 유형 CHECK 제약을 같은 이름으로 다시 만들고, V017은 인증 반려 사유를
+선택 사항으로 바꿉니다. 기존 데이터나 컬럼은 삭제하지 않습니다.

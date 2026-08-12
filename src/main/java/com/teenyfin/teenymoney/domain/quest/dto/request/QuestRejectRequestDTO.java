@@ -8,7 +8,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.Size;
 import java.time.LocalDateTime;
 
@@ -19,9 +18,9 @@ import java.time.LocalDateTime;
 @ApiModel(description = "부모의 퀘스트 인증 반려 요청")
 public class QuestRejectRequestDTO {
 
-    @NotBlank(message = "반려 사유를 입력해 주세요.")
     @Size(max = 500, message = "반려 사유는 500자 이하여야 합니다.")
-    @ApiModelProperty(value = "반려 사유", required = true,
+    @ApiModelProperty(
+            value = "선택적 반려 사유. 생략하거나 공백만 입력하면 사유 없음으로 처리합니다.",
             example = "인증 사진에서 완료 여부를 확인할 수 없어요.")
     private String reason;
 
