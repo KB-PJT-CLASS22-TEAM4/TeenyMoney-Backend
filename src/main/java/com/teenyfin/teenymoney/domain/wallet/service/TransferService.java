@@ -138,4 +138,27 @@ public class TransferService {
             throw e;
         }
     }
+
+    /**
+     * 상위 비즈니스 트랜잭션에 참여하여 송금을 실행한다.
+     * 금융상품 승인처럼 계약 상태 변경과 송금이 함께 롤백되어야 할 때 사용한다.
+     */
+    @Transactional
+    public TransferVO executeTransferAtomically(Long transferId) {
+        return transferExecutor.lockAndMove(transferId);
+    }
+
+    @Transactional
+    public void cancelPendingTransfer(Long transferId) {
+        if (transferId == null) {
+            return;
+        }
+        TransferVO transfer = transferMapper.selectForUpdate(transferId);
+        if (transfer == null) {
+            throw new BusinessException(WalletErrorCode.TRANSFER_NOT_FOUND);
+        }
+        if ("PENDING".equals(transfer.getStatus())) {
+            transferMapper.updateStatus(transferId, "CANCELLED", null);
+        }
+    }
 }

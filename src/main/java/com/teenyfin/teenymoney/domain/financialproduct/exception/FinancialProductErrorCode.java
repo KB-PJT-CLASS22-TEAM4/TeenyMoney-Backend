@@ -20,6 +20,22 @@ public enum FinancialProductErrorCode implements ErrorCode {
             HttpStatus.FORBIDDEN, "부모 회원만 자녀의 금융상품 계약을 조회할 수 있습니다."),
     FINANCIAL_PRODUCT_CHILD_ONLY(
             HttpStatus.FORBIDDEN, "자녀 회원만 본인의 금융상품 계약을 조회할 수 있습니다."),
+    FINANCIAL_PRODUCT_ENROLLMENT_DUPLICATED(
+            HttpStatus.CONFLICT, "동일 상품의 승인 대기 중인 가입 요청이 있습니다."),
+    FINANCIAL_PRODUCT_ENROLLMENT_NOT_PENDING(
+            HttpStatus.CONFLICT, "이미 처리된 금융상품 가입 요청입니다."),
+    FINANCIAL_PRODUCT_INVALID_TERM(
+            HttpStatus.BAD_REQUEST, "상품에서 지원하지 않는 가입 기간입니다."),
+    FINANCIAL_PRODUCT_INVALID_AMOUNT(
+            HttpStatus.BAD_REQUEST, "상품의 가입 가능 금액 범위를 벗어났습니다."),
+    FINANCIAL_PRODUCT_INSUFFICIENT_GRADE(
+            HttpStatus.BAD_REQUEST, "월간 적용 등급이 대출상품의 요구등급보다 낮습니다."),
+    FINANCIAL_PRODUCT_LOAN_GRADE_RESTRICTED(
+            HttpStatus.BAD_REQUEST, "현재 월간 적용 등급으로는 대출에 가입할 수 없습니다."),
+    FINANCIAL_PRODUCT_PARENT_NOT_CONNECTED(
+            HttpStatus.BAD_REQUEST, "연결된 부모 회원을 찾을 수 없습니다."),
+    FINANCIAL_PRODUCT_PENDING_TRANSFER_NOT_FOUND(
+            HttpStatus.CONFLICT, "가입 요청에 연결된 대기 송금을 찾을 수 없습니다."),
     FINLIFE_API_KEY_MISSING(
             HttpStatus.SERVICE_UNAVAILABLE, "금감원 API 설정이 필요합니다."),
     FINLIFE_API_UNAVAILABLE(
