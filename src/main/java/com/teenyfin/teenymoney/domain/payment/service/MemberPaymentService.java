@@ -24,12 +24,12 @@ public class MemberPaymentService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void lockPayment(Long memberId, LocalDateTime lockedUntil) {
+    public void updatePaymentLockedUntil(Long memberId, LocalDateTime lockedUntil) {
         memberPaymentMapper.updatePaymentLockedUntil(memberId, lockedUntil);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void resetFailedCount(Long memberId) {
+    public void resetPaymentPasswordFailedCount(Long memberId) {
         memberPaymentMapper.resetPaymentPasswordFailedCount(memberId);
     }
 }

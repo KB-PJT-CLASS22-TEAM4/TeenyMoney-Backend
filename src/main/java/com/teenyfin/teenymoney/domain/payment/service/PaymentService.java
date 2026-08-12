@@ -146,10 +146,14 @@ public class PaymentService {
             throw new BusinessException(PaymentErrorCode.NOT_SET_PAYMENT_PASSWORD);
         }
 
-        // 결제 잠금 상태면 막음
-        if (memberPaymentVO.getPaymentLockedUntil() != null
-                && memberPaymentVO.getPaymentLockedUntil().isAfter(LocalDateTime.now())) {
-            throw new BusinessException(PaymentErrorCode.PAYMENT_LOCKED);
+        if (memberPaymentVO.getPaymentLockedUntil() != null) {
+            if (memberPaymentVO.getPaymentLockedUntil().isAfter(LocalDateTime.now())) {
+                throw new BusinessException(PaymentErrorCode.PAYMENT_LOCKED);
+            }
+
+            // 잠금이 풀린 후 최초로 시도한 결제면 결제 실패 횟수 초기화
+            memberPaymentService.updatePaymentLockedUntil(memberId, null);
+            memberPaymentService.resetPaymentPasswordFailedCount(memberId);
         }
 
         // 결제 비밀번호 검증
@@ -159,15 +163,15 @@ public class PaymentService {
 
             // 증가 후 횟수가 5회면 잠금 시간 10분 후로 설정
             if (failedCount >= 5) {
-                memberPaymentService.lockPayment(memberId, LocalDateTime.now().plusMinutes(10));
+                memberPaymentService.updatePaymentLockedUntil(memberId, LocalDateTime.now().plusMinutes(10));
                 throw new BusinessException(PaymentErrorCode.PAYMENT_JUST_LOCKED);
             }
 
             throw new BusinessException(PaymentErrorCode.INVALID_PAYMENT_PASSWORD);
         }
 
-        // 성공하면 실패 횟수 초기화
-        memberPaymentService.resetFailedCount(memberId);
+        // 비밀번호 일치 시 결제 실패 횟수 초기화
+        memberPaymentService.resetPaymentPasswordFailedCount(memberId);
 
         CategoryPolicyVO categoryPolicyVO = categoryPolicyMapper.selectByCategoryIdAndChildId(orderVO.getCategoryId(), memberId);
 
