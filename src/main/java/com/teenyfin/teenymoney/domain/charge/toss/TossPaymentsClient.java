@@ -2,9 +2,7 @@ package com.teenyfin.teenymoney.domain.charge.toss;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.teenyfin.teenymoney.domain.charge.exception.ChargeErrorCode;
-import com.teenyfin.teenymoney.domain.charge.toss.dto.TossBillingKeyResponseDTO;
-import com.teenyfin.teenymoney.domain.charge.toss.dto.TossCardBillingKeyRequestDTO;
-import com.teenyfin.teenymoney.domain.charge.toss.dto.TossErrorResponseDTO;
+import com.teenyfin.teenymoney.domain.charge.toss.dto.*;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import org.springframework.beans.factory.annotation.Value;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +18,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.Map;
 
 // 토스페이먼츠 자동결제(빌링) API와 직접 통신하는 담당 클래스.
 // FinlifeClient(금감원 API 연동)랑 똑같은 역할 - "외부 API 하나를 감싸는 전용 컴포넌트".
@@ -78,7 +77,6 @@ public class TossPaymentsClient {
             // 토스가 200이 아닌 상태코드(4xx/5xx)로 응답하면 RestTemplate이 예외를 던짐.
             // 카드번호가 틀렸거나, 유효기간이 잘못됐거나, 카드사에서 거절한 경우 등이 전부 여기로 옴.
             logTossErrorBody(exception);
-
             // 토스가 보낸 원본 에러 메시지를 사용자에게 그대로 노출하지 않고,
             // 우리가 정의한 ChargeErrorCode의 메시지로 감싸서 던짐 - 실제 원인은 위 로그로만 확인.
             throw new BusinessException(ChargeErrorCode.TOSS_BILLING_KEY_ISSUE_FAILED);
@@ -103,6 +101,85 @@ public class TossPaymentsClient {
         }
     }
 
+
+    // 빌링키로 실제 결제(충전)를 승인 요청한다. (토스 API: POST /v1/billing/{billingKey})
+    // ChargeService.executeCharge()가 부른다. 자동결제 승인은 최대 60초 걸릴 수 있으니
+    // 이 메서드를 호출하는 쪽(HTTP 클라이언트 타임아웃 설정)도 그걸 감안해야 한다.
+    //
+    // idempotencyKey: 같은 값으로 재시도하면 토스가 실제로 또 처리하지 않고 "첫 번째
+    // 요청의 원래 결과"를 그대로 돌려준다 - 네트워크 타임아웃 후 안전하게 재시도하기 위한 값.
+    // ChargeService는 이 값으로 charge.orderId를 그대로 재사용한다(같은 시도 = 같은 값).
+    public TossPaymentApprovalResponseDTO approveBillingPayment(String billingKey, TossBillingApproveRequestDTO request, String idempotencyKey) {
+        String url = baseUrl + "/v1/billing/" + billingKey;
+
+        HttpHeaders headers = buildAuthHeaders();
+        headers.set("Idempotency-Key", idempotencyKey);
+
+        HttpEntity<TossBillingApproveRequestDTO> entity = new HttpEntity<>(request,headers);
+
+        try {
+            TossPaymentApprovalResponseDTO response = restTemplate.postForObject(url, entity, TossPaymentApprovalResponseDTO.class);
+
+            if(response == null || response.getPaymentKey() == null) {
+                throw new BusinessException(ChargeErrorCode.TOSS_RESPONSE_INVALID);
+            }
+            return response;
+        } catch(HttpStatusCodeException exception) {
+            // 에러 코드를 로그용으로만 쓰는 게 아니라 아래 분기 판단에도 써야 해서
+            // logTossErrorBody() 대신 코드를 직접 돌려주는 parseTossErrorOrNull()을 쓴다.
+            TossErrorResponseDTO error = parseTossErrorOrNull(exception);
+            String tossCode = error != null ? error.getCode() : null;
+            log.warn("토스페이먼츠 자동결제 승인 실패 - status {}, code: {}", exception.getStatusCode(), tossCode);
+
+            // 같은 멱등키로 첫 요청이 아직 처리 중일 때 재시도하면 이게 옴.
+            // 성공도 실패도 아닌 "아직 모름" 상태라, 이걸 실패로 취급하면 안 된다.
+            if(exception.getStatusCode().value() == 409) {
+                throw new BusinessException(ChargeErrorCode.TOSS_REQUEST_IN_PROGRESS);
+            }
+
+            // 정상 흐름이면 Idempotency-Key가 타임아웃 재시도를 이미 안전하게 처리해줘서
+            // 이 코드를 볼 일이 없어야 한다 - 보인다면 멱등키를 실수로 다르게 보낸 버그일 가능성이 큼.
+            if ("DUPLICATED_ORDER_ID".equals(tossCode)) {
+                throw new BusinessException(ChargeErrorCode.TOSS_ORDER_ID_DUPLICATED);
+            }
+
+            //나머지 (카드 거절, 한도초과 등 진짜 승인 실패)는 전부 여기
+            throw new BusinessException(ChargeErrorCode.TOSS_CHARGE_APPROVAL_FAILED);
+
+        }
+
+    }
+
+    // 승인된 결제를 취소한다. (토스 API: POST /v1/payments/{paymentKey}/cancel)
+    // executeCharge()에서 "토스 승인은 성공했는데 그 직후 우리 DB 처리(SUCCESS 마킹+지갑
+    // 크레딧)가 실패했을 때" 보상 처리로 부른다 - 카드값은 나갔는데 지갑엔 안 들어온
+    // 상황을 막으려고 방금 승인된 결제를 즉시 되돌리는 것.
+    public void cancelPayment(String paymentKey, String cancelReason, String idempotencyKey) {
+        String url = baseUrl + "/v1/payments/" + paymentKey + "/cancel";
+
+        HttpHeaders headers = buildAuthHeaders();
+        headers.set("Idempotency-Key", idempotencyKey);
+
+        // Map.of(...): 간단한 key-value 하나짜리 JSON body({"cancelReason": "..."})를
+        // 만들 때 별도 DTO 클래스까지 안 만들고 바로 쓰는 방법.
+        HttpEntity<Map<String, String>> entity = new HttpEntity<>(Map.of("cancelReason", cancelReason), headers);
+
+        try {
+            restTemplate.postForObject(url,entity, String.class);
+
+        } catch(HttpStatusCodeException exception) {
+            TossErrorResponseDTO error = parseTossErrorOrNull(exception);
+            log.warn("토스페이먼츠 결제 취소 실패 - status: {}, code: {}", exception.getStatusCode(), error != null ? error.getCode() : null);
+            throw new BusinessException(ChargeErrorCode.TOSS_CHARGE_CANCEL_FAILED);
+
+        }
+
+    }
+
+
+
+
+
     // 토스 API를 호출할 때마다 공통으로 필요한 인증 헤더를 만든다.
     private HttpHeaders buildAuthHeaders() {
         HttpHeaders headers = new HttpHeaders();
@@ -123,20 +200,25 @@ public class TossPaymentsClient {
     }
 
 
-    // 토스가 실패 응답으로 보낸 JSON({"code":"...", "message":"..."})을 파싱해서
-    // 우리 서버 로그에 "진짜 실패 이유"를 남긴다. 사용자에게 보여주는 메시지가 아니라
+    // 토스가 실패 응답으로 보낸 JSON({"code":"...", "message":"..."})을 파싱해서 실패하면 null
+    // approveBillingPayment() 처럼 "에러 코드값 자체가 필요한" 곳과, 그냥 로그만 남기면 되는 곳(i에서 재사용하려고 파싱 로직만 따로
     // 우리(개발자)가 나중에 로그 보고 디버깅할 때 쓰는 용도.
-    private void logTossErrorBody(HttpStatusCodeException exception) {
+    private TossErrorResponseDTO parseTossErrorOrNull(HttpStatusCodeException exception) {
         try {
-            TossErrorResponseDTO error = objectMapper.readValue(exception.getResponseBodyAsString(), TossErrorResponseDTO.class);
-            log.warn("토스페이먼츠 API 오류 - status: {}, code; {}, message: {}", exception.getStatusCode(), error.getCode(), error.getMessage());
-
+            return objectMapper.readValue(exception.getResponseBodyAsString(), TossErrorResponseDTO.class);
         } catch (Exception parseException) {
+            log.warn("토스페이먼츠 API 오류 - status {}, body: {}", exception.getStatusCode(), exception.getResponseBodyAsString());
+            return null;
+        }
+    }
 
-            // 에러 응답이 예상한 JSON 형태가 아닐 수도 있는데, 그것 때문에 원래 처리가
-            // 막히면 안 되니까 파싱 실패는 조용히 무시하고 원본 텍스트만 로그에 남김.
-            log.warn("토스페이먼츠 API 오류 - status: {}, body: {}",
-                    exception.getStatusCode(), exception.getResponseBodyAsString());
+
+    // 파싱한 에러를 로그로만 남기고 싶을 때 쓰는 얇은 래퍼 (issueCardBillingKey()가 씀).
+    private void logTossErrorBody(HttpStatusCodeException exception) {
+        TossErrorResponseDTO error = parseTossErrorOrNull(exception);
+        if (error != null) {
+            log.warn("토스페이먼츠 API 오류 - status: {}, code: {}, message: {}",
+                    exception.getStatusCode(), error.getCode(), error.getMessage());
         }
     }
 
