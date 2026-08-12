@@ -13,6 +13,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.PropertySource;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 import javax.sql.DataSource;
 
@@ -28,9 +29,13 @@ import javax.sql.DataSource;
  * 검증 대상이 SQL 이므로 애플리케이션 전체를 띄울 이유가 없다.
  */
 @Configuration
+@EnableTransactionManagement
 @PropertySource("classpath:/application.properties")
 @MapperScan(
-        basePackages = "com.teenyfin.teenymoney.domain.quest.mapper",
+        basePackages = {
+                "com.teenyfin.teenymoney.domain.quest.mapper",
+                "com.teenyfin.teenymoney.domain.teenyscore.mapper"
+        },
         annotationClass = org.apache.ibatis.annotations.Mapper.class)
 public class QuestDeadlineTestConfig {
 
@@ -73,11 +78,16 @@ public class QuestDeadlineTestConfig {
 
     @Bean
     public java.time.Clock clock() {
-        return java.time.Clock.system(java.time.ZoneId.of("Asia/Seoul"));
+        return java.time.Clock.fixed(
+                java.time.Instant.parse("2000-01-02T01:00:00Z"),
+                java.time.ZoneId.of("Asia/Seoul"));
     }
 
     @Bean
     public PlatformTransactionManager transactionManager() {
-        return new DataSourceTransactionManager(dataSource());
+        DataSourceTransactionManager manager = new DataSourceTransactionManager(dataSource());
+        // 마감 배치의 건별 격리가 SAVEPOINT 에 의존한다. RootConfig 와 같은 전제로 맞춘다.
+        manager.setNestedTransactionAllowed(true);
+        return manager;
     }
 }

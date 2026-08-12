@@ -115,6 +115,9 @@ public class RootConfig {
     @Bean
     public DataSourceTransactionManager transactionManager(){
         DataSourceTransactionManager manager = new DataSourceTransactionManager(dataSource());
+        // 기본값이지만 명시한다. 마감 배치의 건별 격리(PROPAGATION_NESTED)가 JDBC SAVEPOINT 에
+        // 의존해서, 이걸 지원하지 않는 매니저로 바꾸면 배치가 매 실행 실패한다.
+        manager.setNestedTransactionAllowed(true);
         return manager;
     }
 

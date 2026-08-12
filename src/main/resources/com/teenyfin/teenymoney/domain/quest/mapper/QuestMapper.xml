@@ -315,6 +315,14 @@
         FROM T_QST_BASE_M q
         WHERE q.status = #{status}
           AND q.deadline &lt; #{now}
+        <!-- ponytail: 실행 중 실패분만 제외한다. 실행 간 누적이 필요해지면 retry_count 컬럼으로 -->
+        <!-- size 는 OGNL 이 리플렉션 없이 읽는다. isEmpty() 로 쓰면 List.of() 같은
+             비공개 구현 클래스에서 JPMS 때문에 막힌다. -->
+        <if test="excludeIds != null and excludeIds.size > 0">
+          AND q.id NOT IN
+          <foreach collection="excludeIds" item="excludeId"
+                   open="(" separator="," close=")">#{excludeId}</foreach>
+        </if>
         ORDER BY q.deadline ASC, q.id ASC
         LIMIT #{limit}
         FOR UPDATE SKIP LOCKED
@@ -323,6 +331,7 @@
     <update id="updateStatusForDeadline">
         UPDATE T_QST_BASE_M
         SET status = #{toStatus},
+            remaining_count = COALESCE(#{remainingCount}, remaining_count),
             updated_at = #{endedAt},
             ended_at = #{endedAt}
         WHERE id = #{questId}
