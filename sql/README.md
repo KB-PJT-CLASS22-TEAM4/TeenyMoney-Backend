@@ -54,3 +54,17 @@ migration 번호는 중복되지 않게 순서대로 증가시킵니다. Flyway�
 
 현재는 migration 적용 여부를 애플리케이션이 추적하지 않습니다. EC2 반영 시
 적용한 파일명, 적용 일시, 담당자를 Pull Request나 배포 기록에 남겨야 합니다.
+
+## 이슈 #104 배포 전 적용
+
+퀘스트 현금 보상은 `T_WLT_TRF_L.type = 'QUEST_REWARD'`를 사용합니다.
+애플리케이션 배포 전에 아래 파일을 MySQL에 수동 적용하고 적용 일시와 담당자를
+배포 기록에 남깁니다.
+
+```text
+sql/migration/V016__add_quest_reward_transfer_type.sql
+sql/migration/V017__allow_optional_quest_rejection_reason.sql
+```
+
+V016은 기존 송금 유형 CHECK 제약을 같은 이름으로 다시 만들고, V017은 인증 반려 사유를
+선택 사항으로 바꿉니다. 기존 데이터나 컬럼은 삭제하지 않습니다.

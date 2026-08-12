@@ -43,6 +43,32 @@ public class TransferService {
     // 1단계: 송금을 "PENDING" 상태로 접수만 해둔다. 잔액은 아직 안 건드린다.
     @Transactional
     public TransferVO createPendingTransfer(Long fromWalletId, Long toWalletId, Long amount, TransferType type, String idempotencyKey) {
+        return createOrLoadPendingTransfer(
+                fromWalletId, toWalletId, amount, type, idempotencyKey);
+    }
+
+    /**
+     * 호출한 서비스의 트랜잭션 안에서 송금 접수와 잔액 이동을 함께 처리한다.
+     * 퀘스트 승인 같은 상위 업무가 뒤에서 실패하면 송금과 원장도 같이 롤백된다.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public TransferVO transferInExistingTransaction(
+            Long fromWalletId,
+            Long toWalletId,
+            Long amount,
+            TransferType type,
+            String idempotencyKey) {
+        TransferVO pending = createOrLoadPendingTransfer(
+                fromWalletId, toWalletId, amount, type, idempotencyKey);
+        return transferExecutor.lockAndMove(pending.getId());
+    }
+
+    private TransferVO createOrLoadPendingTransfer(
+            Long fromWalletId,
+            Long toWalletId,
+            Long amount,
+            TransferType type,
+            String idempotencyKey) {
         if (amount == null || amount <= 0) {
             throw new BusinessException(WalletErrorCode.INVALID_TRANSFER_AMOUNT);
         }

@@ -57,6 +57,10 @@ class QuestMapperContextTest {
                 "selectDetailByParent",
                 "selectDetailByChild",
                 "selectLatestVerification",
+                "selectLatestVerificationForUpdate",
+                "updateVerificationReview",
+                "updateCompletedByParent",
+                "updateAfterRejectionByParent",
                 "insertVerification")) {
             assertTrue(sqlSessionFactory.getConfiguration()
                     .hasStatement(NAMESPACE + "." + statement), statement);
@@ -143,6 +147,63 @@ class QuestMapperContextTest {
                 "memberId", 1L));
 
         assertFalse(detailSql.contains("accepted_at"), detailSql);
+    }
+
+    @Test
+    @DisplayName("최신 인증 잠금 조회는 최신 시도 한 건을 잠근다")
+    void latestVerificationSelectLocksLatestAttempt() {
+        String locking = sql("selectLatestVerificationForUpdate",
+                Map.of("questId", 55L));
+
+        assertTrue(locking.contains("ORDER BY attempt_no DESC, id DESC"), locking);
+        assertTrue(locking.contains("LIMIT 1"), locking);
+        assertTrue(locking.contains("FOR UPDATE"), locking);
+    }
+
+    @Test
+    @DisplayName("인증 심사 갱신은 해당 퀘스트의 PENDING 인증 한 건만 변경한다")
+    void verificationReviewUpdateUsesPendingGuard() {
+        String update = sql("updateVerificationReview", Map.of(
+                "verificationId", 9L,
+                "questId", 55L,
+                "status", "APPROVED",
+                "reviewedAt", LocalDateTime.of(2026, 8, 12, 2, 0)));
+
+        assertTrue(update.contains("id = ?"), update);
+        assertTrue(update.contains("quest_id = ?"), update);
+        assertTrue(update.contains("status = 'PENDING'"), update);
+    }
+
+    @Test
+    @DisplayName("부모 완료 갱신은 PENDING 퀘스트에만 적용된다")
+    void parentCompletionUpdateUsesPendingGuard() {
+        String update = sql("updateCompletedByParent", Map.of(
+                "questId", 55L,
+                "parentId", 1L,
+                "endedAt", LocalDateTime.of(2026, 8, 12, 2, 0),
+                "updatedAt", LocalDateTime.of(2026, 8, 12, 2, 0)));
+
+        assertTrue(update.contains("status = 'COMPLETED'"), update);
+        assertTrue(update.contains("parent_id = ?"), update);
+        assertTrue(update.contains("AND status = 'PENDING'"), update);
+    }
+
+    @Test
+    @DisplayName("반려 상태 갱신은 남은 횟수와 선택적 연장 기한을 원자적으로 반영한다")
+    void rejectionUpdateChangesStateCountAndOptionalDeadline() {
+        String update = sql("updateAfterRejectionByParent", Map.of(
+                "questId", 55L,
+                "parentId", 1L,
+                "toStatus", QuestStatus.IN_PROGRESS,
+                "remainingCount", 2,
+                "deadline", LocalDateTime.of(2026, 8, 13, 20, 0),
+                "updatedAt", LocalDateTime.of(2026, 8, 12, 2, 0)));
+
+        assertTrue(update.contains("status = ?"), update);
+        assertTrue(update.contains("remaining_count = ?"), update);
+        assertTrue(update.contains("deadline = COALESCE(?, deadline)"), update);
+        assertTrue(update.contains("parent_id = ?"), update);
+        assertTrue(update.contains("AND status = 'PENDING'"), update);
     }
 
     private String sql(String statement, Map<String, Object> params) {

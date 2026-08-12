@@ -9,6 +9,7 @@ public enum TransferType {
     DEPOSIT("예금"),
     SAVING("적금"),
     LOAN("대출"),
+    QUEST_REWARD("퀘스트 보상"),
     TRANSFER("송금");
 
     // enum 상수마다 딸려오는 값 하나. ALLOWANCE("용돈")처럼 생성자 호출하듯 써주면,

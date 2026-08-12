@@ -198,6 +198,35 @@
           AND child_id = #{childId}
           AND status = 'AVAILABLE'
     </update>
+    <update id="updateVerificationReview">
+        UPDATE T_QST_VERIFY_L
+        SET status = #{status},
+            rejection_reason = #{rejectionReason},
+            reviewed_at = #{reviewedAt}
+        WHERE id = #{verificationId}
+          AND quest_id = #{questId}
+          AND status = 'PENDING'
+    </update>
+    <update id="updateCompletedByParent">
+        UPDATE T_QST_BASE_M
+        SET status = 'COMPLETED',
+            updated_at = #{updatedAt},
+            ended_at = #{endedAt}
+        WHERE id = #{questId}
+          AND parent_id = #{parentId}
+          AND status = 'PENDING'
+    </update>
+    <update id="updateAfterRejectionByParent">
+        UPDATE T_QST_BASE_M
+        SET status = #{toStatus},
+            remaining_count = #{remainingCount},
+            deadline = COALESCE(#{deadline}, deadline),
+            updated_at = #{updatedAt},
+            ended_at = #{endedAt}
+        WHERE id = #{questId}
+          AND parent_id = #{parentId}
+          AND status = 'PENDING'
+    </update>
 
     <delete id="deleteAvailable">
         DELETE FROM T_QST_BASE_M
@@ -259,8 +288,25 @@
                reviewed_at
         FROM T_QST_VERIFY_L
         WHERE quest_id = #{questId}
-        ORDER BY attempt_no DESC
+        ORDER BY attempt_no DESC, id DESC
         LIMIT 1
+    </select>
+
+    <select id="selectLatestVerificationForUpdate" resultMap="questVerificationResultMap">
+        SELECT id,
+               quest_id,
+               attempt_no,
+               image_key,
+               content,
+               status,
+               rejection_reason,
+               created_at,
+               reviewed_at
+        FROM T_QST_VERIFY_L
+        WHERE quest_id = #{questId}
+        ORDER BY attempt_no DESC, id DESC
+        LIMIT 1
+        FOR UPDATE
     </select>
 
 </mapper>
