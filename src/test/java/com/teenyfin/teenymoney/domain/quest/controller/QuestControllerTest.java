@@ -46,6 +46,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -371,8 +372,12 @@ class QuestControllerTest {
     }
 
     @Test
-    @DisplayName("반려 사유가 비어 있으면 필드 오류 400이고 심사 서비스를 부르지 않는다")
-    void rejectVerificationWithoutReasonReturns400() throws Exception {
+    @DisplayName("반려 사유 없이도 인증을 반려할 수 있다")
+    void rejectVerificationWithoutReasonIsAllowed() throws Exception {
+        given(queryService.getQuest(any(), eq(55L))).willReturn(detail());
+        ArgumentCaptor<QuestRejectRequestDTO> captor =
+                ArgumentCaptor.forClass(QuestRejectRequestDTO.class);
+
         var response = mockMvc.perform(
                         patch("/quests/55/verifications/9/reject")
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -380,10 +385,14 @@ class QuestControllerTest {
                 .andReturn().getResponse();
         String body = response.getContentAsString(StandardCharsets.UTF_8);
 
-        assertEquals(400, response.getStatus(), body);
-        assertTrue(body.contains("\"code\":\"COMMON_INVALID_INPUT\""), body);
-        assertTrue(body.contains("\"reason\""), body);
-        verify(reviewService, never()).reject(any(), any(), any(), any());
+        assertEquals(200, response.getStatus(), body);
+        assertTrue(body.contains("\"questId\":55"), body);
+        verify(reviewService).reject(
+                eq(new MemberPrincipal(1L, "PARENT")),
+                eq(55L),
+                eq(9L),
+                captor.capture());
+        assertNull(captor.getValue().getReason());
     }
 
     /** 수락·거절·인증 제출은 자녀 전용이라 setUp 의 PARENT 인증을 CHILD 로 바꾼다. */

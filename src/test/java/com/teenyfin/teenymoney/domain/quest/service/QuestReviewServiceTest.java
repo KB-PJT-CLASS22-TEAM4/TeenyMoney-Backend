@@ -31,6 +31,7 @@ import java.time.ZoneId;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.inOrder;
@@ -297,20 +298,40 @@ class QuestReviewServiceTest {
     }
 
     @Test
-    @DisplayName("마지막 인증 기회를 반려하면 기한과 선택값에 관계없이 최종 실패한다")
+    @DisplayName("마지막 인증 기회를 반려하면 기한에 관계없이 최종 실패한다")
     void thirdRejectionAlwaysFails() {
         when(questMapper.selectByIdForUpdateByParent(QUEST_ID, PARENT_ID))
                 .thenReturn(pendingQuestWithDeadline(
                         0L, true, 1, NOW.plusDays(1)));
 
         service.reject(parent(), QUEST_ID, VERIFICATION_ID,
-                rejectRequest("세 번째 인증도 부족해요",
-                        AfterDeadlineAction.EXTEND, NOW.minusYears(2)));
+                rejectRequest("세 번째 인증도 부족해요", null, null));
 
         verify(questMapper).updateAfterRejectionByParent(
                 QUEST_ID, PARENT_ID, QuestStatus.FAILED, 0,
                 null, NOW, NOW);
         assertFinalFailureScoreApplied();
+    }
+
+    @Test
+    @DisplayName("마지막 인증 기회에 연장을 요청하면 무시하지 않고 거부한다")
+    void thirdRejectionRejectsExtensionRequestInsteadOfIgnoringIt() {
+        when(questMapper.selectByIdForUpdateByParent(QUEST_ID, PARENT_ID))
+                .thenReturn(pendingQuestWithDeadline(
+                        0L, true, 1, NOW.minusSeconds(1)));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.reject(parent(), QUEST_ID, VERIFICATION_ID,
+                        rejectRequest("세 번째 인증도 부족해요",
+                                AfterDeadlineAction.EXTEND, NOW.plusDays(7))));
+
+        assertEquals(QuestErrorCode.QUEST_REVIEW_REQUEST_INVALID,
+                exception.getErrorCode());
+        // 조용히 최종 실패시키면 부모는 연장한 줄 알고 자녀는 티니점수를 잃는다.
+        // 종료 상태라 되돌릴 수 없으므로 아무것도 바꾸지 않고 알려야 한다.
+        verify(questMapper, never()).updateAfterRejectionByParent(
+                any(), any(), any(), anyInt(), any(), any(), any());
+        verify(teenyScoreChangeService, never()).change(any());
     }
 
     @Test
@@ -366,17 +387,32 @@ class QuestReviewServiceTest {
     }
 
     @Test
-    @DisplayName("반려 사유는 공백 제거 후 1자 이상 500자 이하여야 한다")
-    void rejectValidatesNormalizedReason() {
-        BusinessException blank = assertThrows(BusinessException.class,
-                () -> service.reject(parent(), QUEST_ID, VERIFICATION_ID,
-                        rejectRequest("   ", null, null)));
-        assertEquals(QuestErrorCode.QUEST_REVIEW_REQUEST_INVALID,
-                blank.getErrorCode());
+    @DisplayName("반려 사유가 없으면 null로 저장한다")
+    void rejectWithoutReasonStoresNull() {
+        service.reject(parent(), QUEST_ID, VERIFICATION_ID,
+                rejectRequest(null, null, null));
 
+        verify(questMapper).updateVerificationReview(
+                VERIFICATION_ID, QUEST_ID, "REJECTED", null, NOW);
+    }
+
+    @Test
+    @DisplayName("공백뿐인 반려 사유는 null로 저장한다")
+    void rejectBlankReasonStoresNull() {
+        service.reject(parent(), QUEST_ID, VERIFICATION_ID,
+                rejectRequest("   ", null, null));
+
+        verify(questMapper).updateVerificationReview(
+                VERIFICATION_ID, QUEST_ID, "REJECTED", null, NOW);
+    }
+
+    @Test
+    @DisplayName("반려 사유가 500자를 넘으면 요청을 거부한다")
+    void rejectRejectsReasonLongerThan500Characters() {
         BusinessException tooLong = assertThrows(BusinessException.class,
                 () -> service.reject(parent(), QUEST_ID, VERIFICATION_ID,
                         rejectRequest("가".repeat(501), null, null)));
+
         assertEquals(QuestErrorCode.QUEST_REVIEW_REQUEST_INVALID,
                 tooLong.getErrorCode());
         verify(questMapper, never())

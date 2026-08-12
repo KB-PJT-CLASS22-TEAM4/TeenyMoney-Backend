@@ -41,12 +41,12 @@ Content-Type: application/json
 }
 ```
 
-- `reason`: 공백 제거 후 1~500자 필수
+- `reason`: 선택 사항. 값이 없거나 공백뿐이면 `NULL`, 값이 있으면 공백 제거 후 1~500자
 - 기한 전 첫 번째·두 번째 반려: `afterDeadlineAction`, `extendedDeadline` 모두 없어야 한다.
 - 기한 후 첫 번째·두 번째 반려: `afterDeadlineAction` 필수
 - `EXTEND`: `extendedDeadline`이 현재보다 미래이고 1년 이내여야 한다.
 - `FAIL`: `extendedDeadline`이 없어야 한다.
-- 세 번째 반려: 선택값과 관계없이 최종 실패한다. `afterDeadlineAction`과 `extendedDeadline`은 사용하지 않는다.
+- 세 번째 반려: 항상 최종 실패한다. 연장 선택지가 없으므로 `afterDeadlineAction`이나 `extendedDeadline`이 오면 `400`으로 거절한다. 조용히 무시하면 부모는 연장한 줄 알고 자녀는 최종 실패로 티니점수를 잃는데, 종료 상태라 되돌릴 수 없다.
 
 성공하면 갱신된 `QuestDetailResponseDTO` 전체를 반환한다.
 
@@ -81,7 +81,7 @@ Content-Type: application/json
 
 ## 반려 상태 전이
 
-인증은 모든 정상 반려에서 `REJECTED`, `rejection_reason`, `reviewed_at`을 기록한다. 새 남은 횟수는 `remainingCount - 1`이다.
+인증은 모든 정상 반려에서 `REJECTED`, 선택적 `rejection_reason`, `reviewed_at`을 기록한다. 새 남은 횟수는 `remainingCount - 1`이다.
 
 | 조건 | 퀘스트 결과 | 점수 |
 |---|---|---:|
@@ -118,7 +118,7 @@ Content-Type: application/json
 | 퀘스트가 없거나 부모 소유가 아님 | 404 | `QUEST_NOT_FOUND_OR_ACCESS_DENIED` |
 | 퀘스트가 `PENDING`이 아님 | 409 | `QUEST_STATUS_CONFLICT` |
 | 인증이 최신이 아니거나 이미 처리됨 | 409 | `QUEST_VERIFICATION_CONFLICT` |
-| 반려 사유 또는 기한 후 선택 조합이 잘못됨 | 400 | `QUEST_REVIEW_REQUEST_INVALID` |
+| 반려 사유가 500자를 초과하거나 기한 후 선택 조합이 잘못됨 | 400 | `QUEST_REVIEW_REQUEST_INVALID` |
 | 연장 기한이 미래가 아니거나 1년 초과 | 400 | `QUEST_EXTENDED_DEADLINE_INVALID` |
 | 부모 지갑 잔액 부족 | 400 | 기존 `INSUFFICIENT_BALANCE` |
 | 부모·자녀 MEMBER 지갑 없음 | 404 또는 기존 계약 | 기존 `WALLET_NOT_FOUND` |
@@ -130,7 +130,7 @@ Content-Type: application/json
 ### 단위 테스트
 
 - 승인: 현금+점수, 0원 보상, 점수 비활성, 잔액 부족 전파, 오래된 인증, 처리된 인증
-- 반려: 기한 전 재도전, 기한 후 연장, 기한 후 실패, 세 번째 강제 실패, 잘못된 요청 조합
+- 반려: 사유 누락·공백의 `NULL` 처리, 기한 전 재도전, 기한 후 연장, 기한 후 실패, 세 번째 강제 실패, 잘못된 요청 조합
 - 점수 정책: 완료 +3, 실패 -2, 이벤트 코드·키·참조값
 - 원자적 송금: 기존 트랜잭션 필수와 기존 송금 API 보존
 

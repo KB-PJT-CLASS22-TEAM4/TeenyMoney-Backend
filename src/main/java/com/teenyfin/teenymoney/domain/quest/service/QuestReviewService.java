@@ -16,6 +16,8 @@ import com.teenyfin.teenymoney.domain.wallet.vo.TransferType;
 import com.teenyfin.teenymoney.domain.wallet.vo.WalletVO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import com.teenyfin.teenymoney.global.security.MemberPrincipal;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +27,10 @@ import java.time.temporal.ChronoUnit;
 
 @Service
 public class QuestReviewService {
+
+    // 승인·반려 실패는 트랜잭션이 롤백되어 DB에 아무 흔적이 남지 않는다.
+    // 운영 중 "승인이 안 된다"는 문의가 오면 이 로그가 유일한 단서다.
+    private static final Logger log = LoggerFactory.getLogger(QuestReviewService.class);
 
     private static final String VERIFICATION_PENDING = "PENDING";
     private static final String VERIFICATION_APPROVED = "APPROVED";
@@ -62,31 +68,39 @@ public class QuestReviewService {
             Long questId,
             Long verificationId) {
         Long parentId = requireParent(principal);
-        QuestVO quest = findOwnedPendingForUpdate(questId, parentId);
-        QuestVerificationVO verification =
-                findLatestPendingVerificationForUpdate(
-                        questId, verificationId);
-        LocalDateTime now = now();
+        try {
+            QuestVO quest = findOwnedPendingForUpdate(questId, parentId);
+            QuestVerificationVO verification =
+                    findLatestPendingVerificationForUpdate(
+                            questId, verificationId);
+            LocalDateTime now = now();
 
-        applyRewardIfPresent(quest);
-        if (Boolean.TRUE.equals(quest.getTeenyScoreEnabled())) {
-            teenyScoreChangeService.change(
-                    teenyScorePolicyService.questCompleted(
-                            quest.getChildId(), quest.getId()));
-        }
+            applyRewardIfPresent(quest);
+            if (Boolean.TRUE.equals(quest.getTeenyScoreEnabled())) {
+                teenyScoreChangeService.change(
+                        teenyScorePolicyService.questCompleted(
+                                quest.getChildId(), quest.getId()));
+            }
 
-        if (questMapper.updateVerificationReview(
-                verification.getId(),
-                quest.getId(),
-                VERIFICATION_APPROVED,
-                null,
-                now) != 1) {
-            throw new BusinessException(
-                    QuestErrorCode.QUEST_VERIFICATION_CONFLICT);
-        }
-        if (questMapper.updateCompletedByParent(
-                quest.getId(), parentId, now, now) != 1) {
-            throw new BusinessException(QuestErrorCode.QUEST_STATUS_CONFLICT);
+            if (questMapper.updateVerificationReview(
+                    verification.getId(),
+                    quest.getId(),
+                    VERIFICATION_APPROVED,
+                    null,
+                    now) != 1) {
+                throw new BusinessException(
+                        QuestErrorCode.QUEST_VERIFICATION_CONFLICT);
+            }
+            if (questMapper.updateCompletedByParent(
+                    quest.getId(), parentId, now, now) != 1) {
+                throw new BusinessException(QuestErrorCode.QUEST_STATUS_CONFLICT);
+            }
+        } catch (BusinessException e) {
+            logReviewFailure("승인", questId, verificationId, parentId, e.getErrorCode().getCode(), e);
+            throw e;
+        } catch (RuntimeException e) {
+            logReviewFailure("승인", questId, verificationId, parentId, "UNEXPECTED", e);
+            throw e;
         }
     }
 
@@ -101,6 +115,23 @@ public class QuestReviewService {
             Long verificationId,
             QuestRejectRequestDTO request) {
         Long parentId = requireParent(principal);
+        try {
+            rejectInternal(principal, questId, verificationId, request, parentId);
+        } catch (BusinessException e) {
+            logReviewFailure("반려", questId, verificationId, parentId, e.getErrorCode().getCode(), e);
+            throw e;
+        } catch (RuntimeException e) {
+            logReviewFailure("반려", questId, verificationId, parentId, "UNEXPECTED", e);
+            throw e;
+        }
+    }
+
+    private void rejectInternal(
+            MemberPrincipal principal,
+            Long questId,
+            Long verificationId,
+            QuestRejectRequestDTO request,
+            Long parentId) {
         String reason = normalizeReason(request);
         QuestVO quest = findOwnedPendingForUpdate(questId, parentId);
         QuestVerificationVO verification =
@@ -149,8 +180,22 @@ public class QuestReviewService {
             QuestRejectRequestDTO request,
             int nextRemainingCount,
             LocalDateTime now) {
-        // 마지막 인증 반려는 선택값을 해석하지 않고 즉시 최종 실패한다.
+        // 마지막 인증 반려는 연장 선택지가 없다(설계 8.1).
+        //
+        // 값이 왔다면 클라이언트가 남은 횟수를 잘못 알고 있다는 뜻이다. 조용히 무시하면
+        // 부모는 연장해 준 줄 알고, 자녀는 최종 실패로 티니점수까지 잃는다. 종료 상태라
+        // 되돌릴 수도 없다. 기한 전에 불필요한 값이 왔을 때와 같은 기준으로 거절한다.
+        // normalizeReason 과 마찬가지로 request 가 null 인 경우까지 견딘다.
+        AfterDeadlineAction action =
+                request == null ? null : request.getAfterDeadlineAction();
+        LocalDateTime extendedDeadline =
+                request == null ? null : request.getExtendedDeadline();
+
         if (nextRemainingCount == 0) {
+            if (action != null || extendedDeadline != null) {
+                throw new BusinessException(
+                        QuestErrorCode.QUEST_REVIEW_REQUEST_INVALID);
+            }
             return RejectionDecision.failed(now);
         }
 
@@ -160,8 +205,6 @@ public class QuestReviewService {
                     QuestErrorCode.QUEST_REVIEW_REQUEST_INVALID);
         }
         boolean afterDeadline = now.isAfter(currentDeadline);
-        AfterDeadlineAction action = request.getAfterDeadlineAction();
-        LocalDateTime extendedDeadline = request.getExtendedDeadline();
 
         if (!afterDeadline) {
             if (action != null || extendedDeadline != null) {
@@ -191,13 +234,32 @@ public class QuestReviewService {
         return RejectionDecision.retry(extendedDeadline);
     }
 
+    /**
+     * 검토 실패를 남긴다. 트랜잭션이 롤백되면 DB 에는 아무것도 남지 않으므로 로그가 유일한 기록이다.
+     *
+     * 예외는 다시 던진다. 여기서 삼키면 실패한 승인이 성공으로 응답된다.
+     */
+    private void logReviewFailure(
+            String action,
+            Long questId,
+            Long verificationId,
+            Long parentId,
+            String reasonCode,
+            RuntimeException cause) {
+        log.warn("퀘스트 {} 실패 questId={} verificationId={} parentId={} reason={} message={}",
+                action, questId, verificationId, parentId, reasonCode, cause.getMessage());
+    }
+
     private String normalizeReason(QuestRejectRequestDTO request) {
         if (request == null || request.getReason() == null) {
-            throw new BusinessException(
-                    QuestErrorCode.QUEST_REVIEW_REQUEST_INVALID);
+            return null;
         }
         String reason = request.getReason().trim();
-        if (reason.isEmpty() || reason.length() > 500) {
+        if (reason.isEmpty()) {
+            return null;
+        }
+
+        if (reason.length() > 500) {
             throw new BusinessException(
                     QuestErrorCode.QUEST_REVIEW_REQUEST_INVALID);
         }
