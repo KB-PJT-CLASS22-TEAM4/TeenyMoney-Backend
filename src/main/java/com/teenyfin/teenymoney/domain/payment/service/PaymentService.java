@@ -17,6 +17,7 @@ import com.teenyfin.teenymoney.domain.wallet.exception.WalletErrorCode;
 import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
 import com.teenyfin.teenymoney.domain.wallet.service.WalletLedgerService;
 import com.teenyfin.teenymoney.domain.wallet.vo.ReferenceType;
+import com.teenyfin.teenymoney.domain.wallet.vo.WalletTransactionVO;
 import com.teenyfin.teenymoney.domain.wallet.vo.WalletVO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -127,6 +129,35 @@ public class PaymentService {
     @Transactional
     public PaymentResponseDTO progressPayment(Long memberId, PaymentRequestDTO paymentRequestDTO) {
 
+        // 동일한 사용자에 의한 중복 요청이면 기존 결과를 찾아서 그대로 반환
+        PaymentVO existingPaymentVO = paymentMapper.selectByIdempotencyKey(paymentRequestDTO.getIdempotencyKey());
+
+        if (existingPaymentVO != null) {
+
+            CategoryPolicyVO categoryPolicyVO = categoryPolicyMapper.selectByCategoryIdAndChildId(existingPaymentVO.getCategoryId(), memberId);
+            WalletVO walletVO = walletMapper.selectWalletForUpdate(existingPaymentVO.getWalletId());
+
+            // 해당 결제 내역의 소유주가 현재 요청한 사용자와 다른 경우
+            if (!Objects.equals(walletVO.getMemberId(), memberId)) {
+                throw new BusinessException(PaymentErrorCode.PAYMENT_ACCESS_DENIED);
+            }
+
+            WalletTransactionVO walletTransactionVO = walletMapper.selectByPaymentId(existingPaymentVO.getId());
+
+            return PaymentResponseDTO.builder()
+                    .merchantName(existingPaymentVO.getMerchantName())
+                    .amount(existingPaymentVO.getAmount())
+                    .balance(walletTransactionVO.getBalanceAfter())
+                    .categoryPolicy(CategoryPolicyResponseDTO.builder()
+                            .id(categoryPolicyVO.getId())
+                            .categoryName(categoryPolicyVO.getCategoryName())
+                            .policy(categoryPolicyVO.getPolicy())
+                            .build())
+                    .createdAt(existingPaymentVO.getCreatedAt())
+                    .build();
+        }
+
+        // 새로운 결제 진행
         OrderVO orderVO = orderStore.find(paymentRequestDTO.getOrderId());
 
         // QR 결제 정보가 존재하는지 검증
@@ -159,6 +190,7 @@ public class PaymentService {
                 .categoryId(orderVO.getCategoryId())
                 .orderId(paymentRequestDTO.getOrderId())
                 .idempotencyKey(paymentRequestDTO.getIdempotencyKey())
+                .merchantName(orderVO.getMerchantName())
                 .appliedPolicy(categoryPolicyVO.getPolicy())
                 .amount(orderVO.getAmount())
                 .status("SUCCESS")
@@ -177,8 +209,6 @@ public class PaymentService {
                     orderVO.getMerchantName());
 
         } catch (DuplicateKeyException e) {
-            // 동일한 사용자에 의한 중복 요청이면 기존 결과를 찾아서 그대로 반환
-            paymentVO = paymentMapper.selectByIdempotencyKey(paymentRequestDTO.getIdempotencyKey());
 
             // 다른 사용자로부터 이미 해당 주문이 처리된 경우 예외 반환
             if (paymentVO == null) {
@@ -192,7 +222,7 @@ public class PaymentService {
         walletVO = walletMapper.selectWalletForUpdate(walletVO.getId());
 
         return PaymentResponseDTO.builder()
-                .merchantName(orderVO.getMerchantName())
+                .merchantName(paymentVO.getMerchantName())
                 .amount(paymentVO.getAmount())
                 .balance(walletVO.getBalance())
                 .categoryPolicy(CategoryPolicyResponseDTO.builder()
