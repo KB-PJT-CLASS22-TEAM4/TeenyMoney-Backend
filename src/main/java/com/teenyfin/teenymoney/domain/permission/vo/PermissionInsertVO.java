@@ -6,7 +6,6 @@ import lombok.Setter;
 
 @Builder
 @Getter
-@Setter
 public class PermissionInsertVO {
 
     private Long id;

@@ -10,6 +10,7 @@ import org.springframework.http.HttpStatus;
 public enum CategoryPolicyErrorCode implements ErrorCode {
 
     INVALID_ROLE(HttpStatus.BAD_REQUEST, "유효하지 않은 역할입니다."),
+    CATEGORY_POLICY_NOT_FOUND(HttpStatus.BAD_REQUEST, "카테고리 정책을 찾을 수 없습니다"),
     CHILD_CAN_NOT_UPDATE_CATEGORY_POLICY(HttpStatus.FORBIDDEN, "자녀는 카테고리 정책에 대한 수정 권한이 없습니다."),
     CHILD_ID_REQUIRED(HttpStatus.BAD_REQUEST, "부모는 조회할 자녀의 아이디를 지정해야 합니다."),
     FORBIDDEN_TO_CHILD(HttpStatus.FORBIDDEN, "해당 자녀에 대한 권한이 없습니다."),

@@ -65,7 +65,7 @@ public class CategoryPolicyService {
         return categoryPolicyVOList.stream()
                 .map(x -> CategoryPolicyResponseDTO.builder()
                         .id(x.getId())
-                        .merchantCategoryName(x.getMerchantCategoryName())
+                        .categoryName(x.getCategoryName())
                         .policy(x.getPolicy())
                         .build())
                 .toList();
@@ -78,10 +78,9 @@ public class CategoryPolicyService {
         // 자녀는 수정 권한 없음
         if (role.equals("CHILD")) {
             throw new BusinessException(CategoryPolicyErrorCode.CHILD_CAN_NOT_UPDATE_CATEGORY_POLICY);
-        }
-
-        // 해당 자녀와 연결된 부모인지 검증
-        if (!Objects.equals(memberMapper.selectActiveParentByChildId(childId).getParentId(), memberId)) {
+        } else if (childId == null) {   // 부모의 경우 childId 값은 필수
+            throw new BusinessException(CategoryPolicyErrorCode.CHILD_ID_REQUIRED);
+        } else if (!Objects.equals(memberMapper.selectActiveParentByChildId(childId).getParentId(), memberId)) {  // 해당 자녀와 연결된 부모인지 확인
             throw new BusinessException(CategoryPolicyErrorCode.FORBIDDEN_TO_CHILD);
         }
 
@@ -97,7 +96,7 @@ public class CategoryPolicyService {
         return categoryPolicyVOList.stream()
                 .map(x -> CategoryPolicyResponseDTO.builder()
                         .id(x.getId())
-                        .merchantCategoryName(x.getMerchantCategoryName())
+                        .categoryName(x.getCategoryName())
                         .policy(x.getPolicy())
                         .build())
                 .toList();

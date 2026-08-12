@@ -1,0 +1,28 @@
+package com.teenyfin.teenymoney.domain.payment.mapper;
+
+import com.teenyfin.teenymoney.domain.payment.vo.PaymentVO;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+
+@Mapper
+public interface PaymentMapper {
+
+    // 해당 카테고리에서 최근 30일 간 결제한 횟수 조회
+    int countRecentTransactions(@Param("childId") Long childId, @Param("categoryId") Long categoryId);
+
+    // 해당 카테고리에 최근 30일 간 결제한 금액 조회
+    Long sumRecentTransactionAmount(@Param("childId") Long childId, @Param("categoryId") Long categoryId);
+
+    // 결제 내역 삽입
+    int insert(PaymentVO paymentVO);
+
+    // 아이디로 결제 내역 조회
+    PaymentVO selectById(@Param("id") Long id);
+
+    // 주문 아이디로 결제 내역 유무 조회
+    Boolean existsByOrderId(@Param("orderId") String orderId);
+
+    // 멱등성 키로 결제 내역 조회
+    PaymentVO selectByIdempotencyKey(@Param("idempotencyKey") String idempotencyKey);
+
+}

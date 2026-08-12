@@ -126,4 +126,11 @@
         VALUES (#{memberId}, #{balance}, #{type})
     </insert>
 
+    <!-- 결제 아이디로 거래 원장을 조회한다. 항상 1건만 반환한다. -->
+    <select id="selectByPaymentId"  resultMap="walletTransactionResultMap">
+        SELECT id, direction, amount, balance_after, description, created_at
+        FROM T_WLT_HIST_H
+        WHERE payment_id= #{paymentId}
+    </select>
+
 </mapper>
