@@ -1,5 +1,6 @@
 package com.teenyfin.teenymoney.domain.quest.vo;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -7,7 +8,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class QuestTabTest {
 
     @Test
-    void 탭은_조회할_상태와_정렬_기준을_정한다() {
+    @DisplayName("탭은 조회할 상태와 정렬 기준을 정한다")
+    void tabDefinesStatusesAndSortBasis() {
         assertThat(QuestTab.AVAILABLE.statuses())
                 .containsExactly(QuestStatus.AVAILABLE);
         assertThat(QuestTab.ONGOING.statuses())

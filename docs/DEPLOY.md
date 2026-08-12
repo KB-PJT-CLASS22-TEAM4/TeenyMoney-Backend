@@ -48,6 +48,55 @@ IAM 역할(`teenymoney-ec2-s3`)로 자격증명을 받으므로 서버에 키를
 버킷은 비공개입니다. 퍼블릭 액세스 차단을 풀지 마세요 — 조회 URL은 요청마다 서명해서
 발급하며, 버킷을 공개로 바꾸면 미성년자 사진이 URL만으로 영구 노출됩니다.
 
+### 퀘스트 인증 이미지 Lifecycle — 인프라 설정, 코드 아님
+
+퀘스트 인증 사진은 `quest-verifications/{questId}/{uuid}.{확장자}` 키로 올라갑니다.
+**업로드 90일 뒤 자동 삭제**가 정책이고, 애플리케이션은 이 삭제에 관여하지 않습니다.
+서버에는 `s3:DeleteObject` 권한이 없으며 줄 계획도 없습니다. 버킷의 Lifecycle 규칙만이
+지웁니다. **버킷당 한 번** 아래 규칙을 넣어야 하고, 넣지 않으면 사진이 영구 보관됩니다.
+
+```json
+{
+  "Rules": [
+    {
+      "ID": "quest-verification-image-90d",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "quest-verifications/" },
+      "Expiration": { "Days": 90 }
+    }
+  ]
+}
+```
+
+```bash
+aws s3api put-bucket-lifecycle-configuration --bucket "$AWS_S3_BUCKET" --lifecycle-configuration file://quest-lifecycle.json
+```
+
+적용 확인:
+
+```bash
+aws s3api get-bucket-lifecycle-configuration --bucket "$AWS_S3_BUCKET"
+```
+
+접두사를 `quest-verifications/`로 정확히 맞추세요. 회원 프로필 이미지는 `profile/`
+접두사를 쓰며 삭제 대상이 **아닙니다**. 규칙을 버킷 전체에 걸면 프로필 사진이 90일 뒤
+사라집니다.
+
+이 규칙은 두 가지를 함께 처리합니다.
+
+1. **보관 기간이 끝난 인증 사진 삭제.** 삭제 뒤에도 DB의 인증 글, 상태, 시각, 반려 사유는
+   남고, 조회 API는 서명 URL 대신 `imageExpired=true`를 반환합니다. 만료 판정은 S3가
+   아니라 인증 행의 `created_at` 기준이라 실제 삭제와 화면 표시가 어긋나지 않습니다.
+2. **고아 객체 정리.** 인증 제출은 S3 업로드가 DB 트랜잭션보다 먼저라, 업로드 성공 후
+   트랜잭션이 롤백되면 아무도 참조하지 않는 오브젝트가 남습니다. DB에 키가 저장되지
+   않았으므로 어떤 화면에도 나타나지 않고, 90일 뒤 이 규칙이 지웁니다.
+
+| 항목 | 담당 |
+| --- | --- |
+| 규칙 적용 | 인프라 담당자가 운영 버킷(`teenymoney-media-kb22`)에 1회 |
+| 로컬 개발 | 규칙 없이도 동작합니다. 로컬 테스트 객체는 수동으로 정리하세요 |
+| 코드 변경 시 | 접두사를 바꾸면 이 규칙도 함께 바꿔야 합니다 |
+
 ### 필수 보안값
 
 `JWT_SECRET`과 `COOKIE_SECURE`가 없으면 애플리케이션은 기동하지 않습니다.

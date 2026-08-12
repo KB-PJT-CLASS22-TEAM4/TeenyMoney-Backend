@@ -14,6 +14,7 @@ import com.teenyfin.teenymoney.global.exception.BusinessException;
 import com.teenyfin.teenymoney.global.exception.CommonErrorCode;
 import com.teenyfin.teenymoney.global.security.MemberPrincipal;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -61,7 +62,8 @@ class QuestCreationServiceTest {
     }
 
     @Test
-    void 여러_자녀의_독립_퀘스트를_요청_순서대로_생성한다() {
+    @DisplayName("여러 자녀의 독립 퀘스트를 요청 순서대로 생성한다")
+    void createsIndependentQuestsInRequestedChildOrder() {
         AtomicLong ids = new AtomicLong(100L);
         doAnswer(invocation -> {
             QuestVO quest = invocation.getArgument(0);
@@ -91,7 +93,8 @@ class QuestCreationServiceTest {
     }
 
     @Test
-    void 중복_자녀는_삽입하기_전에_거절한다() {
+    @DisplayName("중복 자녀는 삽입하기 전에 거절한다")
+    void rejectsDuplicateChildBeforeInsert() {
         assertError(
                 () -> service.create(parent(), request(List.of(2L, 2L)), REQUEST_KEY),
                 QuestErrorCode.QUEST_CHILD_DUPLICATED);
@@ -101,7 +104,8 @@ class QuestCreationServiceTest {
     }
 
     @Test
-    void 현금과_티니점수가_모두_없으면_거절한다() {
+    @DisplayName("현금과 티니점수가 모두 없으면 거절한다")
+    void rejectsQuestWithNeitherCashNorTeenyScore() {
         assertError(
                 () -> service.create(
                         parent(),
@@ -111,7 +115,8 @@ class QuestCreationServiceTest {
     }
 
     @Test
-    void 현금_보상은_0원이_아니라면_최소_100원이다() {
+    @DisplayName("현금 보상은 0원이 아니라면 최소 100원이다")
+    void cashRewardIsAtLeast100WhenNotZero() {
         assertError(
                 () -> service.create(
                         parent(),
@@ -121,7 +126,8 @@ class QuestCreationServiceTest {
     }
 
     @Test
-    void 전체_예상_보상_계산이_Long_범위를_넘으면_거절한다() {
+    @DisplayName("전체 예상 보상 계산이 Long 범위를 넘으면 거절한다")
+    void rejectsTotalRewardOverflow() {
         assertError(
                 () -> service.create(
                         parent(),
@@ -132,7 +138,8 @@ class QuestCreationServiceTest {
     }
 
     @Test
-    void 기한은_서버_현재_시각보다_미래이고_최대_1년_이내여야_한다() {
+    @DisplayName("기한은 서버 현재 시각보다 미래이고 최대 1년 이내여야 한다")
+    void deadlineMustBeFutureAndWithinOneYear() {
         assertError(
                 () -> service.create(
                         parent(), request(List.of(2L), "제목", "내용", 100L, true, NOW), REQUEST_KEY),
@@ -147,14 +154,16 @@ class QuestCreationServiceTest {
     }
 
     @Test
-    void 정규_UUID가_아닌_생성_요청_키는_거절한다() {
+    @DisplayName("정규 UUID가 아닌 생성 요청 키는 거절한다")
+    void rejectsNonCanonicalUuidRequestKey() {
         assertError(
                 () -> service.create(parent(), request(List.of(2L)), "1-1-1-1-1"),
                 QuestErrorCode.QUEST_CREATION_KEY_INVALID);
     }
 
     @Test
-    void 부모가_아니면_퀘스트를_생성할_수_없다() {
+    @DisplayName("부모가 아니면 퀘스트를 생성할 수 없다")
+    void nonParentCannotCreateQuest() {
         assertError(
                 () -> service.create(new MemberPrincipal(2L, "CHILD"), request(List.of(2L)), REQUEST_KEY),
                 QuestErrorCode.QUEST_PARENT_ONLY);
@@ -163,7 +172,8 @@ class QuestCreationServiceTest {
     }
 
     @Test
-    void 연결되지_않은_자녀는_퀘스트_오류로_변환한다() {
+    @DisplayName("연결되지 않은 자녀는 퀘스트 오류로 변환한다")
+    void translatesUnlinkedChildToQuestError() {
         doThrow(new BusinessException(CommonErrorCode.AUTH_FORBIDDEN))
                 .when(familyAccessService).requireChildAccess(parent(), 2L);
 
@@ -174,7 +184,8 @@ class QuestCreationServiceTest {
     }
 
     @Test
-    void 같은_키와_같은_내용의_재요청은_기존_결과를_자녀_요청_순서로_돌려준다() {
+    @DisplayName("같은 키와 같은 내용의 재요청은 기존 결과를 자녀 요청 순서로 돌려준다")
+    void retryWithSameKeyAndBodyReturnsExistingIdsInChildOrder() {
         QuestVO child2 = existing(202L, 2L);
         QuestVO child3 = existing(203L, 3L);
         given(questMapper.selectByCreationRequestKey(1L, REQUEST_KEY))
@@ -187,7 +198,8 @@ class QuestCreationServiceTest {
     }
 
     @Test
-    void 같은_키를_다른_내용에_사용하면_충돌로_거절한다() {
+    @DisplayName("같은 키를 다른 내용에 사용하면 충돌로 거절한다")
+    void rejectsSameKeyUsedWithDifferentBody() {
         QuestVO existing = existing(202L, 2L);
         existing.setTitle("다른 제목");
         given(questMapper.selectByCreationRequestKey(1L, REQUEST_KEY))
@@ -200,7 +212,8 @@ class QuestCreationServiceTest {
     }
 
     @Test
-    void 부모의_AVAILABLE_퀘스트를_정규화한_내용으로_수정한다() {
+    @DisplayName("부모의 AVAILABLE 퀘스트를 정규화한 내용으로 수정한다")
+    void updatesAvailableQuestWithNormalizedContent() {
         QuestVO current = existing(55L, 2L);
         given(questMapper.selectByIdForUpdateByParent(55L, 1L)).willReturn(current);
         given(questMapper.updateAvailable(any(QuestVO.class))).willReturn(1);
@@ -216,7 +229,8 @@ class QuestCreationServiceTest {
     }
 
     @Test
-    void 다른_부모의_퀘스트는_없는_퀘스트와_같은_오류로_응답한다() {
+    @DisplayName("다른 부모의 퀘스트는 없는 퀘스트와 같은 오류로 응답한다")
+    void otherParentsQuestReturnsSameErrorAsMissing() {
         given(questMapper.selectByIdForUpdateByParent(55L, 1L)).willReturn(null);
 
         assertError(
@@ -238,7 +252,8 @@ class QuestCreationServiceTest {
     }
 
     @Test
-    void 마감과_서버_시각이_같은_초에는_같은_마감으로_수정할_수_있다() {
+    @DisplayName("마감과 서버 시각이 같은 초에는 같은 마감으로 수정할 수 있다")
+    void canUpdateWithSameDeadlineOnExactDeadlineSecond() {
         QuestVO current = existing(55L, 2L);
         current.setDeadline(NOW);
         given(questMapper.selectByIdForUpdateByParent(55L, 1L)).willReturn(current);
@@ -258,7 +273,8 @@ class QuestCreationServiceTest {
     }
 
     @Test
-    void 잠금_후_상태가_바뀌어_수정이나_삭제가_0건이면_409다() {
+    @DisplayName("잠금 후 상태가 바뀌어 수정이나 삭제가 0건이면 409다")
+    void returns409WhenUpdateOrDeleteAffectsNoRowAfterLock() {
         QuestVO current = existing(55L, 2L);
         given(questMapper.selectByIdForUpdateByParent(55L, 1L)).willReturn(current);
         given(questMapper.updateAvailable(any(QuestVO.class))).willReturn(0);
@@ -273,7 +289,8 @@ class QuestCreationServiceTest {
     }
 
     @Test
-    void 자녀는_수정하거나_삭제할_수_없다() {
+    @DisplayName("자녀는 수정하거나 삭제할 수 없다")
+    void childCannotUpdateOrDelete() {
         MemberPrincipal child = new MemberPrincipal(2L, "CHILD");
 
         assertError(

@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 @Getter
 @RequiredArgsConstructor
 public enum QuestErrorCode implements ErrorCode {
+    // 400
     QUEST_CHILD_REQUIRED(HttpStatus.BAD_REQUEST,
             "퀘스트를 받을 자녀를 한 명 이상 선택해 주세요."),
     QUEST_CHILD_DUPLICATED(HttpStatus.BAD_REQUEST,
@@ -18,18 +19,30 @@ public enum QuestErrorCode implements ErrorCode {
             "기한은 현재보다 미래이며 1년 이내여야 합니다."),
     QUEST_CREATION_KEY_INVALID(HttpStatus.BAD_REQUEST,
             "요청 식별 키를 확인해 주세요."),
+    QUEST_DECLINE_REASON_INVALID(HttpStatus.BAD_REQUEST,
+            "거절 사유를 선택해 주세요. 기타를 선택하면 상세 사유가 필요합니다."),
+    QUEST_VERIFICATION_REQUIREMENT_UNMET(HttpStatus.BAD_REQUEST,
+            "이 퀘스트의 인증 방식에 필요한 사진 또는 글이 없습니다."),
+
+    // 403
     QUEST_PARENT_ONLY(HttpStatus.FORBIDDEN,
             "부모만 사용할 수 있는 기능입니다."),
+    QUEST_CHILD_ONLY(HttpStatus.FORBIDDEN,
+            "자녀만 사용할 수 있는 기능입니다."),
     QUEST_CHILD_NOT_LINKED(HttpStatus.FORBIDDEN,
             "연결된 자녀의 퀘스트만 처리할 수 있습니다."),
     QUEST_NOT_FOUND_OR_ACCESS_DENIED(HttpStatus.NOT_FOUND,
             "퀘스트를 찾을 수 없거나 접근할 수 없습니다."),
+
+    // 409
     QUEST_STATUS_CONFLICT(HttpStatus.CONFLICT,
             "현재 퀘스트 상태에서는 처리할 수 없습니다. 새로고침해 주세요."),
     QUEST_DEADLINE_PASSED(HttpStatus.CONFLICT,
             "퀘스트 기한이 지났습니다. 새로고침해 주세요."),
     QUEST_CREATION_REQUEST_CONFLICT(HttpStatus.CONFLICT,
-            "같은 요청 식별 키가 다른 퀘스트 내용에 사용되었습니다.");
+            "같은 요청 식별 키가 다른 퀘스트 내용에 사용되었습니다."),
+    QUEST_VERIFICATION_ATTEMPT_EXCEEDED(HttpStatus.CONFLICT,
+        "남은 인증 기회를 모두 사용했습니다.");
 
     private final HttpStatus status;
     private final String message;

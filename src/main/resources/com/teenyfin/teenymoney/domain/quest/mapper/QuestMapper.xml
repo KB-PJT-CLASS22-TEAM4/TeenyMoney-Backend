@@ -101,6 +101,15 @@
         ORDER BY q.id ASC
     </select>
 
+    <select id="selectByIdForUpdateByChild" resultMap="questResultMap">
+        SELECT
+            <include refid="questColumns"/>
+            FROM T_QST_BASE_M q
+            WHERE q.id = #{questId}
+              AND q.child_id = #{childId}
+            FOR UPDATE
+    </select>
+
     <select id="selectByIdForUpdateByParent" resultMap="questResultMap">
         SELECT
         <include refid="questColumns"/>
@@ -139,6 +148,23 @@
             #{createdAt}
         )
     </insert>
+    <insert id="insertVerification" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO T_QST_VERIFY_L (
+            quest_id,
+            attempt_no,
+            image_key,
+            content,
+            status,
+            created_at
+        ) VALUES (
+                     #{questId},
+                     #{attemptNo},
+                     #{imageKey},
+                     #{content},
+                     #{status},
+                     #{createdAt}
+                 )
+    </insert>
 
     <update id="updateAvailable">
         UPDATE T_QST_BASE_M
@@ -151,6 +177,25 @@
             updated_at = #{updatedAt}
         WHERE id = #{id}
           AND parent_id = #{parentId}
+          AND status = 'AVAILABLE'
+    </update>
+    <update id="updateStatusByChild">
+        UPDATE T_QST_BASE_M
+        SET status = #{toStatus},
+            updated_at = #{updatedAt}
+        WHERE id = #{questId}
+          AND child_id = #{childId}
+          AND status = #{fromStatus}
+    </update>
+    <update id="updateDeclineByChild">
+        UPDATE T_QST_BASE_M
+        SET status = 'DECLINED',
+            decline_reason_code = #{reasonCode},
+            decline_reason_detail = #{reasonDetail},
+            updated_at = #{endedAt},
+            ended_at = #{endedAt}
+        WHERE id = #{questId}
+          AND child_id = #{childId}
           AND status = 'AVAILABLE'
     </update>
 
@@ -217,4 +262,5 @@
         ORDER BY attempt_no DESC
         LIMIT 1
     </select>
+
 </mapper>
