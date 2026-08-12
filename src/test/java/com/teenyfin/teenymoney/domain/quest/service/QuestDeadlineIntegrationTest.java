@@ -194,11 +194,11 @@ class QuestDeadlineIntegrationTest {
         }
 
         assertThat(jdbc().queryForObject(
-                "SELECT teeny_score FROM T_MBR_INFO_M WHERE id = 2",
+                "SELECT teeny_score FROM T_MBR_INFO_M WHERE id = -900002",
                 Integer.class)).isEqualTo(608);
         assertThat(jdbc().queryForObject(
                 "SELECT COUNT(*) FROM T_TNY_SCOREHIST_H "
-                        + "WHERE child_id = 2 AND event_key = 'QUEST_FAILED:900024'",
+                        + "WHERE child_id = -900002 AND event_key = 'QUEST_FAILED:900024'",
                 Integer.class)).isEqualTo(1);
         // 마감은 됐지만 점수 이력은 남지 않아야 한다. 점수 SAVEPOINT 만 롤백된 것이다.
         assertThat(jdbc().queryForObject(
