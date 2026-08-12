@@ -147,6 +147,9 @@ public class QuestReviewService {
         int nextRemainingCount = remainingCount - 1;
         RejectionDecision decision = decideRejection(
                 quest, request, nextRemainingCount, now);
+        int remainingCountAfterReview =
+                decision.status == QuestStatus.FAILED
+                        ? 0 : nextRemainingCount;
 
         if (decision.status == QuestStatus.FAILED
                 && Boolean.TRUE.equals(quest.getTeenyScoreEnabled())) {
@@ -167,7 +170,7 @@ public class QuestReviewService {
                 quest.getId(),
                 parentId,
                 decision.status,
-                nextRemainingCount,
+                remainingCountAfterReview,
                 decision.deadline,
                 decision.endedAt,
                 now) != 1) {

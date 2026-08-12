@@ -81,7 +81,7 @@ Content-Type: application/json
 
 ## 반려 상태 전이
 
-인증은 모든 정상 반려에서 `REJECTED`, 선택적 `rejection_reason`, `reviewed_at`을 기록한다. 새 남은 횟수는 `remainingCount - 1`이다.
+인증은 모든 정상 반려에서 `REJECTED`, 선택적 `rejection_reason`, `reviewed_at`을 기록한다. 재시도 가능한 반려는 남은 횟수를 1회 차감하고, 최종 실패는 남은 횟수를 0으로 만든다.
 
 | 조건 | 퀘스트 결과 | 점수 |
 |---|---|---:|

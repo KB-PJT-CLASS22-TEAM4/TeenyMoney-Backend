@@ -257,7 +257,7 @@ Expected: rejection tests fail because `reject` is missing.
 
 - [ ] **Step 3: Implement request normalization and state transitions**
 
-Calculate `newRemaining = remainingCount - 1`. If zero, force `FAILED`. Otherwise use current deadline and action rules. Record verification rejection before the guarded quest update inside the same transaction. Apply `QUEST_FAILED` score only for final failure and enabled quests.
+Calculate `newRemaining = remainingCount - 1`. If zero, force `FAILED`. Otherwise use current deadline and action rules. When the result is final `FAILED`, persist the remaining count as zero. Record verification rejection before the guarded quest update inside the same transaction. Apply `QUEST_FAILED` score only for final failure and enabled quests.
 
 - [ ] **Step 4: Run service test and verify GREEN**
 

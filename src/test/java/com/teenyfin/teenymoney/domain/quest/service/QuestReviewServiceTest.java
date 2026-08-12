@@ -281,7 +281,7 @@ class QuestReviewServiceTest {
     }
 
     @Test
-    @DisplayName("기한이 지난 반려에서 실패를 고르면 남은 횟수와 무관하게 최종 실패 처리한다")
+    @DisplayName("기한이 지난 반려에서 실패를 고르면 최종 실패하고 남은 횟수를 0으로 만든다")
     void rejectAfterDeadlineFailsWhenRequested() {
         when(questMapper.selectByIdForUpdateByParent(QUEST_ID, PARENT_ID))
                 .thenReturn(pendingQuestWithDeadline(
@@ -292,7 +292,7 @@ class QuestReviewServiceTest {
                         AfterDeadlineAction.FAIL, null));
 
         verify(questMapper).updateAfterRejectionByParent(
-                QUEST_ID, PARENT_ID, QuestStatus.FAILED, 2,
+                QUEST_ID, PARENT_ID, QuestStatus.FAILED, 0,
                 null, NOW, NOW);
         assertFinalFailureScoreApplied();
     }
