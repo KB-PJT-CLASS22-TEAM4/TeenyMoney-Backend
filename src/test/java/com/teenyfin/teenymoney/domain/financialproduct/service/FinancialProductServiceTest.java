@@ -10,6 +10,7 @@ import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductBenefi
 import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductEnrollmentVO;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductType;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.LoanProductVO;
+import com.teenyfin.teenymoney.domain.financialproduct.vo.SavingProductVO;
 import com.teenyfin.teenymoney.domain.family.service.FamilyAccessService;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import com.teenyfin.teenymoney.global.exception.CommonErrorCode;
@@ -72,6 +73,26 @@ class FinancialProductServiceTest {
         assertTrue(response.get(0).isEligible());
         assertEquals(new BigDecimal("5.50"),
                 response.get(0).getRates().get(0).getExpectedAppliedRate());
+        assertEquals(10_000L, response.get(0).getMinimumAmount());
+        assertEquals(5_000_000L, response.get(0).getMaximumAmount());
+    }
+
+    @Test
+    @DisplayName("적금 상품 목록에 월 최소·최대 납입금액을 반환한다")
+    void savingListReturnsMinimumAndMaximumMonthlyAmount() {
+        SavingProductVO saving = new SavingProductVO();
+        saving.setId(1L);
+        saving.setName("정기적금");
+        saving.setRate12m(new BigDecimal("3.50"));
+        saving.setMinMonthAmount(1_000L);
+        saving.setMaxMonthAmount(500_000L);
+        when(mapper.selectActiveSavingProducts()).thenReturn(List.of(saving));
+
+        FinancialProductListResponseDTO response =
+                service.getSavingProducts(CHILD).get(0);
+
+        assertEquals(1_000L, response.getMinimumAmount());
+        assertEquals(500_000L, response.getMaximumAmount());
     }
 
     @Test
@@ -118,6 +139,8 @@ class FinancialProductServiceTest {
                 service.getLoanProducts(CHILD).get(0);
 
         assertTrue(response.isEligible());
+        assertEquals(10_000L, response.getMinimumAmount());
+        assertEquals(200_000L, response.getMaximumAmount());
     }
 
     @Test
@@ -352,6 +375,8 @@ class FinancialProductServiceTest {
         product.setName("정기예금");
         product.setFinancialCompanyName("국민은행");
         product.setRate12m(new BigDecimal("3.50"));
+        product.setMinAmount(10_000L);
+        product.setMaxAmount(5_000_000L);
         return product;
     }
 
