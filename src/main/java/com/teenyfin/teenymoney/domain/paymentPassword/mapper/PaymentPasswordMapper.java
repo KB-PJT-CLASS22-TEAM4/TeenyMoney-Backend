@@ -1,16 +1,16 @@
-package com.teenyfin.teenymoney.domain.payment.mapper;
+package com.teenyfin.teenymoney.domain.paymentPassword.mapper;
 
-import com.teenyfin.teenymoney.domain.payment.vo.MemberPaymentVO;
+import com.teenyfin.teenymoney.domain.paymentPassword.vo.PaymentPasswordVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.time.LocalDateTime;
 
 @Mapper
-public interface MemberPaymentMapper {
+public interface PaymentPasswordMapper {
 
     // 멤버 아이디로 결제 관련 정보 조회
-    MemberPaymentVO selectByMemberId(@Param("memberId") Long memberId);
+    PaymentPasswordVO selectByMemberId(@Param("memberId") Long memberId);
 
     // 결제 비밀번호 실패 횟수 1 증가
     void incrementPaymentPasswordFailedCount(@Param("memberId") Long memberId);

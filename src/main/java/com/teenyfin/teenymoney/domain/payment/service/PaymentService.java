@@ -4,17 +4,15 @@ import com.teenyfin.teenymoney.domain.categoryPolicy.dto.response.CategoryPolicy
 import com.teenyfin.teenymoney.domain.categoryPolicy.exception.CategoryPolicyErrorCode;
 import com.teenyfin.teenymoney.domain.categoryPolicy.mapper.CategoryPolicyMapper;
 import com.teenyfin.teenymoney.domain.categoryPolicy.vo.CategoryPolicyVO;
-import com.teenyfin.teenymoney.domain.payment.dto.request.PaymentPasswordRequestDTO;
 import com.teenyfin.teenymoney.domain.payment.dto.request.PaymentQrRequestDTO;
 import com.teenyfin.teenymoney.domain.payment.dto.request.PaymentRequestDTO;
 import com.teenyfin.teenymoney.domain.payment.dto.response.PaymentQrResponseDTO;
 import com.teenyfin.teenymoney.domain.payment.dto.response.PaymentResponseDTO;
 import com.teenyfin.teenymoney.domain.payment.exception.PaymentErrorCode;
-import com.teenyfin.teenymoney.domain.payment.mapper.MemberPaymentMapper;
 import com.teenyfin.teenymoney.domain.payment.mapper.PaymentMapper;
-import com.teenyfin.teenymoney.domain.payment.vo.MemberPaymentVO;
 import com.teenyfin.teenymoney.domain.payment.vo.OrderVO;
 import com.teenyfin.teenymoney.domain.payment.vo.PaymentVO;
+import com.teenyfin.teenymoney.domain.paymentPassword.service.PaymentPasswordService;
 import com.teenyfin.teenymoney.domain.wallet.exception.WalletErrorCode;
 import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
 import com.teenyfin.teenymoney.domain.wallet.service.WalletLedgerService;
@@ -23,7 +21,6 @@ import com.teenyfin.teenymoney.domain.wallet.vo.WalletVO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,14 +36,11 @@ public class PaymentService {
 
     private final PaymentMapper paymentMapper;
     private final CategoryPolicyMapper categoryPolicyMapper;
-    private final MemberPaymentMapper memberPaymentMapper;
     private final WalletMapper walletMapper;
 
     private final WalletLedgerService walletLedgerService;
-    private final MemberPaymentService memberPaymentService;
-
+    private final PaymentPasswordService paymentPasswordService;
     private final OrderStore orderStore;
-    private final PasswordEncoder passwordEncoder;
 
     // QR 코드로 주문 정보를 Redis에 저장 후 반환
     @Transactional(readOnly = true)
@@ -140,38 +134,7 @@ public class PaymentService {
             throw new BusinessException(PaymentErrorCode.INVALID_QR_CODE);
         }
 
-        MemberPaymentVO memberPaymentVO = memberPaymentMapper.selectByMemberId(memberId);
-
-        if (memberPaymentVO.getPaymentPassword() == null) {
-            throw new BusinessException(PaymentErrorCode.NOT_SET_PAYMENT_PASSWORD);
-        }
-
-        if (memberPaymentVO.getPaymentLockedUntil() != null) {
-            if (memberPaymentVO.getPaymentLockedUntil().isAfter(LocalDateTime.now())) {
-                throw new BusinessException(PaymentErrorCode.PAYMENT_LOCKED);
-            }
-
-            // 잠금이 풀린 후 최초로 시도한 결제면 결제 실패 횟수 초기화
-            memberPaymentService.updatePaymentLockedUntil(memberId, null);
-            memberPaymentService.resetPaymentPasswordFailedCount(memberId);
-        }
-
-        // 결제 비밀번호 검증
-        if (!passwordEncoder.matches(paymentRequestDTO.getPassword(), memberPaymentVO.getPaymentPassword())) {
-
-            int failedCount = memberPaymentService.incrementFailedCountAndGet(memberId); // 실패 횟수 1 증가
-
-            // 증가 후 횟수가 5회면 잠금 시간 10분 후로 설정
-            if (failedCount >= 5) {
-                memberPaymentService.updatePaymentLockedUntil(memberId, LocalDateTime.now().plusMinutes(10));
-                throw new BusinessException(PaymentErrorCode.PAYMENT_JUST_LOCKED);
-            }
-
-            throw new BusinessException(PaymentErrorCode.INVALID_PAYMENT_PASSWORD);
-        }
-
-        // 비밀번호 일치 시 결제 실패 횟수 초기화
-        memberPaymentService.resetPaymentPasswordFailedCount(memberId);
+        paymentPasswordService.checkPaymentPassword(memberId, paymentRequestDTO.getPassword());
 
         CategoryPolicyVO categoryPolicyVO = categoryPolicyMapper.selectByCategoryIdAndChildId(orderVO.getCategoryId(), memberId);
 
@@ -239,17 +202,5 @@ public class PaymentService {
                         .build())
                 .createdAt(paymentVO.getCreatedAt())
                 .build();
-    }
-
-    // 결제 비밀번호 등록, 최초 1회만 실행
-    @Transactional
-    public void setPaymentPassword(Long memberId, PaymentPasswordRequestDTO paymentPasswordRequestDTO) {
-        MemberPaymentVO memberPaymentVO = memberPaymentMapper.selectByMemberId(memberId);
-
-        if (memberPaymentVO.getPaymentPassword() != null) {
-            throw new BusinessException(PaymentErrorCode.ALREADY_SET_PAYMENT_PASSWORD);
-        }
-
-        memberPaymentMapper.updatePaymentPassword(memberId, passwordEncoder.encode(paymentPasswordRequestDTO.getPassword()));
     }
 }

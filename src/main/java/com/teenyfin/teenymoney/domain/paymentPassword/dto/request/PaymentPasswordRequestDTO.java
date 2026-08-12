@@ -1,4 +1,4 @@
-package com.teenyfin.teenymoney.domain.payment.dto.request;
+package com.teenyfin.teenymoney.domain.paymentPassword.dto.request;
 
 import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;

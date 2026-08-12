@@ -4,9 +4,9 @@ import com.teenyfin.teenymoney.domain.categoryPolicy.mapper.CategoryPolicyMapper
 import com.teenyfin.teenymoney.domain.categoryPolicy.vo.CategoryPolicyVO;
 import com.teenyfin.teenymoney.domain.payment.dto.request.PaymentQrRequestDTO;
 import com.teenyfin.teenymoney.domain.payment.dto.response.PaymentQrResponseDTO;
-import com.teenyfin.teenymoney.domain.payment.mapper.MemberPaymentMapper;
 import com.teenyfin.teenymoney.domain.payment.mapper.PaymentMapper;
 import com.teenyfin.teenymoney.domain.payment.vo.OrderVO;
+import com.teenyfin.teenymoney.domain.paymentPassword.service.PaymentPasswordService;
 import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
 import com.teenyfin.teenymoney.domain.wallet.service.WalletLedgerService;
 import com.teenyfin.teenymoney.domain.wallet.vo.WalletVO;
@@ -14,7 +14,6 @@ import com.teenyfin.teenymoney.global.exception.BusinessException;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
-import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -30,15 +29,13 @@ class PaymentServiceGetPaymentInfoTest {
 
     private final PaymentMapper paymentMapper = Mockito.mock(PaymentMapper.class);
     private final CategoryPolicyMapper categoryPolicyMapper = Mockito.mock(CategoryPolicyMapper.class);
-    private final MemberPaymentMapper memberPaymentMapper = Mockito.mock(MemberPaymentMapper.class);
     private final WalletMapper walletMapper = Mockito.mock(WalletMapper.class);
-    private final OrderStore orderStore = Mockito.mock(OrderStore.class);
-    private final MemberPaymentService memberPaymentService = Mockito.mock(MemberPaymentService.class);
     private final WalletLedgerService walletLedgerService = Mockito.mock(WalletLedgerService.class);
-    private final PasswordEncoder passwordEncoder = Mockito.mock(PasswordEncoder.class);
+    private final PaymentPasswordService paymentPasswordService = Mockito.mock(PaymentPasswordService.class);
+    private final OrderStore orderStore = Mockito.mock(OrderStore.class);
     private final PaymentService paymentService = new PaymentService(
-            paymentMapper, categoryPolicyMapper, memberPaymentMapper, walletMapper,
-            walletLedgerService, memberPaymentService, orderStore, passwordEncoder);
+            paymentMapper, categoryPolicyMapper, walletMapper,
+            walletLedgerService, paymentPasswordService, orderStore);
 
     private WalletVO createWalletVO(Long id, Long balance) {
         WalletVO vo = new WalletVO();
@@ -66,6 +63,25 @@ class PaymentServiceGetPaymentInfoTest {
     }
 
     @Test
+    void 이미_결제_완료된_주문이면_예외를_던진다() {
+        Long memberId = 1L;
+        PaymentQrRequestDTO requestDTO = PaymentQrRequestDTO.builder()
+                .orderId("ORDER-001")
+                .merchantCode("552101")
+                .merchantName("CU 강남역점")
+                .amount(3000L)
+                .expiredAt(LocalDateTime.now().plusMinutes(5))
+                .build();
+
+        given(paymentMapper.existsByOrderId("ORDER-001")).willReturn(true);
+
+        assertThatThrownBy(() -> paymentService.getPaymentInfo(memberId, requestDTO))
+                .isInstanceOf(BusinessException.class);
+
+        verify(orderStore, never()).find(any());
+    }
+
+    @Test
     void 신규_주문이면_업종코드로_카테고리를_조회하고_Redis에_저장한다() {
         Long memberId = 1L;
         Long categoryId = 5L;
@@ -77,6 +93,7 @@ class PaymentServiceGetPaymentInfoTest {
                 .expiredAt(LocalDateTime.now().plusMinutes(5))
                 .build();
 
+        given(paymentMapper.existsByOrderId("ORDER-001")).willReturn(false);
         given(orderStore.find("ORDER-001")).willReturn(null);
         given(categoryPolicyMapper.selectCategoryIdByMerchantCode("552101")).willReturn(categoryId);
 
@@ -116,6 +133,7 @@ class PaymentServiceGetPaymentInfoTest {
                 .expiredAt(LocalDateTime.now().plusMinutes(5))
                 .build();
 
+        given(paymentMapper.existsByOrderId("ORDER-001")).willReturn(false);
         given(orderStore.find("ORDER-001")).willReturn(null);
         given(categoryPolicyMapper.selectCategoryIdByMerchantCode("999999")).willReturn(null);
 
@@ -136,6 +154,8 @@ class PaymentServiceGetPaymentInfoTest {
                 .amount(3000L)
                 .expiredAt(LocalDateTime.now().plusMinutes(5))
                 .build();
+
+        given(paymentMapper.existsByOrderId("ORDER-001")).willReturn(false);
 
         OrderVO existingOrderVO = OrderVO.builder()
                 .merchantName("CU 강남역점")
@@ -173,6 +193,7 @@ class PaymentServiceGetPaymentInfoTest {
                 .expiredAt(LocalDateTime.now().plusMinutes(5))
                 .build();
 
+        given(paymentMapper.existsByOrderId("ORDER-001")).willReturn(false);
         given(orderStore.find("ORDER-001")).willReturn(null);
         given(categoryPolicyMapper.selectCategoryIdByMerchantCode("552101")).willReturn(categoryId);
         given(walletMapper.selectMemberWalletByMemberId(memberId)).willReturn(null);
@@ -193,6 +214,7 @@ class PaymentServiceGetPaymentInfoTest {
                 .expiredAt(LocalDateTime.now().plusMinutes(5))
                 .build();
 
+        given(paymentMapper.existsByOrderId("ORDER-001")).willReturn(false);
         given(orderStore.find("ORDER-001")).willReturn(null);
         given(categoryPolicyMapper.selectCategoryIdByMerchantCode("552101")).willReturn(categoryId);
 
@@ -217,6 +239,7 @@ class PaymentServiceGetPaymentInfoTest {
                 .expiredAt(LocalDateTime.now().plusMinutes(5))
                 .build();
 
+        given(paymentMapper.existsByOrderId("ORDER-001")).willReturn(false);
         given(orderStore.find("ORDER-001")).willReturn(null);
         given(categoryPolicyMapper.selectCategoryIdByMerchantCode("552101")).willReturn(categoryId);
 
@@ -240,6 +263,7 @@ class PaymentServiceGetPaymentInfoTest {
                 .expiredAt(LocalDateTime.now().plusMinutes(5))
                 .build();
 
+        given(paymentMapper.existsByOrderId("ORDER-001")).willReturn(false);
         given(orderStore.find("ORDER-001")).willReturn(null);
         given(categoryPolicyMapper.selectCategoryIdByMerchantCode("552101")).willReturn(categoryId);
 
