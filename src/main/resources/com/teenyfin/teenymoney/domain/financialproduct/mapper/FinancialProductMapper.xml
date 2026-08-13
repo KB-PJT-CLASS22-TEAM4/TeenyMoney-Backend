@@ -8,6 +8,9 @@
     <resultMap id="depositProductResultMap"
                type="com.teenyfin.teenymoney.domain.financialproduct.vo.DepositProductVO">
         <id property="id" column="id"/>
+        <result property="productSource" column="product_source"/>
+        <result property="createdByParentId" column="created_by_parent_id"/>
+        <result property="targetChildId" column="target_child_id"/>
         <result property="financialCompanyCode" column="fin_co_no"/>
         <result property="financialProductCode" column="fin_prdt_cd"/>
         <result property="financialCompanyName" column="kor_co_nm"/>
@@ -27,6 +30,9 @@
     <resultMap id="savingProductResultMap"
                type="com.teenyfin.teenymoney.domain.financialproduct.vo.SavingProductVO">
         <id property="id" column="id"/>
+        <result property="productSource" column="product_source"/>
+        <result property="createdByParentId" column="created_by_parent_id"/>
+        <result property="targetChildId" column="target_child_id"/>
         <result property="financialCompanyCode" column="fin_co_no"/>
         <result property="financialProductCode" column="fin_prdt_cd"/>
         <result property="financialCompanyName" column="kor_co_nm"/>
@@ -47,8 +53,15 @@
     <resultMap id="loanProductResultMap"
                type="com.teenyfin.teenymoney.domain.financialproduct.vo.LoanProductVO">
         <id property="id" column="id"/>
+        <result property="productSource" column="product_source"/>
+        <result property="createdByParentId" column="created_by_parent_id"/>
+        <result property="targetChildId" column="target_child_id"/>
         <result property="name" column="name"/>
         <result property="baseRate" column="base_rate"/>
+        <result property="available1m" column="available_1m"/>
+        <result property="available3m" column="available_3m"/>
+        <result property="available6m" column="available_6m"/>
+        <result property="available12m" column="available_12m"/>
         <result property="lateFeeRate" column="late_fee_rate"/>
         <result property="repaymentType" column="repayment_type"/>
         <result property="minAmount" column="min_amount"/>
@@ -152,20 +165,53 @@
         ORDER BY product.required_grade_id, product.id
     </select>
 
+    <!-- 공용 상품 또는 로그인 회원이 생성·사용할 수 있는 부모 상품만 노출한다. -->
+    <!--
+        공용 상품은 모든 사용자에게 노출한다.
+        PARENT 상품은 대상 자녀 또는 상품을 생성한 부모에게만 노출한다.
+    -->
+    <sql id="visibleProductCondition">
+        product.product_source IN ('TEENY', 'FINLIFE')
+        OR product.target_child_id = #{memberId}
+        OR product.created_by_parent_id = #{memberId}
+    </sql>
+
+    <select id="selectVisibleDepositProducts" resultMap="depositProductResultMap">
+        SELECT product.*
+        FROM T_DPT_PROD_M product
+        WHERE product.is_active = TRUE
+          AND (<include refid="visibleProductCondition"/>)
+        ORDER BY product.id
+    </select>
+
+    <select id="selectVisibleSavingProducts" resultMap="savingProductResultMap">
+        SELECT product.*
+        FROM T_SVG_PROD_M product
+        WHERE product.is_active = TRUE
+          AND (<include refid="visibleProductCondition"/>)
+        ORDER BY product.id
+    </select>
+
+    <select id="selectVisibleLoanProducts" resultMap="loanProductResultMap">
+        SELECT product.*, required_grade.grade_name AS required_grade_name
+        FROM T_LON_PROD_M product
+        INNER JOIN T_TNY_GRADE_A required_grade
+                ON product.required_grade_id = required_grade.grade_id
+        WHERE product.is_active = TRUE
+          AND (<include refid="visibleProductCondition"/>)
+        ORDER BY product.required_grade_id, product.id
+    </select>
+
     <select id="selectActiveDepositProductById" resultMap="depositProductResultMap">
         SELECT * FROM T_DPT_PROD_M
         WHERE id = #{id}
           AND is_active = TRUE
-          AND fin_co_no IS NOT NULL
-          AND fin_prdt_cd IS NOT NULL
     </select>
 
     <select id="selectActiveSavingProductById" resultMap="savingProductResultMap">
         SELECT * FROM T_SVG_PROD_M
         WHERE id = #{id}
           AND is_active = TRUE
-          AND fin_co_no IS NOT NULL
-          AND fin_prdt_cd IS NOT NULL
     </select>
 
     <select id="selectActiveLoanProductById" resultMap="loanProductResultMap">
@@ -176,6 +222,75 @@
                 ON product.required_grade_id = required_grade.grade_id
         WHERE product.id = #{id}
           AND product.is_active = TRUE
+    </select>
+
+    <select id="selectVisibleDepositProductById" resultMap="depositProductResultMap">
+        SELECT product.* FROM T_DPT_PROD_M product
+        WHERE product.id = #{id} AND product.is_active = TRUE
+          AND (<include refid="visibleProductCondition"/>)
+    </select>
+
+    <select id="selectVisibleSavingProductById" resultMap="savingProductResultMap">
+        SELECT product.* FROM T_SVG_PROD_M product
+        WHERE product.id = #{id} AND product.is_active = TRUE
+          AND (<include refid="visibleProductCondition"/>)
+    </select>
+
+    <select id="selectVisibleLoanProductById" resultMap="loanProductResultMap">
+        SELECT product.*, required_grade.grade_name AS required_grade_name
+        FROM T_LON_PROD_M product
+        INNER JOIN T_TNY_GRADE_A required_grade
+                ON product.required_grade_id = required_grade.grade_id
+        WHERE product.id = #{id} AND product.is_active = TRUE
+          AND (<include refid="visibleProductCondition"/>)
+    </select>
+
+    <!-- 부모 전용 예금의 기간별 금리를 각 금리 컬럼에 저장한다. -->
+    <!-- 생성 부모와 대상 자녀를 상품 행에 함께 저장해 공개 범위를 고정한다. -->
+    <insert id="insertCustomDepositProduct" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO T_DPT_PROD_M
+            (product_source, created_by_parent_id, target_child_id, name,
+             interest_calculation_type, rate_1m, rate_3m, rate_6m, rate_12m,
+             early_termination_rate, min_amount, max_amount, description, is_active)
+        VALUES
+            ('PARENT', #{createdByParentId}, #{targetChildId}, #{name},
+             #{interestCalculationType}, #{rate1m}, #{rate3m}, #{rate6m}, #{rate12m},
+             #{earlyTerminationRate}, #{minAmount}, #{maxAmount}, #{description}, TRUE)
+    </insert>
+
+    <!-- 부모 전용 적금의 기간별 금리를 각 금리 컬럼에 저장한다. -->
+    <insert id="insertCustomSavingProduct" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO T_SVG_PROD_M
+            (product_source, created_by_parent_id, target_child_id, name,
+             savings_type, interest_calculation_type,
+             rate_1m, rate_3m, rate_6m, rate_12m,
+             early_termination_rate, min_month_amount, max_month_amount,
+             description, is_active)
+        VALUES
+            ('PARENT', #{createdByParentId}, #{targetChildId}, #{name},
+             #{savingsType}, #{interestCalculationType},
+             #{rate1m}, #{rate3m}, #{rate6m}, #{rate12m},
+             #{earlyTerminationRate}, #{minMonthAmount}, #{maxMonthAmount},
+             #{description}, TRUE)
+    </insert>
+
+    <!-- 부모 전용 대출은 기존 단일 기본금리 구조를 사용한다. -->
+    <!-- 대출 허용 기간은 Boolean 컬럼으로 저장하고 선택된 모든 기간에 같은 기본금리를 사용한다. -->
+    <insert id="insertCustomLoanProduct" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO T_LON_PROD_M
+            (product_source, created_by_parent_id, target_child_id, name,
+             base_rate, available_1m, available_3m, available_6m, available_12m,
+             late_fee_rate, repayment_type, min_amount, max_amount,
+             required_grade_id, description, is_active)
+        VALUES
+            ('PARENT', #{createdByParentId}, #{targetChildId}, #{name},
+             #{baseRate}, #{available1m}, #{available3m}, #{available6m}, #{available12m},
+             #{lateFeeRate}, #{repaymentType}, #{minAmount}, #{maxAmount},
+             #{requiredGradeId}, #{description}, TRUE)
+    </insert>
+
+    <select id="countGradeById" resultType="int">
+        SELECT COUNT(*) FROM T_TNY_GRADE_A WHERE grade_id = #{gradeId}
     </select>
 
     <select id="selectDepositEnrollmentsByChildId"
@@ -673,13 +788,13 @@
 
     <insert id="upsertDepositProduct">
         INSERT INTO T_DPT_PROD_M (
-            fin_co_no, fin_prdt_cd, kor_co_nm, name,
+            product_source, fin_co_no, fin_prdt_cd, kor_co_nm, name,
             interest_calculation_type,
             rate_1m, rate_3m, rate_6m, rate_12m,
             early_termination_rate, min_amount, max_amount,
             description, is_active
         ) VALUES (
-            #{financialCompanyCode}, #{financialProductCode},
+            'FINLIFE', #{financialCompanyCode}, #{financialProductCode},
             #{financialCompanyName}, #{name},
             #{interestCalculationType},
             #{rate1m}, #{rate3m}, #{rate6m}, #{rate12m},
@@ -700,13 +815,13 @@
 
     <insert id="upsertSavingProduct">
         INSERT INTO T_SVG_PROD_M (
-            fin_co_no, fin_prdt_cd, kor_co_nm, name,
+            product_source, fin_co_no, fin_prdt_cd, kor_co_nm, name,
             savings_type, interest_calculation_type,
             rate_1m, rate_3m, rate_6m, rate_12m,
             early_termination_rate, min_month_amount, max_month_amount,
             description, is_active
         ) VALUES (
-            #{financialCompanyCode}, #{financialProductCode},
+            'FINLIFE', #{financialCompanyCode}, #{financialProductCode},
             #{financialCompanyName}, #{name},
             #{savingsType}, #{interestCalculationType},
             #{rate1m}, #{rate3m}, #{rate6m}, #{rate12m},

@@ -3,6 +3,7 @@ package com.teenyfin.teenymoney.domain.financialproduct.mapper;
 import com.teenyfin.teenymoney.config.LazyBeanInitializer;
 import com.teenyfin.teenymoney.config.RootConfig;
 import org.apache.ibatis.session.SqlSessionFactory;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +32,7 @@ class FinancialProductMapperContextTest {
     private SqlSessionFactory sqlSessionFactory;
 
     @Test
+    @DisplayName("금융상품 혜택은 실시간 점수가 아닌 월간 적용 등급으로 조회한다")
     void benefitQueryUsesAppliedGradeInsteadOfRealtimeScoreRange() {
         String statement = FinancialProductMapper.class.getName()
                 + ".selectBenefitByChildId";
@@ -48,6 +50,7 @@ class FinancialProductMapperContextTest {
     }
 
     @Test
+    @DisplayName("동일 상품의 여러 계약을 enrollmentId로 구분하여 조회한다")
     void enrollmentQueriesKeepContractsSeparateAndUseEnrollmentIdForDetail() {
         String namespace = FinancialProductMapper.class.getName();
         String listSql = sqlSessionFactory.getConfiguration()
@@ -74,6 +77,7 @@ class FinancialProductMapperContextTest {
     }
 
     @Test
+    @DisplayName("적금 계약 조회에 자유·정액 유형과 이자 계산 방식을 포함한다")
     void savingEnrollmentQueriesIncludeProductClassification() {
         String namespace = FinancialProductMapper.class.getName();
         String listSql = sqlSessionFactory.getConfiguration()
@@ -100,6 +104,7 @@ class FinancialProductMapperContextTest {
     }
 
     @Test
+    @DisplayName("금감원 상품 동기화 시 기존 상품 설명도 갱신한다")
     void productSyncUpdatesExistingDescriptions() {
         String namespace = FinancialProductMapper.class.getName();
         String depositSql = sqlSessionFactory.getConfiguration()
@@ -119,5 +124,21 @@ class FinancialProductMapperContextTest {
                 "description = VALUES(description)"));
         assertTrue(savingSql.contains(
                 "description = VALUES(description)"));
+    }
+
+    @Test
+    @DisplayName("부모 생성 상품은 생성 부모와 대상 자녀에게만 노출한다")
+    void visibleProductQueryRestrictsParentProductsToOwnerOrTargetChild() {
+        String namespace = FinancialProductMapper.class.getName();
+        String sql = sqlSessionFactory.getConfiguration()
+                .getMappedStatement(namespace + ".selectVisibleDepositProducts")
+                .getBoundSql(Map.of("memberId", 2L))
+                .getSql()
+                .replaceAll("\\s+", " ")
+                .trim();
+
+        assertTrue(sql.contains("product.product_source IN ('TEENY', 'FINLIFE')"));
+        assertTrue(sql.contains("product.target_child_id = ?"));
+        assertTrue(sql.contains("product.created_by_parent_id = ?"));
     }
 }

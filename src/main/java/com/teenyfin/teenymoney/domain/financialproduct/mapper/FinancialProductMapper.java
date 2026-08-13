@@ -18,9 +18,24 @@ public interface FinancialProductMapper {
     List<DepositProductVO> selectActiveDepositProducts();
     List<SavingProductVO> selectActiveSavingProducts();
     List<LoanProductVO> selectActiveLoanProducts();
+    // 공용 상품과 로그인 회원에게 허용된 부모 상품만 조회한다.
+    List<DepositProductVO> selectVisibleDepositProducts(@Param("memberId") Long memberId);
+    List<SavingProductVO> selectVisibleSavingProducts(@Param("memberId") Long memberId);
+    List<LoanProductVO> selectVisibleLoanProducts(@Param("memberId") Long memberId);
     DepositProductVO selectActiveDepositProductById(@Param("id") Long id);
     SavingProductVO selectActiveSavingProductById(@Param("id") Long id);
     LoanProductVO selectActiveLoanProductById(@Param("id") Long id);
+    DepositProductVO selectVisibleDepositProductById(@Param("id") Long id,
+                                                     @Param("memberId") Long memberId);
+    SavingProductVO selectVisibleSavingProductById(@Param("id") Long id,
+                                                   @Param("memberId") Long memberId);
+    LoanProductVO selectVisibleLoanProductById(@Param("id") Long id,
+                                               @Param("memberId") Long memberId);
+    // 부모가 입력한 조건으로 자녀 전용 상품을 저장한다.
+    int insertCustomDepositProduct(DepositProductVO product);
+    int insertCustomSavingProduct(SavingProductVO product);
+    int insertCustomLoanProduct(LoanProductVO product);
+    int countGradeById(@Param("gradeId") Long gradeId);
     List<FinancialProductEnrollmentVO> selectDepositEnrollmentsByChildId(
             @Param("childId") Long childId);
     List<FinancialProductEnrollmentVO> selectSavingEnrollmentsByChildId(

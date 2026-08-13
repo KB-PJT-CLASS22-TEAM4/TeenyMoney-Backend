@@ -54,13 +54,14 @@ public class FinancialProductEnrollmentService {
         Long childId = requireChild(principal);
         Long parentId = activeParentId(childId);
         DepositProductVO product = financialProductMapper
-                .selectActiveDepositProductById(request.getProductId());
+                .selectVisibleDepositProductById(request.getProductId(), childId);
         if (product == null) throw notFound();
         validateAmount(request.getAmount(), product.getMinAmount(), product.getMaxAmount());
         WalletVO memberWallet = lockMemberWallet(childId);
         ensureNoPending(financialProductMapper.countPendingDepositEnrollment(
                 childId, product.getId()));
         FinancialProductBenefitVO benefit = benefit(childId);
+        // 부모 생성 예금도 일반 예금과 동일하게 월간 적용 등급 우대금리를 더한다.
         BigDecimal rate = rateCalculator.depositRate(product,
                 request.getTermMonths(), benefit.getBonusRate());
         validateBalance(memberWallet, request.getAmount());
@@ -82,7 +83,7 @@ public class FinancialProductEnrollmentService {
         Long childId = requireChild(principal);
         Long parentId = activeParentId(childId);
         SavingProductVO product = financialProductMapper
-                .selectActiveSavingProductById(request.getProductId());
+                .selectVisibleSavingProductById(request.getProductId(), childId);
         if (product == null) throw notFound();
         validateAmount(request.getMonthlyAmount(), product.getMinMonthAmount(),
                 product.getMaxMonthAmount());
@@ -90,6 +91,7 @@ public class FinancialProductEnrollmentService {
         ensureNoPending(financialProductMapper.countPendingSavingEnrollment(
                 childId, product.getId()));
         FinancialProductBenefitVO benefit = benefit(childId);
+        // 부모 생성 적금도 일반 적금과 동일하게 월간 적용 등급 우대금리를 더한다.
         BigDecimal rate = rateCalculator.savingRate(product,
                 request.getTermMonths(), benefit.getBonusRate());
         Long productWalletId = walletService.createWallet(childId, WalletType.SAVING);
@@ -111,28 +113,33 @@ public class FinancialProductEnrollmentService {
         Long childId = requireChild(principal);
         Long parentId = activeParentId(childId);
         LoanProductVO product = financialProductMapper
-                .selectActiveLoanProductById(request.getProductId());
+                .selectVisibleLoanProductById(request.getProductId(), childId);
         if (product == null) throw notFound();
         validateAmount(request.getPrincipalAmount(), product.getMinAmount(),
                 product.getMaxAmount());
         if (!ListTerms.LOAN.contains(request.getTermMonths())) {
             throw new BusinessException(FinancialProductErrorCode.FINANCIAL_PRODUCT_INVALID_TERM);
         }
+        if (product.getProductSource() == FinancialProductSource.PARENT
+                && !loanTerms(product).contains(request.getTermMonths())) {
+            throw new BusinessException(
+                    FinancialProductErrorCode.FINANCIAL_PRODUCT_INVALID_TERM);
+        }
         lockMemberWallet(childId);
         ensureNoPending(financialProductMapper.countPendingLoanEnrollment(
                 childId, product.getId()));
         FinancialProductBenefitVO benefit = benefit(childId);
         validateLoanGrade(product, benefit);
+        BigDecimal rate = loanRate(product, benefit);
         FinancialProductEnrollmentCommandVO command = baseCommand(
-                product.getId(), parentId, childId, null, product.getBaseRate(),
+                product.getId(), parentId, childId, null, rate,
                 request.getTermMonths());
         command.setAppliedLateFeeRate(product.getLateFeeRate());
         command.setAmount(request.getPrincipalAmount());
         command.setPaymentDay(request.getPaymentDay());
         command.setAutoTransfer(request.getAutoTransfer());
         financialProductMapper.insertLoanEnrollment(command);
-        return response(command.getId(), FinancialProductType.LOAN,
-                product.getBaseRate());
+        return response(command.getId(), FinancialProductType.LOAN, rate);
     }
 
     private Long requireChild(MemberPrincipal principal) {
@@ -175,6 +182,18 @@ public class FinancialProductEnrollmentService {
             throw new BusinessException(
                     FinancialProductErrorCode.FINANCIAL_PRODUCT_INSUFFICIENT_GRADE);
         }
+    }
+
+    /**
+     * 부모 생성 대출은 상품 기본금리에 bonusRate를 더하지 않는다.
+     * 가입 요청 당시 월간 적용 등급의 대출금리를 계약 확정금리로 저장한다.
+     */
+    private BigDecimal loanRate(LoanProductVO product,
+                                FinancialProductBenefitVO benefit) {
+        if (product.getProductSource() != FinancialProductSource.PARENT) {
+            return product.getBaseRate();
+        }
+        return benefit.getLoanRate();
     }
 
     private void validateAmount(Long amount, Long minimum, Long maximum) {
@@ -224,5 +243,15 @@ public class FinancialProductEnrollmentService {
     private static final class ListTerms {
         private static final java.util.Set<Integer> LOAN =
                 java.util.Set.of(1, 3, 6, 12);
+    }
+
+    private java.util.Set<Integer> loanTerms(LoanProductVO product) {
+        java.util.Set<Integer> terms = new java.util.HashSet<>();
+        if (Boolean.TRUE.equals(product.getAvailable1m())) terms.add(1);
+        if (Boolean.TRUE.equals(product.getAvailable3m())) terms.add(3);
+        if (Boolean.TRUE.equals(product.getAvailable6m())) terms.add(6);
+        if (Boolean.TRUE.equals(product.getAvailable12m())) terms.add(12);
+        return terms.isEmpty() && product.getProductSource() != FinancialProductSource.PARENT
+                ? ListTerms.LOAN : terms;
     }
 }

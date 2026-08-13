@@ -9,6 +9,7 @@ import com.teenyfin.teenymoney.domain.financialproduct.vo.DepositProductVO;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductBenefitVO;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductEnrollmentVO;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductType;
+import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductSource;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.LoanProductVO;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.SavingProductVO;
 import com.teenyfin.teenymoney.domain.family.service.FamilyAccessService;
@@ -48,9 +49,9 @@ class FinancialProductServiceTest {
         familyAccessService = mock(FamilyAccessService.class);
         service = new FinancialProductService(mapper, familyAccessService);
         when(mapper.selectBenefitByChildId(2L)).thenReturn(benefit());
-        when(mapper.selectActiveDepositProducts()).thenReturn(List.of());
-        when(mapper.selectActiveSavingProducts()).thenReturn(List.of());
-        when(mapper.selectActiveLoanProducts()).thenReturn(List.of());
+        when(mapper.selectVisibleDepositProducts(2L)).thenReturn(List.of());
+        when(mapper.selectVisibleSavingProducts(2L)).thenReturn(List.of());
+        when(mapper.selectVisibleLoanProducts(2L)).thenReturn(List.of());
         when(mapper.selectDepositEnrollmentsByChildId(2L))
                 .thenReturn(List.of());
         when(mapper.selectSavingEnrollmentsByChildId(2L))
@@ -60,9 +61,10 @@ class FinancialProductServiceTest {
     }
 
     @Test
+    @DisplayName("예금 예상금리에 월간 적용 등급 우대금리를 더한다")
     void depositRateAddsGradeBonus() {
         DepositProductVO deposit = deposit();
-        when(mapper.selectActiveDepositProducts()).thenReturn(List.of(deposit));
+        when(mapper.selectVisibleDepositProducts(2L)).thenReturn(List.of(deposit));
 
         List<FinancialProductListResponseDTO> response =
                 service.getProducts(CHILD);
@@ -78,6 +80,21 @@ class FinancialProductServiceTest {
     }
 
     @Test
+    @DisplayName("부모 생성 예금도 월간 적용 등급 우대금리를 반영한다")
+    void parentProductAddsGradeBonus() {
+        DepositProductVO deposit = deposit();
+        deposit.setProductSource(FinancialProductSource.PARENT);
+        when(mapper.selectVisibleDepositProducts(2L)).thenReturn(List.of(deposit));
+
+        FinancialProductListResponseDTO response =
+                service.getDepositProducts(CHILD).get(0);
+
+        assertEquals("PARENT", response.getProductSource());
+        assertEquals(new BigDecimal("5.50"),
+                response.getRates().get(0).getExpectedAppliedRate());
+    }
+
+    @Test
     @DisplayName("적금 상품 목록에 월 최소·최대 납입금액을 반환한다")
     void savingListReturnsMinimumAndMaximumMonthlyAmount() {
         SavingProductVO saving = new SavingProductVO();
@@ -86,7 +103,7 @@ class FinancialProductServiceTest {
         saving.setRate12m(new BigDecimal("3.50"));
         saving.setMinMonthAmount(1_000L);
         saving.setMaxMonthAmount(500_000L);
-        when(mapper.selectActiveSavingProducts()).thenReturn(List.of(saving));
+        when(mapper.selectVisibleSavingProducts(2L)).thenReturn(List.of(saving));
 
         FinancialProductListResponseDTO response =
                 service.getSavingProducts(CHILD).get(0);
@@ -96,11 +113,12 @@ class FinancialProductServiceTest {
     }
 
     @Test
+    @DisplayName("대출금리가 없는 최하등급은 대출에 가입할 수 없다")
     void lowestGradeCannotUseLoan() {
         FinancialProductBenefitVO lowest = benefit();
         lowest.setLoanRate(null);
         when(mapper.selectBenefitByChildId(2L)).thenReturn(lowest);
-        when(mapper.selectActiveLoanProducts()).thenReturn(List.of(loan()));
+        when(mapper.selectVisibleLoanProducts(2L)).thenReturn(List.of(loan()));
 
         FinancialProductListResponseDTO response =
                 service.getProducts(CHILD).get(0);
@@ -113,10 +131,11 @@ class FinancialProductServiceTest {
     }
 
     @Test
+    @DisplayName("대출 상세는 기본금리와 가입 가능 기간을 반환한다")
     void loanDetailReturnsProductRatesAndFixedTerms() {
         LoanProductVO loan = loan();
         loan.setBaseRate(new BigDecimal("3.50"));
-        when(mapper.selectActiveLoanProductById(1L)).thenReturn(loan);
+        when(mapper.selectVisibleLoanProductById(1L, 2L)).thenReturn(loan);
 
         FinancialProductDetailResponseDTO response =
                 service.getProductDetail(CHILD, "loan", 1L);
@@ -129,10 +148,30 @@ class FinancialProductServiceTest {
     }
 
     @Test
+    @DisplayName("부모 생성 대출은 부모가 선택한 가입기간들을 반환한다")
+    void parentLoanReturnsConfiguredTerms() {
+        LoanProductVO loan = loan();
+        loan.setProductSource(FinancialProductSource.PARENT);
+        loan.setAvailable1m(true);
+        loan.setAvailable3m(true);
+        loan.setAvailable6m(false);
+        loan.setAvailable12m(true);
+        when(mapper.selectVisibleLoanProducts(2L)).thenReturn(List.of(loan));
+
+        FinancialProductListResponseDTO response =
+                service.getLoanProducts(CHILD).get(0);
+
+        assertEquals(List.of(1, 3, 12), response.getAvailableTerms());
+        assertEquals(new BigDecimal("5.00"),
+                response.getExpectedAppliedRate());
+    }
+
+    @Test
+    @DisplayName("월간 적용 등급이 요구등급 이상이면 대출에 가입할 수 있다")
     void childCanUseLoanWhenAppliedGradeMeetsRequiredGrade() {
         LoanProductVO lowerGradeLoan = loan();
         lowerGradeLoan.setRequiredGradeId(2L);
-        when(mapper.selectActiveLoanProducts()).thenReturn(
+        when(mapper.selectVisibleLoanProducts(2L)).thenReturn(
                 List.of(lowerGradeLoan));
 
         FinancialProductListResponseDTO response =
@@ -144,10 +183,11 @@ class FinancialProductServiceTest {
     }
 
     @Test
+    @DisplayName("월간 적용 등급이 요구등급보다 낮으면 대출에 가입할 수 없다")
     void childCannotUseLoanWhenAppliedGradeIsBelowRequiredGrade() {
         LoanProductVO higherGradeLoan = loan();
         higherGradeLoan.setRequiredGradeId(4L);
-        when(mapper.selectActiveLoanProducts()).thenReturn(
+        when(mapper.selectVisibleLoanProducts(2L)).thenReturn(
                 List.of(higherGradeLoan));
 
         FinancialProductListResponseDTO response =
@@ -172,7 +212,7 @@ class FinancialProductServiceTest {
 
         when(mapper.selectBenefitByChildId(2L))
                 .thenReturn(starterBenefit);
-        when(mapper.selectActiveLoanProducts()).thenReturn(List.of(plusLoan));
+        when(mapper.selectVisibleLoanProducts(2L)).thenReturn(List.of(plusLoan));
 
         FinancialProductListResponseDTO response =
                 service.getLoanProducts(CHILD).get(0);
@@ -238,7 +278,7 @@ class FinancialProductServiceTest {
 
         verify(familyAccessService).requireChildAccess(parent, 2L);
         verify(mapper).selectDepositEnrollmentsByChildId(2L);
-        verify(mapper, never()).selectActiveDepositProducts();
+        verify(mapper, never()).selectVisibleDepositProducts(2L);
         verify(mapper, never()).selectBenefitByChildId(2L);
         assertEquals(11L, response.getEnrollmentId());
         assertEquals("ACTIVE", response.getStatus());
@@ -247,6 +287,7 @@ class FinancialProductServiceTest {
     }
 
     @Test
+    @DisplayName("자녀가 가입하지 않은 계약 상세는 부모가 조회할 수 없다")
     void parentCannotReadDetailOfProductChildDidNotEnroll() {
         MemberPrincipal parent = new MemberPrincipal(1L, "PARENT");
         BusinessException exception = assertThrows(
@@ -281,6 +322,7 @@ class FinancialProductServiceTest {
     }
 
     @Test
+    @DisplayName("자녀 계정은 부모용 자녀 계약 조회 API를 사용할 수 없다")
     void childCannotUseParentChildProductEndpoint() {
         BusinessException exception = assertThrows(
                 BusinessException.class,
@@ -334,6 +376,7 @@ class FinancialProductServiceTest {
     }
 
     @Test
+    @DisplayName("존재하지 않는 금융상품 상세 조회는 NOT_FOUND를 반환한다")
     void missingProductThrowsNotFound() {
         BusinessException exception = assertThrows(
                 BusinessException.class,
@@ -344,8 +387,9 @@ class FinancialProductServiceTest {
     }
 
     @Test
+    @DisplayName("부모는 상품을 조회할 수 있지만 가입 가능 상태로 표시되지 않는다")
     void parentCanReadProductsButCannotEnroll() {
-        when(mapper.selectActiveDepositProducts()).thenReturn(
+        when(mapper.selectVisibleDepositProducts(1L)).thenReturn(
                 List.of(deposit()));
 
         FinancialProductListResponseDTO response = service.getProducts(

@@ -75,11 +75,12 @@ class FinancialProductEnrollmentServiceTest {
     void requestDepositCreatesPendingEnrollmentAndTransfer() {
         DepositProductVO product = new DepositProductVO();
         product.setId(1L);
+        product.setProductSource(FinancialProductSource.PARENT);
         product.setRate12m(new BigDecimal("3.20"));
         product.setEarlyTerminationRate(new BigDecimal("0.50"));
         product.setMinAmount(10_000L);
         product.setMaxAmount(5_000_000L);
-        when(mapper.selectActiveDepositProductById(1L)).thenReturn(product);
+        when(mapper.selectVisibleDepositProductById(1L, 2L)).thenReturn(product);
 
         FinancialProductEnrollmentRequestResponseDTO response =
                 service.requestDeposit(CHILD,
@@ -101,7 +102,7 @@ class FinancialProductEnrollmentServiceTest {
         product.setEarlyTerminationRate(new BigDecimal("1.00"));
         product.setMinMonthAmount(1_000L);
         product.setMaxMonthAmount(500_000L);
-        when(mapper.selectActiveSavingProductById(1L)).thenReturn(product);
+        when(mapper.selectVisibleSavingProductById(1L, 2L)).thenReturn(product);
         doAnswer(invocation -> {
             FinancialProductEnrollmentCommandVO command = invocation.getArgument(0);
             command.setId(101L);
@@ -127,7 +128,7 @@ class FinancialProductEnrollmentServiceTest {
         product.setId(1L);
         product.setMinAmount(10_000L);
         product.setMaxAmount(5_000_000L);
-        when(mapper.selectActiveDepositProductById(1L)).thenReturn(product);
+        when(mapper.selectVisibleDepositProductById(1L, 2L)).thenReturn(product);
 
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> service.requestDeposit(CHILD,
@@ -145,7 +146,7 @@ class FinancialProductEnrollmentServiceTest {
         product.setId(1L);
         product.setMinMonthAmount(1_000L);
         product.setMaxMonthAmount(500_000L);
-        when(mapper.selectActiveSavingProductById(1L)).thenReturn(product);
+        when(mapper.selectVisibleSavingProductById(1L, 2L)).thenReturn(product);
 
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> service.requestSaving(CHILD,
@@ -164,7 +165,7 @@ class FinancialProductEnrollmentServiceTest {
         product.setId(1L);
         product.setMinAmount(10_000L);
         product.setMaxAmount(200_000L);
-        when(mapper.selectActiveLoanProductById(1L)).thenReturn(product);
+        when(mapper.selectVisibleLoanProductById(1L, 2L)).thenReturn(product);
 
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> service.requestLoan(CHILD,
@@ -174,6 +175,59 @@ class FinancialProductEnrollmentServiceTest {
         assertEquals(FinancialProductErrorCode.FINANCIAL_PRODUCT_INVALID_AMOUNT,
                 exception.getErrorCode());
         verify(mapper, never()).insertLoanEnrollment(any());
+    }
+
+    @Test
+    @DisplayName("부모 생성 대출은 부모가 선택하지 않은 가입기간 요청을 차단한다")
+    void parentLoanRejectsUnselectedTerm() {
+        LoanProductVO product = new LoanProductVO();
+        product.setId(1L);
+        product.setProductSource(FinancialProductSource.PARENT);
+        product.setAvailable1m(true);
+        product.setAvailable3m(true);
+        product.setAvailable6m(false);
+        product.setAvailable12m(true);
+        product.setMinAmount(10_000L);
+        product.setMaxAmount(200_000L);
+        when(mapper.selectVisibleLoanProductById(1L, 2L)).thenReturn(product);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.requestLoan(CHILD,
+                        new LoanEnrollmentRequestDTO(
+                                1L, 100_000L, 6, 25, true)));
+
+        assertEquals(FinancialProductErrorCode.FINANCIAL_PRODUCT_INVALID_TERM,
+                exception.getErrorCode());
+        verify(mapper, never()).insertLoanEnrollment(any());
+    }
+
+    @Test
+    @DisplayName("Parent custom loan stores the monthly grade loan rate at request time")
+    void parentLoanEnrollmentUsesGradeLoanRate() {
+        LoanProductVO product = new LoanProductVO();
+        product.setId(1L);
+        product.setProductSource(FinancialProductSource.PARENT);
+        product.setAvailable12m(true);
+        product.setBaseRate(new BigDecimal("5.00"));
+        product.setLateFeeRate(new BigDecimal("8.00"));
+        product.setRequiredGradeId(2L);
+        product.setMinAmount(10_000L);
+        product.setMaxAmount(200_000L);
+        when(mapper.selectVisibleLoanProductById(1L, 2L)).thenReturn(product);
+        doAnswer(invocation -> {
+            FinancialProductEnrollmentCommandVO command = invocation.getArgument(0);
+            command.setId(102L);
+            return 1;
+        }).when(mapper).insertLoanEnrollment(any());
+
+        FinancialProductEnrollmentRequestResponseDTO response =
+                service.requestLoan(CHILD, new LoanEnrollmentRequestDTO(
+                        1L, 100_000L, 12, 25, true));
+
+        assertEquals(new BigDecimal("7.00"),
+                response.getExpectedAppliedRate());
+        verify(mapper).insertLoanEnrollment(argThat(command ->
+                new BigDecimal("7.00").equals(command.getAppliedRate())));
     }
 
     @Test
@@ -194,7 +248,7 @@ class FinancialProductEnrollmentServiceTest {
         product.setId(1L);
         product.setMinAmount(10_000L);
         product.setMaxAmount(5_000_000L);
-        when(mapper.selectActiveDepositProductById(1L)).thenReturn(product);
+        when(mapper.selectVisibleDepositProductById(1L, 2L)).thenReturn(product);
         when(mapper.countPendingDepositEnrollment(2L, 1L)).thenReturn(1);
 
         BusinessException exception = assertThrows(BusinessException.class,
@@ -214,7 +268,7 @@ class FinancialProductEnrollmentServiceTest {
         product.setRequiredGradeId(3L);
         product.setMinAmount(10_000L);
         product.setMaxAmount(200_000L);
-        when(mapper.selectActiveLoanProductById(3L)).thenReturn(product);
+        when(mapper.selectVisibleLoanProductById(3L, 2L)).thenReturn(product);
 
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> service.requestLoan(CHILD,
