@@ -123,7 +123,8 @@ public class QuestController {
 
     @ApiOperation(
             value = "퀘스트 거절",
-            notes = "AVAILABLE 상태인 본인 퀘스트를 사유와 함께 DECLINED로 바꿉니다. 티니점수는 차감하지 않습니다.")
+            notes = "AVAILABLE 상태이며 기한이 지나지 않은 본인 퀘스트를 사유와 함께 DECLINED로 바꿉니다. "
+                    + "티니점수는 차감하지 않습니다.")
     @PreAuthorize("hasRole('CHILD')")
     @PatchMapping("/{questId}/decline")
     public ApiResponse<QuestDetailResponseDTO> declineQuest(
