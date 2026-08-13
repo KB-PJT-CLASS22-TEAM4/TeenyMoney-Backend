@@ -18,7 +18,7 @@ ext {
     lombokVersion = '1.18.30'
     jjwtVersion = '0.12.6'
     jacksonVersion = '2.15.4'
-    log4jVersion = '2.18.0'
+    log4jVersion = '2.23.1'
     swaggerUiVersion = '5.31.0'
     awsSdkVersion = '2.46.7'           // v1(aws-java-sdk-s3)은 유지보수 종료라 쓰지 않는다
 }
@@ -110,7 +110,7 @@ dependencies {
     // Log4j2 Logging
     implementation "org.apache.logging.log4j:log4j-api:${log4jVersion}"
     implementation "org.apache.logging.log4j:log4j-core:${log4jVersion}"
-    implementation "org.apache.logging.log4j:log4j-slf4j-impl:${log4jVersion}"
+    implementation "org.apache.logging.log4j:log4j-slf4j2-impl:${log4jVersion}"
 
     // log4jdbc
     implementation 'org.bgee.log4jdbc-log4j2:log4jdbc-log4j2-jdbc4:1.16'

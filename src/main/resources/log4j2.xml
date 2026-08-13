@@ -14,7 +14,7 @@
         <Logger name="_org.springframework.web.servlet.HandlerMapping.Mappings" level="DEBUG" additivity="false" >
             <AppenderRef ref="console"/>
         </Logger>
-        <Logger name="org.teenymoney" level="INFO" additivity="false" >
+        <Logger name="com.teenyfin.teenymoney" level="INFO" additivity="false" >
             <AppenderRef ref="console"/>
         </Logger>
         <Logger name="org.springframework" level="INFO" additivity="false">
