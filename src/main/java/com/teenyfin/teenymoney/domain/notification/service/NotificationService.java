@@ -1,6 +1,7 @@
 package com.teenyfin.teenymoney.domain.notification.service;
 
 import com.teenyfin.teenymoney.domain.notification.dto.NotificationMessage;
+import com.teenyfin.teenymoney.domain.notification.dto.response.NotificationResponseDTO;
 import com.teenyfin.teenymoney.domain.notification.mapper.MemberNotificationMapper;
 import com.teenyfin.teenymoney.domain.notification.mapper.NotificationMapper;
 import com.teenyfin.teenymoney.domain.notification.vo.MemberNotificationVO;
@@ -9,6 +10,8 @@ import com.teenyfin.teenymoney.domain.notification.vo.NotificationVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -66,5 +69,39 @@ public class NotificationService {
             NotificationMessage notificationMessage = NotificationMessage.of("티니머니", notificationVO.getTitle());
             fcmService.send(fcmService.createMessage(fcmToken, notificationMessage, notificationVO));
         }
+    }
+
+    // 최근 30일 간의 알림 내역을 최신순으로 조회한다.
+    @Transactional
+    public List<NotificationResponseDTO> getNotifications(Long memberId) {
+
+        List<NotificationVO> notificationVOList = notificationMapper.selectRecentNotifications(memberId);
+
+        return notificationVOList.stream()
+                .map(x -> NotificationResponseDTO.builder()
+                        .id(x.getId())
+                        .memberId(x.getMemberId())
+                        .title(x.getTitle())
+                        .content(x.getContent())
+                        .referenceType(x.getReferenceType())
+                        .referenceId(x.getReferenceId())
+                        .isRead(x.getIsRead())
+                        .createdAt(x.getCreatedAt())
+                        .build())
+                .toList();
+    }
+
+    // 하나의 알림을 읽음 처리한다.
+    @Transactional
+    public void readNotification(Long memberId, Long notificationId) {
+
+        notificationMapper.updateIsReadTrue(notificationId);
+    }
+
+    // 모든 알림을 읽음 처리한다.
+    @Transactional
+    public void readAllNotifications(Long memberId) {
+
+        notificationMapper.updateAllIsReadTrue(memberId);
     }
 }

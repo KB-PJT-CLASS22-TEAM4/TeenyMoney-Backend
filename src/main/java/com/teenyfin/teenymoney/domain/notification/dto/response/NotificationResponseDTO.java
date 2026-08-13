@@ -1,17 +1,14 @@
-package com.teenyfin.teenymoney.domain.notification.vo;
+package com.teenyfin.teenymoney.domain.notification.dto.response;
 
-import lombok.AllArgsConstructor;
+import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
 import lombok.Builder;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
 @Builder
 @Getter
-@NoArgsConstructor
-@AllArgsConstructor
-public class NotificationVO {
+public class NotificationResponseDTO {
 
     private Long id;
     private Long memberId;
