@@ -40,6 +40,10 @@ public class FinancialProductListResponseDTO {
     private final BigDecimal expectedAppliedRate;
     @ApiModelProperty(value = "대출 연체금리(%)")
     private final BigDecimal lateFeeRate;
+    @ApiModelProperty(value = "최소 가입금액")
+    private final Long minimumAmount;
+    @ApiModelProperty(value = "최대 가입금액")
+    private final Long maximumAmount;
     @ApiModelProperty(value = "적금 적립 유형(FIXED, FREE)")
     private final String savingsType;
     @ApiModelProperty(value = "예·적금 이자 계산 방식(SIMPLE, COMPOUND)")

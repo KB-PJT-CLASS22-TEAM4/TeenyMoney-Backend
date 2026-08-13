@@ -54,4 +54,7 @@ public interface WalletMapper {
     // 리턴 타입은 void지만, 실행 후 wallet.getId()에 방금 생성된 PK가 자동으로 채워진다
     // (XML의 useGeneratedKeys="true" keyProperty="id" 설정 덕분 - MemberMapper.insert()와 같은 방식).
     void insertWallet(WalletVO wallet);
+
+    // payment id로 결제 건에 대한 원장 조회
+    WalletTransactionVO selectByPaymentId(@Param("paymentId") Long paymentId);
 }

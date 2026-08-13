@@ -353,6 +353,8 @@ public class FinancialProductService {
                 .ineligibleReason(ineligibleReason(eligible, benefit))
                 .availableTerms(terms(rates))
                 .rates(rates)
+                .minimumAmount(product.getMinAmount())
+                .maximumAmount(product.getMaxAmount())
                 .interestCalculationType(
                         product.getInterestCalculationType())
                 .build();
@@ -377,6 +379,8 @@ public class FinancialProductService {
                 .ineligibleReason(ineligibleReason(eligible, benefit))
                 .availableTerms(terms(rates))
                 .rates(rates)
+                .minimumAmount(product.getMinMonthAmount())
+                .maximumAmount(product.getMaxMonthAmount())
                 .savingsType(product.getSavingsType())
                 .interestCalculationType(
                         product.getInterestCalculationType())
@@ -401,6 +405,8 @@ public class FinancialProductService {
                 .baseRate(product.getBaseRate())
                 .expectedAppliedRate(product.getBaseRate())
                 .lateFeeRate(product.getLateFeeRate())
+                .minimumAmount(product.getMinAmount())
+                .maximumAmount(product.getMaxAmount())
                 .repaymentType(product.getRepaymentType())
                 .build();
     }

@@ -1,5 +1,9 @@
 package com.teenyfin.teenymoney.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.teenyfin.teenymoney.domain.payment.service.OrderStore;
 import com.teenyfin.teenymoney.global.auth.RefreshTokenStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -46,5 +50,20 @@ public class RedisConfig {
             StringRedisTemplate stringRedisTemplate,
             @Value("${jwt.refresh-expiration}") long refreshExpirationMs) {
         return new RefreshTokenStore(stringRedisTemplate, refreshExpirationMs);
+    }
+
+    @Bean
+    public OrderStore paymentInfoStore(
+            StringRedisTemplate stringRedisTemplate,
+            ObjectMapper objectMapper) {
+        return new OrderStore(stringRedisTemplate, objectMapper);
+    }
+
+    @Bean
+    public ObjectMapper objectMapper() {
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.registerModule(new JavaTimeModule());
+        objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        return objectMapper;
     }
 }

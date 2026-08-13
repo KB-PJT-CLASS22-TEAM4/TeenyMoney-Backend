@@ -14,7 +14,7 @@ public class CategoryPolicyResponseDTO {
     private Long id;
 
     @ApiModelProperty(value = "카테고리 이름", example = "편의점")
-    private String merchantCategoryName;
+    private String categoryName;
 
     @ApiModelProperty(value = "정책 단계 (ALLOW/WATCH/BLOCK)", example = "ALLOW")
     private String policy;

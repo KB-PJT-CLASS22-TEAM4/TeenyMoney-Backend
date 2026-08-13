@@ -13,6 +13,7 @@ import com.teenyfin.teenymoney.global.storage.S3Storage;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -110,15 +111,16 @@ class PermissionServiceCreateTest {
                 .willReturn(null)
                 .willReturn(afterInsert);
 
-        // 여기 수정: MemberParentVO 객체를 만들어서 리턴하도록
+        // setter 없이 리플렉션으로 필드 직접 세팅
         MemberParentVO parentVO = new MemberParentVO();
-        parentVO.setParentId(parentId);
+        ReflectionTestUtils.setField(parentVO, "parentId", parentId);
         given(memberMapper.selectActiveParentByChildId(childId)).willReturn(parentVO);
 
         ArgumentCaptor<PermissionInsertVO> captor = ArgumentCaptor.forClass(PermissionInsertVO.class);
         Mockito.doAnswer(invocation -> {
             PermissionInsertVO vo = invocation.getArgument(0);
-            vo.setId(generatedId);
+            // setter 없이 리플렉션으로 id 채우기 (useGeneratedKeys 흉내)
+            ReflectionTestUtils.setField(vo, "id", generatedId);
             return null;
         }).when(permissionMapper).insertPermission(captor.capture());
 

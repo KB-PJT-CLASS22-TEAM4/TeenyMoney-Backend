@@ -1,0 +1,227 @@
+package com.teenyfin.teenymoney.domain.financialproduct.service;
+
+import com.teenyfin.teenymoney.domain.financialproduct.dto.request.DepositEnrollmentRequestDTO;
+import com.teenyfin.teenymoney.domain.financialproduct.dto.request.LoanEnrollmentRequestDTO;
+import com.teenyfin.teenymoney.domain.financialproduct.dto.request.SavingEnrollmentRequestDTO;
+import com.teenyfin.teenymoney.domain.financialproduct.dto.response.FinancialProductEnrollmentRequestResponseDTO;
+import com.teenyfin.teenymoney.domain.financialproduct.exception.FinancialProductErrorCode;
+import com.teenyfin.teenymoney.domain.financialproduct.mapper.FinancialProductMapper;
+import com.teenyfin.teenymoney.domain.financialproduct.vo.*;
+import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
+import com.teenyfin.teenymoney.domain.member.vo.MemberParentVO;
+import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
+import com.teenyfin.teenymoney.domain.wallet.service.TransferService;
+import com.teenyfin.teenymoney.domain.wallet.service.WalletService;
+import com.teenyfin.teenymoney.domain.wallet.vo.WalletVO;
+import com.teenyfin.teenymoney.global.exception.BusinessException;
+import com.teenyfin.teenymoney.global.security.MemberPrincipal;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import java.math.BigDecimal;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.*;
+
+class FinancialProductEnrollmentServiceTest {
+    private static final MemberPrincipal CHILD = new MemberPrincipal(2L, "CHILD");
+
+    private FinancialProductMapper mapper;
+    private WalletMapper walletMapper;
+    private WalletService walletService;
+    private TransferService transferService;
+    private FinancialProductEnrollmentService service;
+
+    @BeforeEach
+    void setUp() {
+        mapper = mock(FinancialProductMapper.class);
+        MemberMapper memberMapper = mock(MemberMapper.class);
+        walletMapper = mock(WalletMapper.class);
+        walletService = mock(WalletService.class);
+        transferService = mock(TransferService.class);
+        service = new FinancialProductEnrollmentService(mapper,
+                new FinancialProductRateCalculator(), memberMapper,
+                walletMapper, walletService, transferService);
+
+        MemberParentVO parent = new MemberParentVO();
+        parent.setParentId(1L);
+        when(memberMapper.selectActiveParentByChildId(2L)).thenReturn(parent);
+        FinancialProductBenefitVO benefit = new FinancialProductBenefitVO();
+        benefit.setChildId(2L);
+        benefit.setGradeId(2L);
+        benefit.setBonusRate(new BigDecimal("1.00"));
+        benefit.setLoanRate(new BigDecimal("7.00"));
+        when(mapper.selectBenefitByChildId(2L)).thenReturn(benefit);
+
+        WalletVO wallet = new WalletVO();
+        wallet.setId(10L);
+        wallet.setBalance(500_000L);
+        when(walletMapper.selectMemberWalletByMemberId(2L)).thenReturn(wallet);
+        when(walletMapper.selectWalletForUpdate(10L)).thenReturn(wallet);
+        when(walletService.createWallet(anyLong(), any())).thenReturn(20L);
+        doAnswer(invocation -> {
+            FinancialProductEnrollmentCommandVO command = invocation.getArgument(0);
+            command.setId(100L);
+            return 1;
+        }).when(mapper).insertDepositEnrollment(any());
+    }
+
+    @Test
+    @DisplayName("예금 가입 요청은 등급 우대금리를 반영한 PENDING 계약과 송금을 생성한다")
+    void requestDepositCreatesPendingEnrollmentAndTransfer() {
+        DepositProductVO product = new DepositProductVO();
+        product.setId(1L);
+        product.setRate12m(new BigDecimal("3.20"));
+        product.setEarlyTerminationRate(new BigDecimal("0.50"));
+        product.setMinAmount(10_000L);
+        product.setMaxAmount(5_000_000L);
+        when(mapper.selectActiveDepositProductById(1L)).thenReturn(product);
+
+        FinancialProductEnrollmentRequestResponseDTO response =
+                service.requestDeposit(CHILD,
+                        new DepositEnrollmentRequestDTO(1L, 50_000L, 12));
+
+        assertEquals(100L, response.getEnrollmentId());
+        assertEquals("PENDING", response.getStatus());
+        assertEquals(new BigDecimal("4.20"), response.getExpectedAppliedRate());
+        verify(transferService).createPendingTransfer(eq(10L), eq(20L),
+                eq(50_000L), any(), anyString());
+    }
+
+    @Test
+    @DisplayName("적금 가입 요청은 상품 지갑만 생성하고 대기 송금을 생성하지 않는다")
+    void requestSavingDoesNotCreatePendingTransfer() {
+        SavingProductVO product = new SavingProductVO();
+        product.setId(1L);
+        product.setRate12m(new BigDecimal("3.20"));
+        product.setEarlyTerminationRate(new BigDecimal("1.00"));
+        product.setMinMonthAmount(1_000L);
+        product.setMaxMonthAmount(500_000L);
+        when(mapper.selectActiveSavingProductById(1L)).thenReturn(product);
+        doAnswer(invocation -> {
+            FinancialProductEnrollmentCommandVO command = invocation.getArgument(0);
+            command.setId(101L);
+            return 1;
+        }).when(mapper).insertSavingEnrollment(any());
+
+        FinancialProductEnrollmentRequestResponseDTO response =
+                service.requestSaving(CHILD,
+                        new SavingEnrollmentRequestDTO(
+                                1L, 30_000L, 12, 25, true));
+
+        assertEquals(101L, response.getEnrollmentId());
+        assertEquals("PENDING", response.getStatus());
+        verify(walletService).createWallet(2L,
+                com.teenyfin.teenymoney.domain.wallet.vo.WalletType.SAVING);
+        verifyNoInteractions(transferService);
+    }
+
+    @Test
+    @DisplayName("예금 가입금액이 상품 범위를 벗어나면 가입 요청을 생성하지 않는다")
+    void depositAmountOutsideProductRangeIsRejected() {
+        DepositProductVO product = new DepositProductVO();
+        product.setId(1L);
+        product.setMinAmount(10_000L);
+        product.setMaxAmount(5_000_000L);
+        when(mapper.selectActiveDepositProductById(1L)).thenReturn(product);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.requestDeposit(CHILD,
+                        new DepositEnrollmentRequestDTO(1L, 9_999L, 12)));
+
+        assertEquals(FinancialProductErrorCode.FINANCIAL_PRODUCT_INVALID_AMOUNT,
+                exception.getErrorCode());
+        verify(mapper, never()).insertDepositEnrollment(any());
+    }
+
+    @Test
+    @DisplayName("적금 월 납입금액이 상품 범위를 벗어나면 가입 요청을 생성하지 않는다")
+    void savingAmountOutsideProductRangeIsRejected() {
+        SavingProductVO product = new SavingProductVO();
+        product.setId(1L);
+        product.setMinMonthAmount(1_000L);
+        product.setMaxMonthAmount(500_000L);
+        when(mapper.selectActiveSavingProductById(1L)).thenReturn(product);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.requestSaving(CHILD,
+                        new SavingEnrollmentRequestDTO(
+                                1L, 500_001L, 12, 25, true)));
+
+        assertEquals(FinancialProductErrorCode.FINANCIAL_PRODUCT_INVALID_AMOUNT,
+                exception.getErrorCode());
+        verify(mapper, never()).insertSavingEnrollment(any());
+    }
+
+    @Test
+    @DisplayName("대출 신청금액이 상품 범위를 벗어나면 가입 요청을 생성하지 않는다")
+    void loanAmountOutsideProductRangeIsRejected() {
+        LoanProductVO product = new LoanProductVO();
+        product.setId(1L);
+        product.setMinAmount(10_000L);
+        product.setMaxAmount(200_000L);
+        when(mapper.selectActiveLoanProductById(1L)).thenReturn(product);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.requestLoan(CHILD,
+                        new LoanEnrollmentRequestDTO(
+                                1L, 200_001L, 12, 25, true)));
+
+        assertEquals(FinancialProductErrorCode.FINANCIAL_PRODUCT_INVALID_AMOUNT,
+                exception.getErrorCode());
+        verify(mapper, never()).insertLoanEnrollment(any());
+    }
+
+    @Test
+    @DisplayName("부모 계정은 자녀용 금융상품 가입 요청 API를 사용할 수 없다")
+    void parentCannotRequestEnrollment() {
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.requestDeposit(new MemberPrincipal(1L, "PARENT"),
+                        new DepositEnrollmentRequestDTO(1L, 50_000L, 12)));
+
+        assertEquals(FinancialProductErrorCode.FINANCIAL_PRODUCT_CHILD_ONLY,
+                exception.getErrorCode());
+    }
+
+    @Test
+    @DisplayName("동일 상품의 PENDING 계약이 있으면 중복 가입 요청을 차단한다")
+    void duplicatePendingEnrollmentIsRejected() {
+        DepositProductVO product = new DepositProductVO();
+        product.setId(1L);
+        product.setMinAmount(10_000L);
+        product.setMaxAmount(5_000_000L);
+        when(mapper.selectActiveDepositProductById(1L)).thenReturn(product);
+        when(mapper.countPendingDepositEnrollment(2L, 1L)).thenReturn(1);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.requestDeposit(CHILD,
+                        new DepositEnrollmentRequestDTO(1L, 50_000L, 12)));
+
+        assertEquals(FinancialProductErrorCode.FINANCIAL_PRODUCT_ENROLLMENT_DUPLICATED,
+                exception.getErrorCode());
+        verify(walletService, never()).createWallet(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("월간 적용 등급이 요구등급보다 낮으면 대출 가입 요청을 차단한다")
+    void insufficientGradeLoanRequestIsRejected() {
+        LoanProductVO product = new LoanProductVO();
+        product.setId(3L);
+        product.setRequiredGradeId(3L);
+        product.setMinAmount(10_000L);
+        product.setMaxAmount(200_000L);
+        when(mapper.selectActiveLoanProductById(3L)).thenReturn(product);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.requestLoan(CHILD,
+                        new LoanEnrollmentRequestDTO(
+                                3L, 100_000L, 12, 25, true)));
+
+        assertEquals(FinancialProductErrorCode.FINANCIAL_PRODUCT_INSUFFICIENT_GRADE,
+                exception.getErrorCode());
+    }
+}

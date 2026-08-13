@@ -3,12 +3,15 @@ package com.teenyfin.teenymoney.domain.financialproduct.mapper;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.DepositProductVO;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductBenefitVO;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductEnrollmentVO;
+import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductEnrollmentCommandVO;
+import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductApprovalVO;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.LoanProductVO;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.SavingProductVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
+import java.time.LocalDate;
 
 @Mapper
 public interface FinancialProductMapper {
@@ -35,6 +38,61 @@ public interface FinancialProductMapper {
             @Param("enrollmentId") Long enrollmentId);
     FinancialProductBenefitVO selectBenefitByChildId(
             @Param("childId") Long childId);
+    int countPendingDepositEnrollment(@Param("childId") Long childId,
+                                      @Param("productId") Long productId);
+    int countPendingSavingEnrollment(@Param("childId") Long childId,
+                                     @Param("productId") Long productId);
+    int countPendingLoanEnrollment(@Param("childId") Long childId,
+                                   @Param("productId") Long productId);
+    int insertDepositEnrollment(FinancialProductEnrollmentCommandVO command);
+    int insertSavingEnrollment(FinancialProductEnrollmentCommandVO command);
+    int insertLoanEnrollment(FinancialProductEnrollmentCommandVO command);
+    List<FinancialProductApprovalVO> selectPendingApprovalsByParentId(
+            @Param("parentId") Long parentId);
+    FinancialProductApprovalVO selectDepositApprovalForUpdate(
+            @Param("parentId") Long parentId,
+            @Param("enrollmentId") Long enrollmentId);
+    FinancialProductApprovalVO selectSavingApprovalForUpdate(
+            @Param("parentId") Long parentId,
+            @Param("enrollmentId") Long enrollmentId);
+    FinancialProductApprovalVO selectLoanApprovalForUpdate(
+            @Param("parentId") Long parentId,
+            @Param("enrollmentId") Long enrollmentId);
+    int approveDepositEnrollment(@Param("enrollmentId") Long enrollmentId,
+                                 @Param("appliedRate") java.math.BigDecimal appliedRate,
+                                 @Param("earlyTerminationRate") java.math.BigDecimal earlyTerminationRate,
+                                 @Param("startDate") java.time.LocalDate startDate,
+                                 @Param("maturityDate") java.time.LocalDate maturityDate);
+    int approveSavingEnrollment(@Param("enrollmentId") Long enrollmentId,
+                                @Param("appliedRate") java.math.BigDecimal appliedRate,
+                                @Param("earlyTerminationRate") java.math.BigDecimal earlyTerminationRate,
+                                @Param("startDate") java.time.LocalDate startDate,
+                                @Param("maturityDate") java.time.LocalDate maturityDate);
+    int approveLoanEnrollment(@Param("enrollmentId") Long enrollmentId,
+                              @Param("appliedRate") java.math.BigDecimal appliedRate,
+                              @Param("lateFeeRate") java.math.BigDecimal lateFeeRate,
+                              @Param("startDate") java.time.LocalDate startDate,
+                              @Param("maturityDate") java.time.LocalDate maturityDate);
+    int rejectDepositEnrollment(@Param("enrollmentId") Long enrollmentId);
+    int rejectSavingEnrollment(@Param("enrollmentId") Long enrollmentId);
+    int rejectLoanEnrollment(@Param("enrollmentId") Long enrollmentId);
+    int insertFirstSavingPayment(@Param("enrollmentId") Long enrollmentId,
+                                 @Param("transferId") Long transferId,
+                                 @Param("amount") Long amount);
+    List<Long> selectDueSavingPaymentEnrollmentIds(
+            @Param("paymentDate") LocalDate paymentDate);
+    com.teenyfin.teenymoney.domain.financialproduct.vo.SavingPaymentDueVO
+    selectDueSavingPaymentForUpdate(
+            @Param("enrollmentId") Long enrollmentId,
+            @Param("paymentDate") LocalDate paymentDate);
+    int countSavingPaymentHistory(@Param("enrollmentId") Long enrollmentId,
+                                  @Param("installmentNo") Integer installmentNo);
+    int insertSavingPaymentHistory(@Param("enrollmentId") Long enrollmentId,
+                                   @Param("transferId") Long transferId,
+                                   @Param("installmentNo") Integer installmentNo,
+                                   @Param("amount") Long amount,
+                                   @Param("paidAmount") Long paidAmount,
+                                   @Param("status") String status);
     int upsertDepositProduct(DepositProductVO product);
     int upsertSavingProduct(SavingProductVO product);
 }

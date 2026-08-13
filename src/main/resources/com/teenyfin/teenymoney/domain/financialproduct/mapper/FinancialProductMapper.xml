@@ -101,6 +101,31 @@
         <result property="repaymentType" column="repayment_type"/>
     </resultMap>
 
+    <resultMap id="approvalResultMap"
+               type="com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductApprovalVO">
+        <id property="enrollmentId" column="enrollment_id"/>
+        <result property="productId" column="product_id"/>
+        <result property="productType" column="product_type"/>
+        <result property="productName" column="product_name"/>
+        <result property="parentId" column="parent_id"/>
+        <result property="childId" column="child_id"/>
+        <result property="childName" column="child_name"/>
+        <result property="walletId" column="wallet_id"/>
+        <result property="transferId" column="transfer_id"/>
+        <result property="requestedAmount" column="requested_amount"/>
+        <result property="termMonths" column="term_months"/>
+        <result property="paymentDay" column="payment_day"/>
+        <result property="autoTransfer" column="auto_transfer"/>
+        <result property="savingsType" column="savings_type"/>
+        <result property="interestCalculationType" column="interest_calculation_type"/>
+        <result property="repaymentType" column="repayment_type"/>
+        <result property="appliedRate" column="applied_rate"/>
+        <result property="earlyTerminationRate" column="early_termination_rate"/>
+        <result property="lateFeeRate" column="late_fee_rate"/>
+        <result property="status" column="enrollment_status"/>
+        <result property="requestedAt" column="requested_at"/>
+    </resultMap>
+
     <select id="selectActiveDepositProducts" resultMap="depositProductResultMap">
         SELECT * FROM T_DPT_PROD_M
         WHERE is_active = TRUE
@@ -357,6 +382,294 @@
           AND member.role = 'CHILD'
           AND member.status = 'ACTIVE'
     </select>
+
+    <select id="countPendingDepositEnrollment" resultType="int">
+        SELECT COUNT(*) FROM T_DPT_ENROLL_M
+        WHERE child_id = #{childId} AND deposit_id = #{productId}
+          AND status = 'PENDING'
+    </select>
+
+    <select id="countPendingSavingEnrollment" resultType="int">
+        SELECT COUNT(*) FROM T_SVG_ENROLL_M
+        WHERE child_id = #{childId} AND saving_id = #{productId}
+          AND status = 'PENDING'
+    </select>
+
+    <select id="countPendingLoanEnrollment" resultType="int">
+        SELECT COUNT(*) FROM T_LON_ENROLL_M
+        WHERE child_id = #{childId} AND loan_id = #{productId}
+          AND status = 'PENDING'
+    </select>
+
+    <insert id="insertDepositEnrollment" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO T_DPT_ENROLL_M
+            (deposit_id, child_id, parent_id, wallet_id, applied_rate,
+             applied_early_termination_rate, term_months, status)
+        VALUES
+            (#{productId}, #{childId}, #{parentId}, #{walletId}, #{appliedRate},
+             #{appliedEarlyTerminationRate}, #{termMonths}, 'PENDING')
+    </insert>
+
+    <insert id="insertSavingEnrollment" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO T_SVG_ENROLL_M
+            (saving_id, child_id, parent_id, wallet_id, applied_rate,
+             applied_early_termination_rate, term_months, monthly_amount,
+             payment_day, auto_transfer, status)
+        VALUES
+            (#{productId}, #{childId}, #{parentId}, #{walletId}, #{appliedRate},
+             #{appliedEarlyTerminationRate}, #{termMonths}, #{amount},
+             #{paymentDay}, #{autoTransfer}, 'PENDING')
+    </insert>
+
+    <insert id="insertLoanEnrollment" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO T_LON_ENROLL_M
+            (loan_id, parent_id, child_id, principal_amount,
+             outstanding_principal, overdue_interest, applied_rate,
+             applied_late_fee_rate, auto_transfer, payment_day, paid_count,
+             term_months, status)
+        VALUES
+            (#{productId}, #{parentId}, #{childId}, #{amount}, 0, 0,
+             #{appliedRate}, #{appliedLateFeeRate}, #{autoTransfer},
+             #{paymentDay}, 0, #{termMonths}, 'PENDING')
+    </insert>
+
+    <select id="selectPendingApprovalsByParentId" resultMap="approvalResultMap">
+        SELECT * FROM (
+            SELECT enrollment.id AS enrollment_id,
+                   enrollment.deposit_id AS product_id,
+                   'DEPOSIT' AS product_type,
+                   product.name AS product_name,
+                   enrollment.parent_id,
+                   enrollment.child_id,
+                   child.name AS child_name,
+                   enrollment.wallet_id,
+                   transfer.id AS transfer_id,
+                   transfer.amount AS requested_amount,
+                   enrollment.term_months,
+                   NULL AS payment_day,
+                   NULL AS auto_transfer,
+                   NULL AS savings_type,
+                   product.interest_calculation_type,
+                   NULL AS repayment_type,
+                   enrollment.applied_rate,
+                   enrollment.applied_early_termination_rate AS early_termination_rate,
+                   NULL AS late_fee_rate,
+                   enrollment.status AS enrollment_status,
+                   enrollment.created_at AS requested_at
+            FROM T_DPT_ENROLL_M enrollment
+            INNER JOIN T_DPT_PROD_M product ON product.id = enrollment.deposit_id
+            INNER JOIN T_MBR_INFO_M child ON child.id = enrollment.child_id
+            LEFT JOIN T_WLT_TRF_L transfer
+                   ON transfer.to_wallet_id = enrollment.wallet_id
+                  AND transfer.type = 'DEPOSIT'
+                  AND transfer.status = 'PENDING'
+            WHERE enrollment.parent_id = #{parentId}
+              AND enrollment.status = 'PENDING'
+            UNION ALL
+            SELECT enrollment.id, enrollment.saving_id, 'SAVING', product.name,
+                   enrollment.parent_id, enrollment.child_id, child.name,
+                   enrollment.wallet_id, transfer.id, enrollment.monthly_amount,
+                   enrollment.term_months, enrollment.payment_day,
+                   enrollment.auto_transfer, product.savings_type,
+                   product.interest_calculation_type, NULL,
+                   enrollment.applied_rate,
+                   enrollment.applied_early_termination_rate, NULL,
+                   enrollment.status, enrollment.created_at
+            FROM T_SVG_ENROLL_M enrollment
+            INNER JOIN T_SVG_PROD_M product ON product.id = enrollment.saving_id
+            INNER JOIN T_MBR_INFO_M child ON child.id = enrollment.child_id
+            LEFT JOIN T_WLT_TRF_L transfer
+                   ON transfer.to_wallet_id = enrollment.wallet_id
+                  AND transfer.type = 'SAVING'
+                  AND transfer.status = 'PENDING'
+            WHERE enrollment.parent_id = #{parentId}
+              AND enrollment.status = 'PENDING'
+            UNION ALL
+            SELECT enrollment.id, enrollment.loan_id, 'LOAN', product.name,
+                   enrollment.parent_id, enrollment.child_id, child.name,
+                   NULL, NULL, enrollment.principal_amount,
+                   enrollment.term_months, enrollment.payment_day,
+                   enrollment.auto_transfer, NULL, NULL,
+                   product.repayment_type, enrollment.applied_rate,
+                   NULL, enrollment.applied_late_fee_rate,
+                   enrollment.status, enrollment.created_at
+            FROM T_LON_ENROLL_M enrollment
+            INNER JOIN T_LON_PROD_M product ON product.id = enrollment.loan_id
+            INNER JOIN T_MBR_INFO_M child ON child.id = enrollment.child_id
+            WHERE enrollment.parent_id = #{parentId}
+              AND enrollment.status = 'PENDING'
+        ) approvals
+        ORDER BY requested_at DESC, enrollment_id DESC
+    </select>
+
+    <select id="selectDepositApprovalForUpdate" resultMap="approvalResultMap">
+        SELECT enrollment.id AS enrollment_id, enrollment.deposit_id AS product_id,
+               'DEPOSIT' AS product_type, product.name AS product_name,
+               enrollment.parent_id, enrollment.child_id, child.name AS child_name,
+               enrollment.wallet_id, transfer.id AS transfer_id,
+               transfer.amount AS requested_amount, enrollment.term_months,
+               product.interest_calculation_type,
+               enrollment.applied_rate,
+               enrollment.applied_early_termination_rate AS early_termination_rate,
+               enrollment.status AS enrollment_status,
+               enrollment.created_at AS requested_at
+        FROM T_DPT_ENROLL_M enrollment
+        INNER JOIN T_DPT_PROD_M product ON product.id = enrollment.deposit_id
+        INNER JOIN T_MBR_INFO_M child ON child.id = enrollment.child_id
+        LEFT JOIN T_WLT_TRF_L transfer
+               ON transfer.to_wallet_id = enrollment.wallet_id
+              AND transfer.type = 'DEPOSIT' AND transfer.status = 'PENDING'
+        WHERE enrollment.id = #{enrollmentId}
+          AND enrollment.parent_id = #{parentId}
+        FOR UPDATE
+    </select>
+
+    <select id="selectSavingApprovalForUpdate" resultMap="approvalResultMap">
+        SELECT enrollment.id AS enrollment_id, enrollment.saving_id AS product_id,
+               'SAVING' AS product_type, product.name AS product_name,
+               enrollment.parent_id, enrollment.child_id, child.name AS child_name,
+               enrollment.wallet_id, transfer.id AS transfer_id,
+               enrollment.monthly_amount AS requested_amount, enrollment.term_months,
+               enrollment.payment_day, enrollment.auto_transfer,
+               product.savings_type, product.interest_calculation_type,
+               enrollment.applied_rate,
+               enrollment.applied_early_termination_rate AS early_termination_rate,
+               enrollment.status AS enrollment_status,
+               enrollment.created_at AS requested_at
+        FROM T_SVG_ENROLL_M enrollment
+        INNER JOIN T_SVG_PROD_M product ON product.id = enrollment.saving_id
+        INNER JOIN T_MBR_INFO_M child ON child.id = enrollment.child_id
+        LEFT JOIN T_WLT_TRF_L transfer
+               ON transfer.to_wallet_id = enrollment.wallet_id
+              AND transfer.type = 'SAVING' AND transfer.status = 'PENDING'
+        WHERE enrollment.id = #{enrollmentId}
+          AND enrollment.parent_id = #{parentId}
+        FOR UPDATE
+    </select>
+
+    <select id="selectLoanApprovalForUpdate" resultMap="approvalResultMap">
+        SELECT enrollment.id AS enrollment_id, enrollment.loan_id AS product_id,
+               'LOAN' AS product_type, product.name AS product_name,
+               enrollment.parent_id, enrollment.child_id, child.name AS child_name,
+               enrollment.principal_amount AS requested_amount,
+               enrollment.term_months, enrollment.payment_day,
+               enrollment.auto_transfer, product.repayment_type,
+               enrollment.applied_rate,
+               enrollment.applied_late_fee_rate AS late_fee_rate,
+               enrollment.status AS enrollment_status,
+               enrollment.created_at AS requested_at
+        FROM T_LON_ENROLL_M enrollment
+        INNER JOIN T_LON_PROD_M product ON product.id = enrollment.loan_id
+        INNER JOIN T_MBR_INFO_M child ON child.id = enrollment.child_id
+        WHERE enrollment.id = #{enrollmentId}
+          AND enrollment.parent_id = #{parentId}
+        FOR UPDATE
+    </select>
+
+    <update id="approveDepositEnrollment">
+        UPDATE T_DPT_ENROLL_M
+        SET applied_rate = #{appliedRate},
+            applied_early_termination_rate = #{earlyTerminationRate},
+            start_date = #{startDate}, maturity_date = #{maturityDate},
+            status = 'ACTIVE', updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{enrollmentId} AND status = 'PENDING'
+    </update>
+
+    <update id="approveSavingEnrollment">
+        UPDATE T_SVG_ENROLL_M
+        SET applied_rate = #{appliedRate},
+            applied_early_termination_rate = #{earlyTerminationRate},
+            start_date = #{startDate}, maturity_date = #{maturityDate},
+            status = 'ACTIVE', updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{enrollmentId} AND status = 'PENDING'
+    </update>
+
+    <update id="approveLoanEnrollment">
+        UPDATE T_LON_ENROLL_M
+        SET applied_rate = #{appliedRate},
+            applied_late_fee_rate = #{lateFeeRate},
+            outstanding_principal = principal_amount,
+            start_date = #{startDate}, maturity_date = #{maturityDate},
+            status = 'ACTIVE', updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{enrollmentId} AND status = 'PENDING'
+    </update>
+
+    <update id="rejectDepositEnrollment">
+        UPDATE T_DPT_ENROLL_M SET status = 'REJECTED', updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{enrollmentId} AND status = 'PENDING'
+    </update>
+    <update id="rejectSavingEnrollment">
+        UPDATE T_SVG_ENROLL_M SET status = 'REJECTED', updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{enrollmentId} AND status = 'PENDING'
+    </update>
+    <update id="rejectLoanEnrollment">
+        UPDATE T_LON_ENROLL_M SET status = 'REJECTED', updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{enrollmentId} AND status = 'PENDING'
+    </update>
+
+    <insert id="insertFirstSavingPayment">
+        INSERT INTO T_SVG_PAYHIST_H
+            (saving_enrollment_id, transfer_id, installment_no, amount,
+             paid_amount, status, paid_at)
+        VALUES (#{enrollmentId}, #{transferId}, 1, #{amount}, #{amount},
+                'PAID', CURRENT_TIMESTAMP)
+    </insert>
+
+    <select id="selectDueSavingPaymentEnrollmentIds" resultType="long">
+        SELECT enrollment.id
+        FROM T_SVG_ENROLL_M enrollment
+        WHERE enrollment.status = 'ACTIVE'
+          AND enrollment.auto_transfer = TRUE
+          AND enrollment.start_date &lt;= #{paymentDate}
+          AND TIMESTAMPDIFF(MONTH, enrollment.start_date, #{paymentDate})
+                BETWEEN 0 AND enrollment.term_months - 1
+          AND DATE_ADD(
+                enrollment.start_date,
+                INTERVAL TIMESTAMPDIFF(
+                    MONTH, enrollment.start_date, #{paymentDate}) MONTH
+              ) = #{paymentDate}
+        ORDER BY enrollment.id
+    </select>
+
+    <select id="selectDueSavingPaymentForUpdate"
+            resultType="com.teenyfin.teenymoney.domain.financialproduct.vo.SavingPaymentDueVO">
+        SELECT enrollment.id AS enrollment_id,
+               enrollment.child_id,
+               enrollment.wallet_id AS product_wallet_id,
+               enrollment.monthly_amount,
+               TIMESTAMPDIFF(MONTH, enrollment.start_date, #{paymentDate}) + 1
+                   AS installment_no
+        FROM T_SVG_ENROLL_M enrollment
+        WHERE enrollment.id = #{enrollmentId}
+          AND enrollment.status = 'ACTIVE'
+          AND enrollment.auto_transfer = TRUE
+          AND enrollment.start_date &lt;= #{paymentDate}
+          AND TIMESTAMPDIFF(MONTH, enrollment.start_date, #{paymentDate})
+                BETWEEN 0 AND enrollment.term_months - 1
+          AND DATE_ADD(
+                enrollment.start_date,
+                INTERVAL TIMESTAMPDIFF(
+                    MONTH, enrollment.start_date, #{paymentDate}) MONTH
+              ) = #{paymentDate}
+        FOR UPDATE
+    </select>
+
+    <select id="countSavingPaymentHistory" resultType="int">
+        SELECT COUNT(*)
+        FROM T_SVG_PAYHIST_H
+        WHERE saving_enrollment_id = #{enrollmentId}
+          AND installment_no = #{installmentNo}
+    </select>
+
+    <insert id="insertSavingPaymentHistory">
+        INSERT INTO T_SVG_PAYHIST_H
+            (saving_enrollment_id, transfer_id, installment_no, amount,
+             paid_amount, status, paid_at)
+        VALUES
+            (#{enrollmentId}, #{transferId}, #{installmentNo}, #{amount},
+             #{paidAmount}, #{status},
+             CASE WHEN #{status} = 'PAID' THEN CURRENT_TIMESTAMP ELSE NULL END)
+    </insert>
 
     <insert id="upsertDepositProduct">
         INSERT INTO T_DPT_PROD_M (
