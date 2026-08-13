@@ -7,6 +7,7 @@ import com.teenyfin.teenymoney.domain.quest.vo.QuestVerificationVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.time.LocalDateTime;
 
@@ -100,4 +101,25 @@ public interface QuestMapper {
             @Param("updatedAt") LocalDateTime updatedAt);
 
     int insertVerification(QuestVerificationVO verification);
+
+    /**
+     * 마감 대상을 상태별로 잠그고 가져온다. 다른 인스턴스가 잡은 행은 기다리지 않고 건너뛴다.
+     *
+     * excludeIds 는 이번 실행에서 이미 실패한 퀘스트다. 실패해도 상태가 그대로라
+     * (deadline ASC, id ASC) 정렬에서 계속 맨 앞에 오기 때문에, 자바에서 건너뛰기만 하면
+     * 조회 창이 앞으로 나가지 못하고 뒤의 정상 대상이 영원히 막힌다. 조회 단계에서 뺀다.
+     * 비어 있으면 조건 자체가 붙지 않는다.
+     */
+    List<QuestVO> selectDeadlineTargetsForUpdate(
+            @Param("status") QuestStatus status,
+            @Param("now") LocalDateTime now,
+            @Param("limit") int limit,
+            @Param("excludeIds") Collection<Long> excludeIds);
+
+    int updateStatusForDeadline(
+            @Param("questId") Long questId,
+            @Param("fromStatus") QuestStatus fromStatus,
+            @Param("toStatus") QuestStatus toStatus,
+            @Param("remainingCount") Integer remainingCount,
+            @Param("endedAt") LocalDateTime endedAt);
 }

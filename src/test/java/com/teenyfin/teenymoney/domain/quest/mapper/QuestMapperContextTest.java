@@ -61,7 +61,9 @@ class QuestMapperContextTest {
                 "updateVerificationReview",
                 "updateCompletedByParent",
                 "updateAfterRejectionByParent",
-                "insertVerification")) {
+                "insertVerification",
+                "selectDeadlineTargetsForUpdate",
+                "updateStatusForDeadline")) {
             assertTrue(sqlSessionFactory.getConfiguration()
                     .hasStatement(NAMESPACE + "." + statement), statement);
         }
@@ -204,6 +206,54 @@ class QuestMapperContextTest {
         assertTrue(update.contains("deadline = COALESCE(?, deadline)"), update);
         assertTrue(update.contains("parent_id = ?"), update);
         assertTrue(update.contains("AND status = 'PENDING'"), update);
+    }
+
+    @Test
+    @DisplayName("마감 대상 조회는 인덱스 순서로 정렬하고 잠긴 행을 건너뛴다")
+    void deadlineTargetSelectUsesIndexOrderAndSkipsLockedRows() {
+        String sql = sql("selectDeadlineTargetsForUpdate", Map.of(
+                "status", QuestStatus.AVAILABLE,
+                "now", LocalDateTime.of(2026, 8, 10, 10, 0),
+                "limit", 200));
+
+        assertTrue(sql.contains("q.status = ?"), sql);
+        assertTrue(sql.contains("q.deadline < ?"), sql);
+        assertFalse(sql.contains("q.deadline <= ?"), sql);
+        assertTrue(sql.contains("ORDER BY q.deadline ASC, q.id ASC"), sql);
+        assertTrue(sql.contains("FOR UPDATE SKIP LOCKED"), sql);
+        assertFalse(sql.contains("NOT IN"), sql);
+    }
+
+    @Test
+    @DisplayName("이번 실행에서 실패한 퀘스트는 마감 대상 조회에서 제외된다")
+    void deadlineTargetSelectExcludesFailedQuestIds() {
+        // 실패해도 상태가 그대로라 (deadline, id) 정렬 맨 앞에 계속 남는다. 자바에서만
+        // 건너뛰면 조회 창이 앞으로 나가지 못해 뒤의 정상 대상이 영원히 처리되지 않는다.
+        String sql = sql("selectDeadlineTargetsForUpdate", Map.of(
+                "status", QuestStatus.AVAILABLE,
+                "now", LocalDateTime.of(2026, 8, 10, 10, 0),
+                "limit", 200,
+                "excludeIds", List.of(11L, 22L)));
+
+        assertTrue(sql.contains("q.id NOT IN"), sql);
+        assertTrue(sql.contains("FOR UPDATE SKIP LOCKED"), sql);
+    }
+
+    @Test
+    @DisplayName("마감 상태 변경은 기대 상태일 때만 적용되고 종료 시각을 남긴다")
+    void deadlineStatusUpdateAppliesOnlyOnExpectedStatusAndSetsEndedAt() {
+        String sql = sql("updateStatusForDeadline", Map.of(
+                "questId", 55L,
+                "fromStatus", QuestStatus.AVAILABLE,
+                "toStatus", QuestStatus.EXPIRED,
+                "remainingCount", 0,
+                "endedAt", LocalDateTime.of(2026, 8, 10, 10, 0)));
+
+        assertTrue(sql.contains("AND status = ?"), sql);
+        assertTrue(sql.contains("ended_at = ?"), sql);
+        assertTrue(sql.contains("remaining_count = COALESCE(?, remaining_count)"), sql);
+        assertFalse(sql.contains("child_id"), sql);
+        assertFalse(sql.contains("parent_id"), sql);
     }
 
     private String sql(String statement, Map<String, Object> params) {
