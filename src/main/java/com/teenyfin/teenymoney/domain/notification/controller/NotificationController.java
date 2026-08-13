@@ -22,7 +22,7 @@ public class NotificationController {
     private final NotificationService notificationService;
 
     @ApiOperation(value = "푸시 알림 테스트", notes = "푸시 알림 기능을 테스트하기 위한 API입니다.")
-    @GetMapping("/test")
+    @PostMapping("/test")
     public ApiResponse<Void> testNotification(
             @AuthenticationPrincipal MemberPrincipal memberPrincipal) {
         notificationService.createNotification(memberPrincipal.memberId(), "결제가 완료됐어요", "GS25 강남점 · 3,200원", NotificationReferenceType.PAYMENT, 1L, true);
@@ -51,5 +51,12 @@ public class NotificationController {
             @AuthenticationPrincipal MemberPrincipal memberPrincipal) {
         notificationService.readAllNotifications(memberPrincipal.memberId());
         return ApiResponse.ok();
+    }
+
+    @ApiOperation(value = "읽지 않은 알림 개수 조회", notes = "아직 읽지 않은 알림의 개수를 반환합니다.")
+    @GetMapping("/unread")
+    public ApiResponse<Integer> getUnreadNotificationCount(
+            @AuthenticationPrincipal MemberPrincipal memberPrincipal) {
+        return ApiResponse.ok(notificationService.getUnreadNotificationCount(memberPrincipal.memberId()));
     }
 }

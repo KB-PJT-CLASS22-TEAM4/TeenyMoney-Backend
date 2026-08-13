@@ -41,4 +41,10 @@
         WHERE member_id = #{memberId} AND is_read = false
     </update>
 
+    <select id="countIsReadFalse" resultType="int">
+        SELECT COUNT(*)
+        FROM T_NTF_NOTI_L
+        WHERE member_id = #{memberId} AND is_read = false
+    </select>
+
 </mapper>

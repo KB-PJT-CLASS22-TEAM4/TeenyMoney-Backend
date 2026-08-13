@@ -91,17 +91,24 @@ public class NotificationService {
                 .toList();
     }
 
-    // 하나의 알림을 읽음 처리한다.
+    // 단일 알림 읽음 처리
     @Transactional
     public void readNotification(Long memberId, Long notificationId) {
 
         notificationMapper.updateIsReadTrue(notificationId);
     }
 
-    // 모든 알림을 읽음 처리한다.
+    // 전체 알림 읽음 처리
     @Transactional
     public void readAllNotifications(Long memberId) {
 
         notificationMapper.updateAllIsReadTrue(memberId);
+    }
+
+    // 아직 읽지 않은 알림 개수 조회
+    @Transactional(readOnly = true)
+    public Integer getUnreadNotificationCount(Long memberId) {
+
+        return notificationMapper.countIsReadFalse(memberId);
     }
 }

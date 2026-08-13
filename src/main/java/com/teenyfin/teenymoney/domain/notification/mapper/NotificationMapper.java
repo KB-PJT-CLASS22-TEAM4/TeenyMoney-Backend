@@ -20,4 +20,7 @@ public interface NotificationMapper {
 
     // 전체 알림 읽음 처리
     void updateAllIsReadTrue(@Param("memberId") Long memberId);
+
+    // 읽지 않은 알림 개수 조회
+    int countIsReadFalse(@Param("memberId") Long memberId);
 }
