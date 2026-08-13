@@ -3,7 +3,7 @@
 --
 -- 실행 순서:
 --   1. schema/teenymoney_schema_renamed.sql
---   2. migration/V001 ~ V006 전부, 번호 순서대로
+--   2. migration/V001 ~ V020 전부, 파일명 순서대로 (V006 다음 V006_1, V019 없음)
 --   3. seed/01_seed_valid_data.sql (이 파일)
 --
 -- 세 단계 모두 에러 없이 끝나야 한다. 하나라도 실패하면 제약조건이나 순서에 버그가 있는 것이다.
@@ -32,10 +32,10 @@
 --
 --  3) PARENT 의 teeny_score 는 NULL 이다. 컬럼을 생략하면 DB 기본값 600이 들어간다.
 --     등급 판정이 T_TNY_GRADE_A 를 BETWEEN 으로 조회하므로 600이면 부모가
---     '양호'(600~799)로 매칭되어 우대금리 0.20%와 오늘만허용 3회를 받는다.
+--     '스타터'(450~649)로 매칭되어 우대금리 1.00%와 오늘만허용 3회를 받는다.
 --     스키마 주석도 "(자녀만 사용)"이고 CHECK 가 IS NULL 을 허용한다.
 INSERT INTO `T_MBR_INFO_M` (`id`, `role`, `name`, `birth_date`, `phone_number`, `email`, `password`, `teeny_score`, `customer_key`, `status`)
-VALUES (1, 'PARENT', '김부모', '1985-03-11', '01011111111', 'parent1@test.com',
+VALUES (1, 'PARENT', '김부모', '1985-03-11', '01011111111', 'parent1@naver.com',
         '$2a$10$Ii6qH9kVC2z.mkEdiVas9.dN9yr/wZXPoSUgExNjp7N9Dra8avcSy',
         NULL, 'toss-customer-uuid-1', 'ACTIVE');
 
@@ -46,13 +46,15 @@ VALUES (1, 'PARENT', '김부모', '1985-03-11', '01011111111', 'parent1@test.com
 -- +10 이력이 있고 그 행의 score_after 가 610이기 때문이다. 이 컬럼은 이력의 최신 score_after 를
 -- 캐시한 값이라, 둘이 어긋나면 "점수 이벤트 적용 후 member.teeny_score == 최신 score_after" 를
 -- 검증하는 테스트가 시작부터 깨진 값을 물고 간다. 한쪽을 바꾸면 반드시 다른 쪽도 바꾼다.
--- 610은 여전히 '양호'(600~799) 구간이라 우대금리 0.20%p 가정은 그대로 유지된다.
-INSERT INTO `T_MBR_INFO_M` (`id`, `role`, `name`, `birth_date`, `phone_number`, `email`, `password`, `payment_password`, `teeny_score`, `status`)
+-- 610은 '스타터'(450~649) 구간이며 월간 적용 등급도 같은 등급으로 고정한다.
+INSERT INTO `T_MBR_INFO_M` (`id`, `role`, `name`, `birth_date`, `phone_number`, `email`, `password`, `payment_password`, `teeny_score`, `applied_grade_id`, `grade_applied_at`, `status`)
 VALUES
-(2, 'CHILD', '김첫째', '2013-05-20', '01022222222', 'child1@test.com',
- '$2a$10$Ii6qH9kVC2z.mkEdiVas9.dN9yr/wZXPoSUgExNjp7N9Dra8avcSy', 'hashed_pay_pw', 610, 'ACTIVE'),
-(3, 'CHILD', '김둘째', '2015-09-02', '01033333333', 'child2@test.com',
- '$2a$10$Ii6qH9kVC2z.mkEdiVas9.dN9yr/wZXPoSUgExNjp7N9Dra8avcSy', 'hashed_pay_pw', 600, 'ACTIVE');
+(2, 'CHILD', '김첫째', '2013-05-20', '01022222222', 'child1@gmail.com',
+ '$2a$10$Ii6qH9kVC2z.mkEdiVas9.dN9yr/wZXPoSUgExNjp7N9Dra8avcSy', 'hashed_pay_pw', 610,
+ (SELECT `grade_id` FROM `T_TNY_GRADE_A` WHERE 610 BETWEEN `min_score` AND `max_score`), '2026-08-01 00:00:00', 'ACTIVE'),
+(3, 'CHILD', '김둘째', '2015-09-02', '01033333333', 'child2@gmail.com',
+ '$2a$10$Ii6qH9kVC2z.mkEdiVas9.dN9yr/wZXPoSUgExNjp7N9Dra8avcSy', 'hashed_pay_pw', 600,
+ (SELECT `grade_id` FROM `T_TNY_GRADE_A` WHERE 600 BETWEEN `min_score` AND `max_score`), '2026-08-01 00:00:00', 'ACTIVE');
 
 -- T_MBR_CONN_R: 부모-자녀 연동 (부모 1명 고정이므로 자녀당 1건)
 INSERT INTO `T_MBR_CONN_R` (`id`, `parent_id`, `child_id`, `status`)
@@ -99,15 +101,6 @@ VALUES
  'AGREED', 'LEGAL_GUARDIAN', NULL, 'SMS_TEST', 'lg-verify-child-3', '2026-06-01 10:05:00'),
 (6, 3, (SELECT `id` FROM `T_MBR_AGRMT_M` WHERE `code` = 'PRIVACY' AND `version` = '1.0'),
  'AGREED', 'LEGAL_GUARDIAN', NULL, 'SMS_TEST', 'lg-verify-child-3', '2026-06-01 10:05:00');
-
--- T_TNY_GRADE_A: 참조용 상수 테이블
-INSERT INTO `T_TNY_GRADE_A` (`grade_id`, `grade_name`, `min_score`, `max_score`, `bonus_rate`, `monthly_override_limit`, `color`)
-VALUES
-(1, '회복필요', 0, 199, 0.00, 0, '#FF4D4D'),
-(2, '주의', 200, 399, 0.00, 1, '#FF9F40'),
-(3, '보통', 400, 599, 0.10, 2, '#FFD400'),
-(4, '양호', 600, 799, 0.20, 3, '#4CAF50'),
-(5, '우수', 800, 1000, 0.30, 5, '#2196F3');
 
 -- =====================================================================
 -- T_MCC_CTGR_C / T_MCC_CODE_C 시드 데이터
@@ -3446,17 +3439,14 @@ VALUES (1, 1, 'billing-key-card-001', 'CARD', '신한카드', '1234-56**-****-78
 INSERT INTO `T_PAY_METHOD_M` (`id`, `parent_id`, `billing_key`, `type`, `account_bank_name`, `account_number`, `is_primary`, `status`)
 VALUES (2, 1, 'billing-key-account-001', 'ACCOUNT', '카카오뱅크', '3333-**-*****1', FALSE, 'ACTIVE');
 
--- T_DPT_PROD_M / T_SVG_PROD_M / T_LON_PROD_M 상품
-INSERT INTO `T_DPT_PROD_M` (`id`, `name`, `rate_1m`, `rate_3m`, `rate_6m`, `rate_12m`, `early_termination_rate`, `min_amount`, `max_amount`, `min_teeny_score`)
-VALUES (1, '티니 자유예금', 1.5, 2.0, 2.5, 3.0, 0.5, 10000, 5000000, 0);
+-- T_DPT_PROD_M / T_SVG_PROD_M 상품. 대출 상품은 V010에서 등급별로 생성된다.
+INSERT INTO `T_DPT_PROD_M` (`id`, `name`, `interest_calculation_type`, `rate_1m`, `rate_3m`, `rate_6m`, `rate_12m`, `early_termination_rate`, `min_amount`, `max_amount`)
+VALUES (1, '티니 자유예금', 'SIMPLE', 1.5, 2.0, 2.5, 3.0, 0.5, 10000, 5000000);
 
-INSERT INTO `T_SVG_PROD_M` (`id`, `name`, `savings_type`, `interest_calculation_type`, `rate_12m`, `early_termination_rate`, `min_month_amount`, `max_month_amount`, `min_teeny_score`)
+INSERT INTO `T_SVG_PROD_M` (`id`, `name`, `savings_type`, `interest_calculation_type`, `rate_12m`, `early_termination_rate`, `min_month_amount`, `max_month_amount`)
 VALUES
-(1, '티니 정기적금', 'FIXED', 'SIMPLE', 4.0, 1.0, 10000, 500000, 400),
-(2, '티니 자유적금', 'FREE', 'SIMPLE', 3.5, 1.0, 1000, 500000, 0);
-
-INSERT INTO `T_LON_PROD_M` (`id`, `name`, `base_rate`, `late_fee_rate`, `repayment_type`, `min_amount`, `max_amount`, `min_teeny_score`)
-VALUES (1, '티니 새싹 대출', 5.0, 8.0, 'EQUAL_PRINCIPAL_INTEREST', 10000, 200000, 300);
+(1, '티니 정기적금', 'FIXED', 'SIMPLE', 4.0, 1.0, 10000, 500000),
+(2, '티니 자유적금', 'FREE', 'SIMPLE', 3.5, 1.0, 1000, 500000);
 
 -- T_DPT_ENROLL_M: 자녀2가 예금 가입, 승인 완료 상태
 -- ACTIVE 예금은 반드시 예치금이 들어와 있어야 한다. 아래 transfer 3 이 그 입금이고
@@ -3464,7 +3454,7 @@ VALUES (1, '티니 새싹 대출', 5.0, 8.0, 'EQUAL_PRINCIPAL_INTEREST', 10000, 
 -- 애초에 개설될 수 없는 예금이 되고, 이자 계산 로직을 돌려도 0이 나와 조용히 통과한다.
 INSERT INTO `T_DPT_ENROLL_M`
 	(`id`, `deposit_id`, `child_id`, `parent_id`, `wallet_id`, `applied_rate`, `applied_early_termination_rate`, `term_months`, `start_date`, `maturity_date`, `status`)
-VALUES (1, 1, 2, 1, 4, 3.2, 0.5, 12, '2026-07-01', '2027-07-01', 'ACTIVE');
+VALUES (1, 1, 2, 1, 4, 4.0, 0.5, 12, '2026-07-01', '2027-07-01', 'ACTIVE');
 
 -- T_WLT_TRF_L: 예금 가입 예치금 이체 (자녀2 지갑 -> 예금 지갑), 가입 확정일과 같은 날
 INSERT INTO `T_WLT_TRF_L` (`id`, `from_wallet_id`, `to_wallet_id`, `idempotency_key`, `amount`, `type`, `status`, `created_at`)
@@ -3476,7 +3466,7 @@ VALUES (3, 2, 4, UUID(), 50000, 'DEPOSIT', 'COMPLETED', '2026-07-01 09:00:00');
 -- start_date 를 7/25로 두면 2회차 만기일이 미래라, 연체 배치가 상태를 재계산하는 순간 MISSED 가 뒤집힌다.
 INSERT INTO `T_SVG_ENROLL_M`
 	(`id`, `saving_id`, `child_id`, `parent_id`, `wallet_id`, `applied_rate`, `applied_early_termination_rate`, `term_months`, `monthly_amount`, `payment_day`, `auto_transfer`, `start_date`, `maturity_date`, `status`)
-VALUES (1, 1, 2, 1, 5, 4.2, 1.0, 12, 100000, 25, TRUE, '2026-06-25', '2027-06-25', 'ACTIVE');
+VALUES (1, 1, 2, 1, 5, 5.0, 1.0, 12, 100000, 25, TRUE, '2026-06-25', '2027-06-25', 'ACTIVE');
 
 -- T_LON_ENROLL_M: 자녀3가 대출 실행 후 1회차 상환까지 마친 상태
 --
@@ -3486,11 +3476,12 @@ VALUES (1, 1, 2, 1, 5, 4.2, 1.0, 12, 100000, 25, TRUE, '2026-06-25', '2027-06-25
 -- 실행 직후(상환 이력 0건) 상태를 원하면 아래 상환 이력과 transfer 2 를 같이 지워야 한다.
 --
 -- applied_rate / applied_late_fee_rate 는 상품의 base_rate / late_fee_rate 를 그대로 스냅샷한다.
--- 예적금은 등급 우대금리(bonus_rate)라는 문서화된 가산 규칙이 있어 3.0+0.20, 4.0+0.20 이지만
+-- 예적금은 등급 우대금리(bonus_rate)라는 문서화된 가산 규칙이 있어 3.0+1.00, 4.0+1.00 이지만
 -- 대출에는 그런 규칙이 없다. 근거 없이 +0.5 를 얹으면 금리 산출 로직의 기대값을 만들 수 없다.
 INSERT INTO `T_LON_ENROLL_M`
 	(`id`, `loan_id`, `parent_id`, `child_id`, `principal_amount`, `outstanding_principal`, `overdue_interest`, `applied_rate`, `applied_late_fee_rate`, `auto_transfer`, `payment_day`, `paid_count`, `term_months`, `start_date`, `maturity_date`, `status`)
-VALUES (1, 1, 1, 3, 100000, 92000, 0, 5.0, 8.0, TRUE, 25, 1, 12, '2026-07-01', '2027-07-01', 'ACTIVE');
+VALUES (1, (SELECT `id` FROM `T_LON_PROD_M` WHERE `name` = '스타터 원리금균등 대출'),
+        1, 3, 100000, 92000, 0, 7.0, 8.0, TRUE, 25, 1, 12, '2026-07-01', '2027-07-01', 'ACTIVE');
 
 -- T_WLT_TRF_L: 적금 1회차 자동이체 성공 건
 INSERT INTO `T_WLT_TRF_L` (`id`, `from_wallet_id`, `to_wallet_id`, `idempotency_key`, `amount`, `type`, `status`, `created_at`)
@@ -3527,10 +3518,10 @@ VALUES (1, 2, 1, UUID(), 50000, 'SUCCESS', 'charge-order-0001', 'toss-payment-ke
 -- 자녀2 전용 WATCH 정책이 있고 커스텀 정책이 기본정책을 덮는다(스키마 주석: "이 행이 없으면
 -- category.default_policy 적용"). 여기에 ALLOW 를 남겨두면 정책 판정 로직이 커스텀 정책을
 -- 무시해도 시드 값과 일치해 테스트가 통과한다. WATCH 는 관찰이지 차단이 아니므로 결제는 SUCCESS 다.
-INSERT INTO `T_PAY_TRAN_L` (`id`, `wallet_id`, `category_id`, `idempotency_key`, `applied_policy`, `amount`, `status`, `order_id`, `payment_key`, `created_at`)
+INSERT INTO `T_PAY_TRAN_L` (`id`, `wallet_id`, `category_id`, `idempotency_key`, `applied_policy`, `merchant_name`, `amount`, `status`, `order_id`, `payment_key`, `created_at`)
 VALUES (1, 2,
         (SELECT `id` FROM `T_MCC_CTGR_C` WHERE `name` = '편의점'),
-        UUID(), 'WATCH', 3500, 'SUCCESS', 'order-0001', 'toss-payment-key-0001', '2026-07-30 18:00:00');
+        UUID(), 'WATCH', '티니편의점', 3500, 'SUCCESS', 'order-0001', 'toss-payment-key-0001', '2026-07-30 18:00:00');
 
 -- ============================================================
 -- T_WLT_HIST_H: 위의 모든 이체/충전/결제를 양쪽 지갑에 빠짐없이 반영한 원장
@@ -3612,8 +3603,8 @@ INSERT INTO `T_ALW_SCHEDULE_M` (`id`, `parent_id`, `child_id`, `amount`, `cycle_
 VALUES (1, 1, 3, 20000, 'MONTHLY', 5, '2026-08-05');
 
 -- T_NTF_NOTI_L: 위 결제(payment 1) 직후 부모에게 나간 알림
-INSERT INTO `T_NTF_NOTI_L` (`id`, `member_id`, `type`, `content`, `reference_type`, `reference_id`, `created_at`)
-VALUES (1, 1, 'PAYMENT', '자녀2가 3,500원을 결제했어요', 'PAYMENT', 1, '2026-07-30 18:00:01');
+INSERT INTO `T_NTF_NOTI_L` (`id`, `member_id`, `title`, `content`, `reference_type`, `reference_id`, `created_at`)
+VALUES (1, 1, '결제 알림', '자녀2가 3,500원을 결제했어요', 'PAYMENT', 1, '2026-07-30 18:00:01');
 
 -- ============================================================
 -- 정합성 검증
