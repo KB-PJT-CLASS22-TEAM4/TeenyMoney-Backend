@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.teenyfin.teenymoney.domain.notification.mapper.MemberNotificationMapper">
+
+    <resultMap id="memberNotificationResultMap" type="com.teenyfin.teenymoney.domain.notification.vo.MemberNotificationVO">
+        <result property="fcmToken" column="fcm_token"/>
+        <result property="notiPayment" column="noti_payment"/>
+        <result property="notiQuest" column="noti_quest"/>
+        <result property="notiFinance" column="noti_finance"/>
+        <result property="notiAllowance" column="noti_allowance"/>
+    </resultMap>
+
+    <select id="selectNotificationInfo" resultMap="memberNotificationResultMap">
+        SELECT fcm_token, noti_payment, noti_quest, noti_finance, noti_allowance
+        FROM T_MBR_INFO_M
+        WHERE id = #{memberId}
+    </select>
+
+</mapper>
