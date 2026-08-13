@@ -1,0 +1,13 @@
+-- 흐름 테스트가 만든 행을 FK 역순으로 지운다.
+-- T_WLT_HIST_H 는 T_WLT_TRF_L 을 참조하므로 원장을 먼저 지운다.
+DELETE FROM `T_TNY_SCOREHIST_H` WHERE `child_id` = 900012;
+DELETE FROM `T_WLT_HIST_H` WHERE `wallet_id` IN (-900011, -900012);
+DELETE FROM `T_WLT_TRF_L`
+WHERE `from_wallet_id` IN (-900011, -900012)
+   OR `to_wallet_id` IN (-900011, -900012);
+DELETE FROM `T_QST_VERIFY_L`
+WHERE `quest_id` IN (SELECT `id` FROM `T_QST_BASE_M` WHERE `parent_id` = 900011);
+DELETE FROM `T_QST_BASE_M` WHERE `parent_id` = 900011;
+DELETE FROM `T_WLT_BASE_M` WHERE `member_id` IN (900011, 900012);
+DELETE FROM `T_MBR_CONN_R` WHERE `parent_id` = 900011;
+DELETE FROM `T_MBR_INFO_M` WHERE `id` IN (900011, 900012);
