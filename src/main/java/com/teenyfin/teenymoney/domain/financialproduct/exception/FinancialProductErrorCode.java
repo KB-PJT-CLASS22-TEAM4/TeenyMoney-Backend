@@ -36,6 +36,8 @@ public enum FinancialProductErrorCode implements ErrorCode {
             HttpStatus.BAD_REQUEST, "연결된 부모 회원을 찾을 수 없습니다."),
     FINANCIAL_PRODUCT_PENDING_TRANSFER_NOT_FOUND(
             HttpStatus.CONFLICT, "가입 요청에 연결된 대기 송금을 찾을 수 없습니다."),
+    FINANCIAL_PRODUCT_CUSTOM_INVALID_CONDITION(
+            HttpStatus.BAD_REQUEST, "부모 생성 금융상품의 입력 조건이 올바르지 않습니다."),
     FINLIFE_API_KEY_MISSING(
             HttpStatus.SERVICE_UNAVAILABLE, "금감원 API 설정이 필요합니다."),
     FINLIFE_API_UNAVAILABLE(

@@ -18,6 +18,8 @@ import java.util.List;
 public class FinancialProductListResponseDTO {
     private final Long productId;
     private final FinancialProductType productType;
+    @ApiModelProperty(value = "상품 출처", example = "PARENT")
+    private final String productSource;
     private final String financialCompanyName;
     private final String productName;
     @ApiModelProperty(value = "이번 달 적용 등급 ID", example = "2")

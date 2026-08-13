@@ -11,6 +11,7 @@ import com.teenyfin.teenymoney.domain.financialproduct.vo.DepositProductVO;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductBenefitVO;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductEnrollmentVO;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductType;
+import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductSource;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.LoanProductVO;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.SavingProductVO;
 import com.teenyfin.teenymoney.domain.family.service.FamilyAccessService;
@@ -50,13 +51,13 @@ public class FinancialProductService {
         FinancialProductBenefitVO benefit = findBenefit(principal);
         List<FinancialProductListResponseDTO> products = new ArrayList<>();
 
-        financialProductMapper.selectActiveDepositProducts().stream()
+        financialProductMapper.selectVisibleDepositProducts(principal.memberId()).stream()
                 .map(product -> depositListItem(product, benefit))
                 .forEach(products::add);
-        financialProductMapper.selectActiveSavingProducts().stream()
+        financialProductMapper.selectVisibleSavingProducts(principal.memberId()).stream()
                 .map(product -> savingListItem(product, benefit))
                 .forEach(products::add);
-        financialProductMapper.selectActiveLoanProducts().stream()
+        financialProductMapper.selectVisibleLoanProducts(principal.memberId()).stream()
                 .map(product -> loanListItem(product, benefit))
                 .forEach(products::add);
         return products;
@@ -66,7 +67,7 @@ public class FinancialProductService {
     public List<FinancialProductListResponseDTO> getDepositProducts(
             MemberPrincipal principal) {
         FinancialProductBenefitVO benefit = findBenefit(principal);
-        return financialProductMapper.selectActiveDepositProducts().stream()
+        return financialProductMapper.selectVisibleDepositProducts(principal.memberId()).stream()
                 .map(product -> depositListItem(product, benefit))
                 .toList();
     }
@@ -75,7 +76,7 @@ public class FinancialProductService {
     public List<FinancialProductListResponseDTO> getSavingProducts(
             MemberPrincipal principal) {
         FinancialProductBenefitVO benefit = findBenefit(principal);
-        return financialProductMapper.selectActiveSavingProducts().stream()
+        return financialProductMapper.selectVisibleSavingProducts(principal.memberId()).stream()
                 .map(product -> savingListItem(product, benefit))
                 .toList();
     }
@@ -84,7 +85,7 @@ public class FinancialProductService {
     public List<FinancialProductListResponseDTO> getLoanProducts(
             MemberPrincipal principal) {
         FinancialProductBenefitVO benefit = findBenefit(principal);
-        return financialProductMapper.selectActiveLoanProducts().stream()
+        return financialProductMapper.selectVisibleLoanProducts(principal.memberId()).stream()
                 .map(product -> loanListItem(product, benefit))
                 .toList();
     }
@@ -199,9 +200,12 @@ public class FinancialProductService {
             Long productId) {
         FinancialProductBenefitVO benefit = findBenefit(principal);
         return switch (FinancialProductType.from(productType)) {
-            case DEPOSIT -> depositDetail(findDeposit(productId), benefit);
-            case SAVING -> savingDetail(findSaving(productId), benefit);
-            case LOAN -> loanDetail(findLoan(productId), benefit);
+            case DEPOSIT -> depositDetail(
+                    findDeposit(productId, principal.memberId()), benefit);
+            case SAVING -> savingDetail(
+                    findSaving(productId, principal.memberId()), benefit);
+            case LOAN -> loanDetail(
+                    findLoan(productId, principal.memberId()), benefit);
         };
     }
 
@@ -209,21 +213,24 @@ public class FinancialProductService {
     public FinancialProductDetailResponseDTO getDepositProductDetail(
             MemberPrincipal principal,
             Long productId) {
-        return depositDetail(findDeposit(productId), findBenefit(principal));
+        return depositDetail(findDeposit(productId, principal.memberId()),
+                findBenefit(principal));
     }
 
     @Transactional(readOnly = true)
     public FinancialProductDetailResponseDTO getSavingProductDetail(
             MemberPrincipal principal,
             Long productId) {
-        return savingDetail(findSaving(productId), findBenefit(principal));
+        return savingDetail(findSaving(productId, principal.memberId()),
+                findBenefit(principal));
     }
 
     @Transactional(readOnly = true)
     public FinancialProductDetailResponseDTO getLoanProductDetail(
             MemberPrincipal principal,
             Long productId) {
-        return loanDetail(findLoan(productId), findBenefit(principal));
+        return loanDetail(findLoan(productId, principal.memberId()),
+                findBenefit(principal));
     }
 
     @Transactional(readOnly = true)
@@ -302,27 +309,27 @@ public class FinancialProductService {
         return principal.memberId();
     }
 
-    private DepositProductVO findDeposit(Long id) {
+    private DepositProductVO findDeposit(Long id, Long memberId) {
         DepositProductVO product =
-                financialProductMapper.selectActiveDepositProductById(id);
+                financialProductMapper.selectVisibleDepositProductById(id, memberId);
         if (product == null) {
             throw productNotFound();
         }
         return product;
     }
 
-    private SavingProductVO findSaving(Long id) {
+    private SavingProductVO findSaving(Long id, Long memberId) {
         SavingProductVO product =
-                financialProductMapper.selectActiveSavingProductById(id);
+                financialProductMapper.selectVisibleSavingProductById(id, memberId);
         if (product == null) {
             throw productNotFound();
         }
         return product;
     }
 
-    private LoanProductVO findLoan(Long id) {
+    private LoanProductVO findLoan(Long id, Long memberId) {
         LoanProductVO product =
-                financialProductMapper.selectActiveLoanProductById(id);
+                financialProductMapper.selectVisibleLoanProductById(id, memberId);
         if (product == null) {
             throw productNotFound();
         }
@@ -332,6 +339,11 @@ public class FinancialProductService {
     private BusinessException productNotFound() {
         return new BusinessException(
                 FinancialProductErrorCode.FINANCIAL_PRODUCT_NOT_FOUND);
+    }
+
+    /** 마이그레이션 이전 데이터의 null 출처는 기존 TEENY 상품으로 취급한다. */
+    private String sourceName(FinancialProductSource source) {
+        return source == null ? FinancialProductSource.TEENY.name() : source.name();
     }
 
     private FinancialProductListResponseDTO depositListItem(
@@ -345,6 +357,7 @@ public class FinancialProductService {
         return FinancialProductListResponseDTO.builder()
                 .productId(product.getId())
                 .productType(FinancialProductType.DEPOSIT)
+                .productSource(sourceName(product.getProductSource()))
                 .financialCompanyName(product.getFinancialCompanyName())
                 .productName(product.getName())
                 .appliedGradeId(benefit.getGradeId())
@@ -371,6 +384,7 @@ public class FinancialProductService {
         return FinancialProductListResponseDTO.builder()
                 .productId(product.getId())
                 .productType(FinancialProductType.SAVING)
+                .productSource(sourceName(product.getProductSource()))
                 .financialCompanyName(product.getFinancialCompanyName())
                 .productName(product.getName())
                 .appliedGradeId(benefit.getGradeId())
@@ -394,6 +408,7 @@ public class FinancialProductService {
         return FinancialProductListResponseDTO.builder()
                 .productId(product.getId())
                 .productType(FinancialProductType.LOAN)
+                .productSource(sourceName(product.getProductSource()))
                 .productName(product.getName())
                 .appliedGradeId(benefit.getGradeId())
                 .appliedGradeName(benefit.getGradeName())
@@ -401,9 +416,9 @@ public class FinancialProductService {
                 .requiredGradeName(product.getRequiredGradeName())
                 .eligible(eligible)
                 .ineligibleReason(loanIneligibleReason(product, benefit))
-                .availableTerms(LOAN_TERMS)
+                .availableTerms(loanTerms(product))
                 .baseRate(product.getBaseRate())
-                .expectedAppliedRate(product.getBaseRate())
+                .expectedAppliedRate(loanRate(product, benefit))
                 .lateFeeRate(product.getLateFeeRate())
                 .minimumAmount(product.getMinAmount())
                 .maximumAmount(product.getMaxAmount())
@@ -422,6 +437,7 @@ public class FinancialProductService {
         return FinancialProductDetailResponseDTO.builder()
                 .productId(product.getId())
                 .productType(FinancialProductType.DEPOSIT)
+                .productSource(sourceName(product.getProductSource()))
                 .financialCompanyName(product.getFinancialCompanyName())
                 .productName(product.getName())
                 .description(product.getDescription())
@@ -450,6 +466,7 @@ public class FinancialProductService {
         return FinancialProductDetailResponseDTO.builder()
                 .productId(product.getId())
                 .productType(FinancialProductType.SAVING)
+                .productSource(sourceName(product.getProductSource()))
                 .financialCompanyName(product.getFinancialCompanyName())
                 .productName(product.getName())
                 .description(product.getDescription())
@@ -474,6 +491,7 @@ public class FinancialProductService {
         return FinancialProductDetailResponseDTO.builder()
                 .productId(product.getId())
                 .productType(FinancialProductType.LOAN)
+                .productSource(sourceName(product.getProductSource()))
                 .productName(product.getName())
                 .description(product.getDescription())
                 .appliedGradeId(benefit.getGradeId())
@@ -482,9 +500,9 @@ public class FinancialProductService {
                 .requiredGradeName(product.getRequiredGradeName())
                 .eligible(loanEligible(product, benefit))
                 .ineligibleReason(loanIneligibleReason(product, benefit))
-                .availableTerms(LOAN_TERMS)
+                .availableTerms(loanTerms(product))
                 .baseRate(product.getBaseRate())
-                .expectedAppliedRate(product.getBaseRate())
+                .expectedAppliedRate(loanRate(product, benefit))
                 .lateFeeRate(product.getLateFeeRate())
                 .minimumAmount(product.getMinAmount())
                 .maximumAmount(product.getMaxAmount())
@@ -499,6 +517,26 @@ public class FinancialProductService {
                 && benefit.getGradeId() != null
                 && product.getRequiredGradeId() != null
                 && benefit.getGradeId() >= product.getRequiredGradeId();
+    }
+
+    /** 부모 생성 대출의 예상금리는 자녀 월간 적용 등급의 loanRate를 사용한다. */
+    private BigDecimal loanRate(LoanProductVO product,
+                                FinancialProductBenefitVO benefit) {
+        if (product.getProductSource() != FinancialProductSource.PARENT) {
+            return product.getBaseRate();
+        }
+        return benefit.getLoanRate();
+    }
+
+    /** 기간별 Boolean 컬럼을 API의 availableTerms 배열로 변환한다. */
+    private List<Integer> loanTerms(LoanProductVO product) {
+        List<Integer> terms = new ArrayList<>();
+        if (Boolean.TRUE.equals(product.getAvailable1m())) terms.add(1);
+        if (Boolean.TRUE.equals(product.getAvailable3m())) terms.add(3);
+        if (Boolean.TRUE.equals(product.getAvailable6m())) terms.add(6);
+        if (Boolean.TRUE.equals(product.getAvailable12m())) terms.add(12);
+        return terms.isEmpty() && product.getProductSource() != FinancialProductSource.PARENT
+                ? LOAN_TERMS : terms;
     }
 
     private String loanIneligibleReason(

@@ -11,8 +11,16 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 public class LoanProductVO {
     private Long id;
+    // 상품 출처와 부모 상품의 생성자·대상 자녀 범위
+    private FinancialProductSource productSource;
+    private Long createdByParentId;
+    private Long targetChildId;
     private String name;
     private BigDecimal baseRate;
+    private Boolean available1m;
+    private Boolean available3m;
+    private Boolean available6m;
+    private Boolean available12m;
     private BigDecimal lateFeeRate;
     private String repaymentType;
     private Long minAmount;

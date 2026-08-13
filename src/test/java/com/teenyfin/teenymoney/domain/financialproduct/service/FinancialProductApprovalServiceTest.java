@@ -96,6 +96,29 @@ class FinancialProductApprovalServiceTest {
     }
 
     @Test
+    @DisplayName("승인일과 납입일이 같으면 첫 납입일을 다음 달로 설정한다")
+    void approvalOnPaymentDaySchedulesFirstPaymentNextMonth() {
+        FinancialProductApprovalVO approval = approval(FinancialProductType.SAVING);
+        approval.setPaymentDay(11);
+        approval.setAppliedRate(new BigDecimal("4.20"));
+        approval.setEarlyTerminationRate(new BigDecimal("1.00"));
+        when(mapper.selectSavingApprovalForUpdate(1L, 7L)).thenReturn(approval);
+        SavingProductVO product = new SavingProductVO();
+        product.setId(3L);
+        when(mapper.selectActiveSavingProductById(3L)).thenReturn(product);
+        when(mapper.approveSavingEnrollment(eq(7L), eq(new BigDecimal("4.20")),
+                eq(new BigDecimal("1.00")), any(), any())).thenReturn(1);
+
+        service.approve(PARENT, "saving", 7L);
+
+        verifyNoInteractions(transferService);
+        verify(mapper).approveSavingEnrollment(eq(7L),
+                eq(new BigDecimal("4.20")), eq(new BigDecimal("1.00")),
+                eq(java.time.LocalDate.of(2026, 9, 11)),
+                eq(java.time.LocalDate.of(2027, 9, 11)));
+    }
+
+    @Test
     @DisplayName("이미 처리된 계약은 다시 승인할 수 없다")
     void processedEnrollmentCannotBeApprovedAgain() {
         FinancialProductApprovalVO approval = approval(FinancialProductType.DEPOSIT);

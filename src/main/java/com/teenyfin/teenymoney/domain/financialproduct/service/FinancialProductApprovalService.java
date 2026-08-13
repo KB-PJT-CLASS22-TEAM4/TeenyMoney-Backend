@@ -178,11 +178,16 @@ public class FinancialProductApprovalService {
         return transferService.executeTransferAtomically(approval.getTransferId());
     }
 
+    /*
+     * 승인일 < 납입일이면 이번 달 납입일을 사용한다.
+     * 승인일 >= 납입일이면 다음 달 납입일을 사용하므로,
+     * 승인일과 납입일이 같아도 가입 직후 출금하지 않는다.
+     */
     private LocalDate nextPaymentDate(LocalDate approvalDate, Integer paymentDay) {
         LocalDate paymentDate = approvalDate.withDayOfMonth(paymentDay);
-        return paymentDate.isBefore(approvalDate)
-                ? paymentDate.plusMonths(1)
-                : paymentDate;
+        return paymentDate.isAfter(approvalDate)
+                ? paymentDate
+                : paymentDate.plusMonths(1);
     }
 
     private WalletVO memberWallet(Long memberId) {
