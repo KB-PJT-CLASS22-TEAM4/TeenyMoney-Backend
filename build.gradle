@@ -96,6 +96,9 @@ dependencies {
     runtimeOnly "io.jsonwebtoken:jjwt-impl:${jjwtVersion}"
     runtimeOnly "io.jsonwebtoken:jjwt-jackson:${jjwtVersion}"
 
+    // FCM
+    implementation 'com.google.firebase:firebase-admin:9.2.0'
+
     // Bean Validation (@NotNull 등) - 구현체가 없으면 @Valid가 조용히 무시된다
     implementation 'org.hibernate.validator:hibernate-validator:6.2.5.Final'
     implementation 'org.glassfish:jakarta.el:3.0.4'
