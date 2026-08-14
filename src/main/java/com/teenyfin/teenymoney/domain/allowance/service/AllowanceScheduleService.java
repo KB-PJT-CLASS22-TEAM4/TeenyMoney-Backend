@@ -22,12 +22,14 @@ public class AllowanceScheduleService {
     private final AllowanceScheduleMapper allowanceScheduleMapper;
     private final FamilyAccessService familyAccessService;
     private final Clock clock;
+    private final AllowanceScheduleProcessor allowanceScheduleProcessor;
 
 
-    public AllowanceScheduleService(AllowanceScheduleMapper allowanceScheduleMapper, FamilyAccessService familyAccessService, Clock clock) {
+    public AllowanceScheduleService(AllowanceScheduleMapper allowanceScheduleMapper, FamilyAccessService familyAccessService, Clock clock, AllowanceScheduleProcessor allowanceScheduleProcessor) {
         this.allowanceScheduleMapper = allowanceScheduleMapper;
         this.familyAccessService = familyAccessService;
         this.clock = clock;
+        this.allowanceScheduleProcessor = allowanceScheduleProcessor;
     }
 
 
@@ -139,5 +141,12 @@ public class AllowanceScheduleService {
     }
 
 
+    // 배치 진입점
+    // 오늘이 지급일인 스케줄 id를 조회해서, 한 건씩 Processor에 위임한다.
+    public int processDuePayments(LocalDate paymentDate) {
+        List<Long> dueIds = allowanceScheduleMapper.selectDueScheduleIds(paymentDate);
+        dueIds.forEach(id -> allowanceScheduleProcessor.process(id, paymentDate));
+        return dueIds.size();
+    }
 
 }
