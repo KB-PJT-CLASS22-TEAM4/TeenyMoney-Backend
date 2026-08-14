@@ -12,6 +12,7 @@ public class PermissionVO {
     private Long id;
     private Long parentId;
     private Long childId;
+    private String category;
     private String reason;
     private String status;
     private LocalDateTime createdAt;

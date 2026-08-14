@@ -15,47 +15,45 @@
 
     <select id="selectById" resultMap="permissionResultMap">
         SELECT
-        id,
-        parent_id,
-        child_id,
-        reason,
-        status,
-        created_at
-        FROM T_TDP_REQ_L
-        WHERE id = #{permissionId}
-    </select>
-
-    <select id="selectCreatedTodayByParentId" resultMap="permissionResultMap">
-        SELECT
-        id,
-        parent_id,
-        child_id,
-        reason,
-        status,
-        created_at
-        FROM T_TDP_REQ_L
-        WHERE parent_id = #{parentId}
-        AND DATE(created_at) = CURDATE()
+        r.id,
+        r.parent_id,
+        r.child_id,
+        c.name,
+        r.reason,
+        r.status,
+        r.created_at
+        FROM T_TDP_REQ_L r
+        JOIN T_TDP_REQCTGR_R rc
+        ON r.id = rc.today_permission_id
+        JOIN T_MCC_CTGR_C c
+        ON rc.merchant_category_id = c.id
+        WHERE r.id = #{permissionId}
     </select>
 
     <select id="selectCreatedTodayByChildId" resultMap="permissionResultMap">
         SELECT
-        id,
-        parent_id,
-        child_id,
-        reason,
-        status,
-        created_at
-        FROM T_TDP_REQ_L
-        WHERE child_id = #{childId}
-        AND DATE(created_at) = CURDATE()
+        r.id,
+        r.parent_id,
+        r.child_id,
+        c.name,
+        r.reason,
+        r.status,
+        r.created_at
+        FROM T_TDP_REQ_L r
+        JOIN T_TDP_REQCTGR_R rc
+        ON r.id = rc.today_permission_id
+        JOIN T_MCC_CTGR_C c
+        ON rc.merchant_category_id = c.id
+        WHERE r.child_id = #{childId}
+        AND DATE(r.created_at) = CURDATE()
     </select>
 
-    <select id="selectPermissionCategoriesByPermissionId" resultType="java.lang.String">
-        SELECT c.name
-        FROM T_TDP_REQCTGR_R rc
-        JOIN T_MCC_CTGR_C c ON rc.merchant_category_id = c.id
-        WHERE rc.today_permission_id = #{permissionId}
+    <select id="countCreatedAtThisMonth" resultType="int">
+        SELECT COUNT(*)
+        FROM T_TDP_REQ_L
+        WHERE child_id = #{childId}
+        AND YEAR(created_at) = YEAR(CURDATE())
+        AND MONTH(created_at) = MONTH(CURDATE())
     </select>
 
     <insert id="insertPermission" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
@@ -70,12 +68,13 @@
         )
     </insert>
 
-    <insert id="insertPermissionCategories">
+    <insert id="insertPermissionCategory">
         INSERT INTO T_TDP_REQCTGR_R (today_permission_id, merchant_category_id, created_at)
-        VALUES
-        <foreach collection="categoryIds" item="categoryId" separator=",">
-            (#{permissionId}, #{categoryId}, NOW())
-        </foreach>
+        VALUES (
+            #{permissionId},
+            #{categoryId},
+            NOW())
+        )
     </insert>
 
     <update id="updatePermissionReason">

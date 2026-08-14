@@ -2,17 +2,15 @@ package com.teenyfin.teenymoney.domain.permission.service;
 
 import com.teenyfin.teenymoney.domain.categoryPolicy.exception.CategoryPolicyErrorCode;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
-import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
 import com.teenyfin.teenymoney.domain.permission.dto.request.PermissionRequestDTO;
-import com.teenyfin.teenymoney.domain.permission.dto.response.PermissionResponseChildDTO;
+import com.teenyfin.teenymoney.domain.permission.dto.request.PermissionUpdateRequestDTO;
 import com.teenyfin.teenymoney.domain.permission.dto.response.PermissionResponseDTO;
-import com.teenyfin.teenymoney.domain.permission.dto.response.PermissionResponseWrapperDTO;
 import com.teenyfin.teenymoney.domain.permission.exception.PermissionErrorCode;
 import com.teenyfin.teenymoney.domain.permission.mapper.PermissionMapper;
 import com.teenyfin.teenymoney.domain.permission.vo.PermissionInsertVO;
 import com.teenyfin.teenymoney.domain.permission.vo.PermissionVO;
+import com.teenyfin.teenymoney.domain.teenyscore.mapper.TeenyScoreMapper;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
-import com.teenyfin.teenymoney.global.storage.S3Storage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,87 +25,71 @@ public class PermissionService {
 
     private final PermissionMapper permissionMapper;
     private final MemberMapper memberMapper;
-    private final S3Storage s3Storage;
+    private final TeenyScoreMapper teenyScoreMapper;
 
     // 오늘 날짜에 생성된 오늘만 허용 요청 조회
     @Transactional(readOnly = true)
-    public PermissionResponseWrapperDTO getPermission(Long memberId, String role) {
+    public List<PermissionResponseDTO> getPermission(Long memberId, String role, Long childId) {
 
-        PermissionVO permissionVO = switch (role) {
-            case "PARENT" -> permissionMapper.selectCreatedTodayByParentId(memberId);
-            case "CHILD" -> permissionMapper.selectCreatedTodayByChildId(memberId);
-            default -> throw new BusinessException(CategoryPolicyErrorCode.INVALID_ROLE); // 추후 MemberErrorCode 추가 시 변경
-        };
-
-        // 오늘만 허용 요청이 없는 경우
-        if (permissionVO == null) {
-            return PermissionResponseWrapperDTO.builder()
-                    .isExist(false)
-                    .permission(null)
-                    .build();
+        if (role.equals("CHILD")) {
+            childId = memberId;
+        } else if (childId == null) {   // 부모의 경우 childId 값은 필수
+            throw new BusinessException(CategoryPolicyErrorCode.CHILD_ID_REQUIRED);
+        } else if (!Objects.equals(memberMapper.selectActiveParentByChildId(childId).getParentId(), memberId)) {  // 해당 자녀와 연결된 부모인지 확인
+            throw new BusinessException(CategoryPolicyErrorCode.FORBIDDEN_TO_CHILD);
         }
 
-        // 자녀 정보
-        MemberVO childVO = memberMapper.selectById(permissionVO.getChildId());
+        List<PermissionVO> permissionVOList = permissionMapper.selectCreatedTodayByChildId(childId);
 
-        // 카테고리 이름 리스트로 변환
-        List<String> categoryNameList = permissionMapper.selectPermissionCategoriesByPermissionId(permissionVO.getId());
-
-        PermissionResponseDTO permissionResponseDTO = PermissionResponseDTO.builder()
-                .id(permissionVO.getId())
-                .child(PermissionResponseChildDTO.builder()
-                        .id(childVO.getId())
-                        .name(childVO.getName())
-                        .profileImageUrl(s3Storage.presignedUrl(childVO.getProfileImageKey()))
+        return permissionVOList.stream()
+                .map(x -> PermissionResponseDTO.builder()
+                        .id(x.getId())
+                        .category(x.getCategory())
+                        .reason(x.getReason())
+                        .status(x.getStatus())
+                        .createdAt(x.getCreatedAt())
                         .build())
-                .categories(categoryNameList)
-                .reason(permissionVO.getReason())
-                .status(permissionVO.getStatus())
-                .createdAt(permissionVO.getCreatedAt())
-                .build();
-
-        return PermissionResponseWrapperDTO.builder()
-                .isExist(true)
-                .permission(permissionResponseDTO)
-                .build();
+                .toList();
     }
 
     // 새로운 오늘만 허용 요청 생성
     @Transactional
-    public PermissionResponseWrapperDTO createPermission(Long memberId, String role, PermissionRequestDTO permissionRequestDTO) {
+    public List<PermissionResponseDTO> createPermission(Long memberId, String role, PermissionRequestDTO permissionRequestDTO) {
 
         // 자녀만 오늘만 요청 생성 가능
         if (!role.equals("CHILD")) {
             throw new BusinessException(PermissionErrorCode.ONLY_CHILD_CAN_MANAGE_PERMISSION);
         }
 
-        PermissionVO permissionVO = permissionMapper.selectCreatedTodayByChildId(memberId);
+        int count = permissionMapper.countCreatedAtThisMonth(memberId); // 이번 달에 오늘만 허용을 요청한 일수
+        int monthlyLimit = teenyScoreMapper.selectTeenyScoreByChildId(memberId).getMonthlyOverrideLimit();  // 이번 달에 요청할 수 있는 일수
 
-        // 이미 오늘 날짜에 생성된 오늘만 요청이 있을 경우 추가 생성 불가
-        if (permissionVO != null) {
-            throw new BusinessException(PermissionErrorCode.ALREADY_EXIST_TODAY_PERMISSION);
+        if (count >= monthlyLimit) {
+            throw new BusinessException(PermissionErrorCode.MONTHLY_LIMIT_EXCEEDED);
         }
 
         Long parentId = memberMapper.selectActiveParentByChildId(memberId).getParentId();
 
-        PermissionInsertVO permissionInsertVO = PermissionInsertVO.builder()
-                .parentId(parentId)
-                .childId(memberId)
-                .reason(permissionRequestDTO.getReason())
-                .build();
+        for (Long categoryId : permissionRequestDTO.getCategories()) {
+            PermissionInsertVO permissionInsertVO = PermissionInsertVO.builder()
+                    .parentId(parentId)
+                    .childId(memberId)
+                    .reason(permissionRequestDTO.getReason())
+                    .build();
 
-        // 오늘만 요청 row 삽입
-        permissionMapper.insertPermission(permissionInsertVO);
+            // 오늘만 요청 row 삽입
+            permissionMapper.insertPermission(permissionInsertVO);
 
-        // 오늘만 허용 대상 카테고리 row 삽입
-        permissionMapper.insertPermissionCategories(permissionInsertVO.getId(), permissionRequestDTO.getCategories());
+            // 오늘만 허용 대상 카테고리 row 삽입
+            permissionMapper.insertPermissionCategory(permissionInsertVO.getId(), categoryId);
+        }
 
-        return getPermission(memberId, role);
+        return getPermission(memberId, role, null);
     }
 
     // 오늘 날짜에 생성한 오늘만 허용 요청 수정
     @Transactional
-    public PermissionResponseWrapperDTO updatePermission(Long memberId, String role, Long permissionId, PermissionRequestDTO permissionRequestDTO) {
+    public List<PermissionResponseDTO> updatePermission(Long memberId, String role, Long permissionId, PermissionUpdateRequestDTO permissionUpdateRequestDTO) {
 
         // 자녀만 오늘만 요청 수정 가능
         if (!role.equals("CHILD")) {
@@ -118,20 +100,14 @@ public class PermissionService {
         validatePermission(memberId, role, permissionVO);
 
         // 사유 수정
-        permissionMapper.updatePermissionReason(permissionId, permissionRequestDTO.getReason());
+        permissionMapper.updatePermissionReason(permissionId, permissionUpdateRequestDTO.getReason());
 
-        // 오늘만 허용 대상 카테고리 row 일괄 삭제
-        permissionMapper.deletePermissionCategoriesByPermissionId(permissionId);
-
-        // 오늘만 허용 대상 카테고리 row 새로 삽입
-        permissionMapper.insertPermissionCategories(permissionId, permissionRequestDTO.getCategories());
-
-        return getPermission(memberId, role);
+        return getPermission(memberId, role, null);
     }
 
     // 오늘 날짜에 생성한 오늘만 허용 요청 승인
     @Transactional
-    public PermissionResponseWrapperDTO approvePermission(Long memberId, String role, Long permissionId) {
+    public List<PermissionResponseDTO> approvePermission(Long memberId, String role, Long permissionId) {
 
         // 부모만 오늘만 요청 승인 가능
         if (!role.equals("PARENT")) {
@@ -144,12 +120,12 @@ public class PermissionService {
         // 상태 변경
         permissionMapper.updatePermissionStatus(permissionId, "APPROVED");
 
-        return getPermission(memberId, role);
+        return getPermission(memberId, role, permissionVO.getChildId());
     }
 
     // 오늘 날짜에 생성한 오늘만 허용 요청 거절
     @Transactional
-    public PermissionResponseWrapperDTO rejectPermission(Long memberId, String role, Long permissionId) {
+    public List<PermissionResponseDTO> rejectPermission(Long memberId, String role, Long permissionId) {
 
         // 부모만 오늘만 요청 거절 가능
         if (!role.equals("PARENT")) {
@@ -162,7 +138,7 @@ public class PermissionService {
         // 상태 변경
         permissionMapper.updatePermissionStatus(permissionId, "REJECTED");
 
-        return getPermission(memberId, role);
+        return getPermission(memberId, role, permissionVO.getChildId());
     }
 
     // 오늘 날짜에 생성한 오늘만 허용 요청 삭제
