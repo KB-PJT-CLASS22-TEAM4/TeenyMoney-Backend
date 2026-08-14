@@ -1,7 +1,11 @@
 package com.teenyfin.teenymoney.domain.permission.service;
 
 import com.teenyfin.teenymoney.domain.categoryPolicy.exception.CategoryPolicyErrorCode;
+import com.teenyfin.teenymoney.domain.categoryPolicy.mapper.CategoryPolicyMapper;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
+import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
+import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
 import com.teenyfin.teenymoney.domain.permission.dto.request.PermissionRequestDTO;
 import com.teenyfin.teenymoney.domain.permission.dto.request.PermissionUpdateRequestDTO;
 import com.teenyfin.teenymoney.domain.permission.dto.response.PermissionResponseDTO;
@@ -26,6 +30,9 @@ public class PermissionService {
     private final PermissionMapper permissionMapper;
     private final MemberMapper memberMapper;
     private final TeenyScoreMapper teenyScoreMapper;
+    private final CategoryPolicyMapper categoryPolicyMapper;
+
+    private final NotificationService notificationService;
 
     // 오늘 날짜에 생성된 오늘만 허용 요청 조회
     @Transactional(readOnly = true)
@@ -69,8 +76,13 @@ public class PermissionService {
         }
 
         Long parentId = memberMapper.selectActiveParentByChildId(memberId).getParentId();
+        List<Long> categories = permissionRequestDTO.getCategories();
 
-        for (Long categoryId : permissionRequestDTO.getCategories()) {
+        if (categories.isEmpty()) {
+            return getPermission(memberId, role, null);
+        }
+
+        for (Long categoryId : categories) {
             PermissionInsertVO permissionInsertVO = PermissionInsertVO.builder()
                     .parentId(parentId)
                     .childId(memberId)
@@ -83,6 +95,18 @@ public class PermissionService {
             // 오늘만 허용 대상 카테고리 row 삽입
             permissionMapper.insertPermissionCategory(permissionInsertVO.getId(), categoryId);
         }
+
+        MemberVO memberVO = memberMapper.selectById(memberId);
+
+        // 부모에게 알림 발송
+        String title = "자녀가 오늘만 허용을 요청했어요";
+        String content = memberVO.getName() + " · " + categoryPolicyMapper.selectCategoryNameById(categories.get(0));
+
+        if (categories.size() > 1) {
+            content += " 외 " + (categories.size() - 1) + "건";
+        }
+
+        notificationService.createNotification(parentId, title, content, NotificationReferenceType.TODAY_PERMISSION, null, true);
 
         return getPermission(memberId, role, null);
     }
@@ -120,6 +144,13 @@ public class PermissionService {
         // 상태 변경
         permissionMapper.updatePermissionStatus(permissionId, "APPROVED");
 
+        // 자녀에게 알림 발송
+        String title = "오늘만 허용이 승인되었어요";
+        String content = permissionVO.getCategory();
+
+        notificationService.createNotification(permissionVO.getChildId(), title, content, NotificationReferenceType.TODAY_PERMISSION, null, true);
+
+
         return getPermission(memberId, role, permissionVO.getChildId());
     }
 
@@ -137,6 +168,12 @@ public class PermissionService {
 
         // 상태 변경
         permissionMapper.updatePermissionStatus(permissionId, "REJECTED");
+
+        // 자녀에게 알림 발송
+        String title = "오늘만 허용이 거절되었어요";
+        String content = permissionVO.getCategory();
+
+        notificationService.createNotification(permissionVO.getChildId(), title, content, NotificationReferenceType.TODAY_PERMISSION, null, true);
 
         return getPermission(memberId, role, permissionVO.getChildId());
     }

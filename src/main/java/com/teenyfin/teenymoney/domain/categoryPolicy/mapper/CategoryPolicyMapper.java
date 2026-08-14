@@ -24,6 +24,9 @@ public interface CategoryPolicyMapper {
 
     // 자녀 아이디와 업종 카테고리 아이디로 특정 업종 카테고리 정책 조회
     CategoryPolicyVO selectByCategoryIdAndChildId(@Param("categoryId") Long categoryId, @Param("childId") Long childId);
+
+    // 카테고리 아이디로 카테고리 이름 조회
+    String selectCategoryNameById(@Param("categoryId") Long categoryId);
 }
 
 
