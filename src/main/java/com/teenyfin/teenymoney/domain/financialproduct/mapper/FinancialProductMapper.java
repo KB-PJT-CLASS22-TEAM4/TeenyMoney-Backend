@@ -7,6 +7,7 @@ import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductEnroll
 import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductApprovalVO;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.LoanProductVO;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.SavingProductVO;
+import com.teenyfin.teenymoney.domain.financialproduct.vo.FreeSavingPaymentVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -110,4 +111,18 @@ public interface FinancialProductMapper {
                                    @Param("status") String status);
     int upsertDepositProduct(DepositProductVO product);
     int upsertSavingProduct(SavingProductVO product);
+    // 자유적금 가입 행을 잠가 동시 납입 시 월 한도를 직렬화한다.
+    FreeSavingPaymentVO selectFreeSavingForPaymentForUpdate(
+            @Param("childId") Long childId,
+            @Param("enrollmentId") Long enrollmentId);
+    FreeSavingPaymentVO selectFreeSavingPaymentByIdempotencyKey(
+            @Param("enrollmentId") Long enrollmentId,
+            @Param("idempotencyKey") String idempotencyKey);
+    long selectFreeSavingPaidAmountInMonth(
+            @Param("enrollmentId") Long enrollmentId,
+            @Param("paymentDate") LocalDate paymentDate);
+    int insertFreeSavingPayment(@Param("enrollmentId") Long enrollmentId,
+                                @Param("transferId") Long transferId,
+                                @Param("installmentNo") Integer installmentNo,
+                                @Param("amount") Long amount);
 }

@@ -38,6 +38,12 @@ public enum FinancialProductErrorCode implements ErrorCode {
             HttpStatus.CONFLICT, "가입 요청에 연결된 대기 송금을 찾을 수 없습니다."),
     FINANCIAL_PRODUCT_CUSTOM_INVALID_CONDITION(
             HttpStatus.BAD_REQUEST, "부모 생성 금융상품의 입력 조건이 올바르지 않습니다."),
+    FINANCIAL_PRODUCT_SAVING_NOT_FREE(
+            HttpStatus.BAD_REQUEST, "자유적금만 직접 납입할 수 있습니다."),
+    FINANCIAL_PRODUCT_ENROLLMENT_NOT_ACTIVE(
+            HttpStatus.CONFLICT, "진행 중인 금융상품 가입이 아닙니다."),
+    FINANCIAL_PRODUCT_SAVING_MONTHLY_LIMIT_EXCEEDED(
+            HttpStatus.BAD_REQUEST, "자유적금의 월 최대 납입 한도를 초과했습니다."),
     FINLIFE_API_KEY_MISSING(
             HttpStatus.SERVICE_UNAVAILABLE, "금감원 API 설정이 필요합니다."),
     FINLIFE_API_UNAVAILABLE(

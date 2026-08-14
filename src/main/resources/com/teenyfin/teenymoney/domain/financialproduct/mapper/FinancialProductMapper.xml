@@ -841,4 +841,52 @@
             updated_at = CURRENT_TIMESTAMP
     </insert>
 
+    <!-- 자유적금 가입 행을 먼저 잠가 같은 계좌의 동시 납입과 월 한도 경쟁을 막는다. -->
+    <select id="selectFreeSavingForPaymentForUpdate"
+            resultType="com.teenyfin.teenymoney.domain.financialproduct.vo.FreeSavingPaymentVO">
+        SELECT enrollment.id AS enrollment_id,
+               enrollment.child_id,
+               enrollment.wallet_id AS product_wallet_id,
+               enrollment.status,
+               enrollment.start_date,
+               enrollment.maturity_date,
+               product.savings_type,
+               product.max_month_amount
+        FROM T_SVG_ENROLL_M enrollment
+        INNER JOIN T_SVG_PROD_M product ON product.id = enrollment.saving_id
+        WHERE enrollment.id = #{enrollmentId}
+          AND enrollment.child_id = #{childId}
+        FOR UPDATE
+    </select>
+
+    <!-- 같은 UUID가 이미 완료된 경우 기존 납입 결과를 그대로 반환한다. -->
+    <select id="selectFreeSavingPaymentByIdempotencyKey"
+            resultType="com.teenyfin.teenymoney.domain.financialproduct.vo.FreeSavingPaymentVO">
+        SELECT history.transfer_id, history.paid_amount
+        FROM T_SVG_PAYHIST_H history
+        INNER JOIN T_WLT_TRF_L transfer ON transfer.id = history.transfer_id
+        WHERE history.saving_enrollment_id = #{enrollmentId}
+          AND transfer.idempotency_key = #{idempotencyKey}
+          AND transfer.status = 'COMPLETED'
+        LIMIT 1
+    </select>
+
+    <select id="selectFreeSavingPaidAmountInMonth" resultType="long">
+        SELECT COALESCE(SUM(paid_amount), 0)
+        FROM T_SVG_PAYHIST_H
+        WHERE saving_enrollment_id = #{enrollmentId}
+          AND status IN ('PAID', 'PARTIAL')
+          AND paid_at &gt;= DATE_FORMAT(#{paymentDate}, '%Y-%m-01')
+          AND paid_at &lt; DATE_ADD(LAST_DAY(#{paymentDate}), INTERVAL 1 DAY)
+    </select>
+
+    <insert id="insertFreeSavingPayment">
+        INSERT INTO T_SVG_PAYHIST_H
+            (saving_enrollment_id, transfer_id, installment_no,
+             amount, paid_amount, status, paid_at)
+        VALUES
+            (#{enrollmentId}, #{transferId}, #{installmentNo},
+             #{amount}, #{amount}, 'PAID', CURRENT_TIMESTAMP)
+    </insert>
+
 </mapper>
