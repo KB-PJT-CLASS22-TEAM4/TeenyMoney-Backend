@@ -5,6 +5,7 @@ import com.teenyfin.teenymoney.domain.report.dto.response.PeriodResponseDTO;
 import com.teenyfin.teenymoney.domain.report.dto.response.WeeklyTrendResponseDTO;
 import com.teenyfin.teenymoney.domain.report.exception.MoneyReportErrorCode;
 import com.teenyfin.teenymoney.domain.report.vo.DailySpendingVO;
+import com.teenyfin.teenymoney.domain.report.vo.ProductPeriodVO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -144,7 +146,8 @@ class ReportPeriodCalculatorTest {
         @DisplayName("가입 월부터 현재 월까지 최신 순, 미래 월은 없다")
         void listsFromJoinToNow() {
             List<AvailableMonthResponseDTO> months = calculator.availableMonths(
-                    LocalDate.of(2026, 8, 13), LocalDate.of(2026, 5, 20));
+                    LocalDate.of(2026, 8, 13), LocalDate.of(2026, 5, 20),
+                    Set.of("2026-07", "2026-06", "2026-05"));
 
             assertThat(months).extracting(AvailableMonthResponseDTO::getYearMonth)
                     .containsExactly("2026-08", "2026-07", "2026-06", "2026-05");
@@ -156,11 +159,32 @@ class ReportPeriodCalculatorTest {
         @DisplayName("이번 달에 가입했으면 한 달만")
         void joinedThisMonth() {
             List<AvailableMonthResponseDTO> months = calculator.availableMonths(
-                    LocalDate.of(2026, 8, 13), LocalDate.of(2026, 8, 2));
+                    LocalDate.of(2026, 8, 13), LocalDate.of(2026, 8, 2), Set.of());
 
             assertThat(months).hasSize(1);
             assertThat(months.get(0).getYearMonth()).isEqualTo("2026-08");
             assertThat(months.get(0).getStatus()).isEqualTo("IN_PROGRESS");
+        }
+
+        @Test
+        @DisplayName("활동이 없었던 지난 달은 기록 없음")
+        void monthWithoutActivityIsNoRecord() {
+            List<AvailableMonthResponseDTO> months = calculator.availableMonths(
+                    LocalDate.of(2026, 8, 13), LocalDate.of(2026, 5, 20),
+                    Set.of("2026-07", "2026-05"));   // 6월만 활동 없음
+
+            assertThat(months).extracting(AvailableMonthResponseDTO::getStatus)
+                    .containsExactly("IN_PROGRESS", "COMPLETED", "NO_RECORD", "COMPLETED");
+        }
+
+        @Test
+        @DisplayName("현재 월은 활동이 없어도 진행 중이다")
+        void currentMonthIsAlwaysInProgress() {
+            List<AvailableMonthResponseDTO> months = calculator.availableMonths(
+                    LocalDate.of(2026, 8, 13), LocalDate.of(2026, 7, 1), Set.of());
+
+            assertThat(months).extracting(AvailableMonthResponseDTO::getStatus)
+                    .containsExactly("IN_PROGRESS", "NO_RECORD");
         }
     }
 
@@ -258,6 +282,54 @@ class ReportPeriodCalculatorTest {
         private DailySpendingVO daily(LocalDate date, long amount, int count) {
             return DailySpendingVO.builder()
                     .spentDate(date).amount(amount).paymentCount(count).build();
+        }
+    }
+
+    @Nested
+    @DisplayName("상품이 살아 있던 달")
+    class ProductMonths {
+
+        @Test
+        @DisplayName("시작월부터 종료월까지 펼친다")
+        void expandsClosedRange() {
+            var months = calculator.monthsCoveredByProducts(
+                    List.of(ProductPeriodVO.builder()
+                            .startDate(LocalDate.of(2026, 5, 20))
+                            .endDate(LocalDate.of(2026, 7, 3)).build()),
+                    LocalDate.of(2026, 8, 13));
+
+            assertThat(months).containsExactlyInAnyOrder("2026-05", "2026-06", "2026-07");
+        }
+
+        @Test
+        @DisplayName("끝이 열려 있으면 오늘까지")
+        void expandsOpenRangeToToday() {
+            var months = calculator.monthsCoveredByProducts(
+                    List.of(ProductPeriodVO.builder()
+                            .startDate(LocalDate.of(2026, 6, 5)).endDate(null).build()),
+                    LocalDate.of(2026, 8, 13));
+
+            assertThat(months).containsExactlyInAnyOrder("2026-06", "2026-07", "2026-08");
+        }
+
+        @Test
+        @DisplayName("만기가 미래여도 오늘을 넘지 않는다")
+        void doesNotGoBeyondToday() {
+            var months = calculator.monthsCoveredByProducts(
+                    List.of(ProductPeriodVO.builder()
+                            .startDate(LocalDate.of(2026, 7, 3))
+                            .endDate(LocalDate.of(2026, 12, 1)).build()),
+                    LocalDate.of(2026, 8, 13));
+
+            assertThat(months).containsExactlyInAnyOrder("2026-07", "2026-08");
+        }
+
+        @Test
+        @DisplayName("시작일이 없는 상품은 무시한다")
+        void skipsUnstartedProducts() {
+            assertThat(calculator.monthsCoveredByProducts(
+                    List.of(ProductPeriodVO.builder().startDate(null).build()),
+                    LocalDate.of(2026, 8, 13))).isEmpty();
         }
     }
 

@@ -7,13 +7,7 @@ import lombok.Getter;
 
 import java.util.List;
 
-/**
- * 머니 리포트 한 화면 분량.
- *
- * 다음 단계에서 summary(한눈에 보기 4종), insights(금융 습관), teenyScore(점수 변화)가
- * 추가된다. 지금은 필드 자체가 없다. 화면 입장에서 키가 없는 것과 null 인 것이 같으므로
- * 빈 DTO 를 미리 만들어 null 로 채우지 않는다.
- */
+/** 머니 리포트 한 화면 분량. */
 @Getter
 @AllArgsConstructor
 @ApiModel(description = "월간 머니 리포트")
@@ -28,9 +22,18 @@ public class MoneyReportResponseDTO {
     @ApiModelProperty(value = "월 선택에 노출할 월 목록. 가입 월부터 현재 월까지, 최신 월이 먼저")
     private final List<AvailableMonthResponseDTO> availableMonths;
 
+    @ApiModelProperty(value = "이번 달 한눈에 보기. 네 가지 돈의 흐름")
+    private final SummaryResponseDTO summary;
+
+    @ApiModelProperty(value = "금융 습관 인사이트. 보여줄 사실이 없으면 빈 배열")
+    private final List<InsightResponseDTO> insights;
+
     @ApiModelProperty(value = "소비 상세")
     private final SpendingResponseDTO spending;
 
     @ApiModelProperty(value = "주의 업종 결제")
     private final WatchSpendingResponseDTO watchSpending;
+
+    @ApiModelProperty(value = "이달의 티니점수 변화. 기간 내 이력이 없으면 null")
+    private final MonthlyScoreResponseDTO teenyScore;
 }

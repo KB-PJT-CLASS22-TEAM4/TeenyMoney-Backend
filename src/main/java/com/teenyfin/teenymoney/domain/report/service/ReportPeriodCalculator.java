@@ -5,6 +5,7 @@ import com.teenyfin.teenymoney.domain.report.dto.response.PeriodResponseDTO;
 import com.teenyfin.teenymoney.domain.report.dto.response.WeeklyTrendResponseDTO;
 import com.teenyfin.teenymoney.domain.report.exception.MoneyReportErrorCode;
 import com.teenyfin.teenymoney.domain.report.vo.DailySpendingVO;
+import com.teenyfin.teenymoney.domain.report.vo.ProductPeriodVO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import org.springframework.stereotype.Component;
 
@@ -16,8 +17,10 @@ import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 리포트의 날짜 계산만 담당한다. DB도 인증도 보지 않는다.
@@ -34,6 +37,7 @@ public class ReportPeriodCalculator {
 
     public static final String STATUS_IN_PROGRESS = "IN_PROGRESS";
     public static final String STATUS_COMPLETED = "COMPLETED";
+    public static final String STATUS_NO_RECORD = "NO_RECORD";
 
     public static final String AGE_BAND_JUNIOR = "JUNIOR";
     public static final String AGE_BAND_TEEN = "TEEN";
@@ -106,10 +110,15 @@ public class ReportPeriodCalculator {
      * 월 선택에 노출할 월 목록. 가입 월부터 현재 월까지, 최신 월이 먼저다.
      * 미래 월은 노출하지 않는다 (정의서 4.4).
      *
-     * 기록이 없는 달을 따로 표시하지 않는 것은 의도된 것이다. 결제만 보고 판정하면
-     * 다음 단계에서 적금·퀘스트 집계가 들어오는 순간 같은 달의 상태가 뒤집힌다.
+     * 현재 월은 늘 진행 중이다. 지난 달은 활동이 있었으면 완료, 없었으면 기록 없음이다.
+     * 활동 판정은 결제만이 아니라 리포트가 보여주는 모든 도메인을 훑은 결과여야 한다.
+     * 결제만 보면 저축이나 퀘스트만 한 달이 '기록 없음'으로 잘못 나온다.
+     *
+     * @param activeMonths 활동이 하나라도 있었던 달의 yyyy-MM 집합
      */
-    public List<AvailableMonthResponseDTO> availableMonths(LocalDate today, LocalDate joinedOn) {
+    public List<AvailableMonthResponseDTO> availableMonths(
+            LocalDate today, LocalDate joinedOn, Set<String> activeMonths) {
+
         YearMonth currentMonth = YearMonth.from(today);
         YearMonth from = joinedOn == null ? currentMonth : YearMonth.from(joinedOn);
         if (from.isAfter(currentMonth)) {
@@ -118,9 +127,16 @@ public class ReportPeriodCalculator {
 
         List<AvailableMonthResponseDTO> months = new ArrayList<>();
         for (YearMonth m = currentMonth; !m.isBefore(from); m = m.minusMonths(1)) {
-            months.add(new AvailableMonthResponseDTO(
-                    m.format(YEAR_MONTH),
-                    m.equals(currentMonth) ? STATUS_IN_PROGRESS : STATUS_COMPLETED));
+            String label = m.format(YEAR_MONTH);
+            String status;
+            if (m.equals(currentMonth)) {
+                status = STATUS_IN_PROGRESS;
+            } else if (activeMonths.contains(label)) {
+                status = STATUS_COMPLETED;
+            } else {
+                status = STATUS_NO_RECORD;
+            }
+            months.add(new AvailableMonthResponseDTO(label, status));
         }
         return months;
     }
@@ -172,6 +188,35 @@ public class ReportPeriodCalculator {
             weekNo++;
         }
         return weeks;
+    }
+
+    /**
+     * 가입 상품이 살아 있던 달을 yyyy-MM 으로 펼친다.
+     *
+     * 활동 월 판정에 쓴다. 결제도 퀘스트도 없던 달이라도 그 달에 적금이 굴러가고 있었다면
+     * 리포트에 진행 카드가 뜨므로 '기록 없음'이 아니다.
+     *
+     * 끝이 열려 있는(아직 진행 중인) 상품은 오늘까지로 본다.
+     */
+    public Set<String> monthsCoveredByProducts(
+            List<ProductPeriodVO> periods, LocalDate today) {
+
+        Set<String> months = new HashSet<>();
+        for (ProductPeriodVO period : periods) {
+            if (period.getStartDate() == null) {
+                continue;
+            }
+            YearMonth from = YearMonth.from(period.getStartDate());
+            YearMonth to = YearMonth.from(
+                    period.getEndDate() == null ? today : period.getEndDate());
+            if (to.isAfter(YearMonth.from(today))) {
+                to = YearMonth.from(today);
+            }
+            for (YearMonth m = from; !m.isAfter(to); m = m.plusMonths(1)) {
+                months.add(m.format(YEAR_MONTH));
+            }
+        }
+        return months;
     }
 
     /** 그 주의 일요일. 달을 넘어가면 말일에서 자른다. */

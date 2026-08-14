@@ -205,6 +205,213 @@ class MoneyReportMapperTest {
     }
 
     @Test
+    @DisplayName("전월 모은 돈: 틴은 예금 50,000 / 주니어는 적금 10,000")
+    void moneyFlowSavedAmount() {
+        var teen = moneyReportMapper.selectMoneyFlow(
+                memberIdOrNull(TEEN), previousMonthStart, previousMonthEnd);
+        assertThat(teen.getDepositAmount()).isEqualTo(50_000L);
+        assertThat(teen.getSavingAmount()).isZero();
+
+        var junior = moneyReportMapper.selectMoneyFlow(
+                memberIdOrNull(JUNIOR), previousMonthStart, previousMonthEnd);
+        assertThat(junior.getDepositAmount()).isZero();
+        assertThat(junior.getSavingAmount()).isEqualTo(10_000L);
+    }
+
+    @Test
+    @DisplayName("적금·예금 납입 개수와 횟수를 함께 센다")
+    void moneyFlowCountsProductsAndPayments() {
+        var junior = moneyReportMapper.selectMoneyFlow(
+                memberIdOrNull(JUNIOR), previousMonthStart, previousMonthEnd);
+
+        // 주니어는 전월에 적금 1개에 1회 납입
+        assertThat(junior.getSavingProductCount()).isEqualTo(1);
+        assertThat(junior.getSavingPaymentCount()).isEqualTo(1);
+        assertThat(junior.getSavingAmount()).isEqualTo(10_000L);
+        assertThat(junior.getDepositProductCount()).isZero();
+
+        // 틴은 전월에 예금 1개에 1회
+        var teen = moneyReportMapper.selectMoneyFlow(
+                memberIdOrNull(TEEN), previousMonthStart, previousMonthEnd);
+        assertThat(teen.getDepositProductCount()).isEqualTo(1);
+        assertThat(teen.getDepositPaymentCount()).isEqualTo(1);
+        assertThat(teen.getSavingProductCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("전월 직접 얻은 돈은 자녀 지갑으로 들어온 퀘스트 보상만 센다")
+    void moneyFlowEarnedAmount() {
+        var teen = moneyReportMapper.selectMoneyFlow(
+                memberIdOrNull(TEEN), previousMonthStart, previousMonthEnd);
+
+        assertThat(teen.getEarnedAmount()).isEqualTo(4_000L);
+        assertThat(teen.getQuestRewardCount()).isEqualTo(1);
+
+        // 대출 상환도 자녀 지갑에서 나가는 이체지만 모은 돈에 섞이면 안 된다
+        assertThat(teen.getDepositAmount() + teen.getSavingAmount()).isEqualTo(50_000L);
+    }
+
+    @Test
+    @DisplayName("전월 갚은 돈은 원금과 이자로 나뉜다")
+    void loanRepaymentSplitsPrincipalAndInterest() {
+        var teen = moneyReportMapper.selectLoanRepayment(
+                memberIdOrNull(TEEN), previousMonthStart, previousMonthEnd);
+
+        assertThat(teen.getPaidPrincipal()).isEqualTo(10_000L);
+        assertThat(teen.getPaidInterest()).isEqualTo(1_000L);
+        assertThat(teen.getRepaidCount()).isEqualTo(1);
+
+        // 주니어는 대출이 없다
+        var junior = moneyReportMapper.selectLoanRepayment(
+                memberIdOrNull(JUNIOR), previousMonthStart, previousMonthEnd);
+        assertThat(junior.getPaidPrincipal()).isZero();
+        assertThat(junior.getRepaidCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("오늘만 허용은 상태별로 세고 사유 작성 여부도 센다")
+    void permissionSummary() {
+        var teen = moneyReportMapper.selectPermissionSummary(
+                memberIdOrNull(TEEN), previousMonthStart, previousMonthEnd);
+
+        assertThat(teen.getRequestCount()).isEqualTo(1);
+        assertThat(teen.getApprovedCount()).isEqualTo(1);
+        assertThat(teen.getRejectedCount()).isZero();
+        assertThat(teen.getReasonWrittenCount()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("퀘스트는 ended_at 이 기간 안에 있는 것만 종료로 센다")
+    void questSummary() {
+        var teen = moneyReportMapper.selectQuestSummary(
+                memberIdOrNull(TEEN), previousMonthStart, previousMonthEnd);
+
+        assertThat(teen.getCompletedCount()).isEqualTo(1);
+        assertThat(teen.getFailedCount()).isZero();   // 실패 퀘스트는 이번 달 것이다
+    }
+
+    @Test
+    @DisplayName("달을 넘겨 끝난 퀘스트는 이전 달에 '진행 중'으로 잡힌다")
+    void questInProgressIsReconstructedAsOfPeriodEnd() {
+        Long juniorId = memberIdOrNull(JUNIOR);
+
+        // 시드의 퀘스트는 전부 같은 달에 생성·종료돼서 이 경계를 가리지 못한다.
+        // 이번 달에 끝난 퀘스트 하나를 지난 달 생성으로 옮겨 만든다. (@Transactional 롤백)
+        Long questId = jdbcTemplate.queryForObject(
+                "SELECT id FROM T_QST_BASE_M WHERE child_id = ? AND status = 'COMPLETED' "
+                        + "AND ended_at >= ? ORDER BY ended_at DESC LIMIT 1",
+                Long.class, juniorId, LocalDate.now().withDayOfMonth(1));
+        jdbcTemplate.update("UPDATE T_QST_BASE_M SET created_at = ? WHERE id = ?",
+                previousMonthStart.plusDays(10).atStartOfDay(), questId);
+
+        var previousMonth = moneyReportMapper.selectQuestSummary(
+                juniorId, previousMonthStart, previousMonthEnd);
+        var thisMonth = moneyReportMapper.selectQuestSummary(
+                juniorId, LocalDate.now().withDayOfMonth(1), LocalDate.now());
+
+        // 지난 달 말 기준으로는 아직 안 끝난 퀘스트다
+        assertThat(previousMonth.getInProgressCount()).isEqualTo(1);
+        assertThat(previousMonth.getCompletedCount()).isEqualTo(1);   // 지난 달에 끝난 다른 퀘스트
+
+        // 이번 달에는 완료로 잡히고 진행 중에서는 빠진다
+        assertThat(thisMonth.getCompletedCount()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("가입 상품이 살아 있던 기간을 읽는다")
+    void productPeriods() {
+        var periods = moneyReportMapper.selectProductPeriods(memberIdOrNull(JUNIOR));
+
+        assertThat(periods).isNotEmpty();
+        assertThat(periods).allSatisfy(p -> assertThat(p.getStartDate()).isNotNull());
+
+        // 활동이 전혀 없는 자녀는 상품도 없다 — '기록 없음' 판정이 성립한다
+        assertThat(moneyReportMapper.selectProductPeriods(memberIdOrNull(EMPTY))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("티니점수 이력은 event_code 와 함께 읽힌다")
+    void scoreHistory() {
+        var rows = moneyReportMapper.selectScoreHistory(
+                memberIdOrNull(JUNIOR), previousMonthStart, previousMonthEnd);
+
+        assertThat(rows).isNotEmpty();
+        assertThat(rows).allSatisfy(r -> {
+            assertThat(r.getEventCode()).isNotBlank();
+            assertThat(r.getDescription()).isNotBlank();
+            assertThat(r.getCreatedAt()).isNotNull();
+        });
+    }
+
+    @Test
+    @DisplayName("활동 월 목록은 결제가 없어도 저축·퀘스트가 있으면 잡는다")
+    void activityMonthsCoverAllDomains() {
+        var months = moneyReportMapper.selectActivityMonths(memberIdOrNull(JUNIOR));
+
+        assertThat(months).isNotEmpty();
+        assertThat(months).allSatisfy(m -> assertThat(m).matches("\\d{4}-\\d{2}"));
+        // 활동이 전혀 없는 자녀는 빈 목록이어야 '기록 없음' 판정이 성립한다
+        assertThat(moneyReportMapper.selectActivityMonths(memberIdOrNull(EMPTY))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("만기가 이번 달 밖이면 빈 목록이다")
+    void noClosingProductsWhenMaturityIsFarAway() {
+        LocalDate monthStart = LocalDate.now().withDayOfMonth(1);
+        LocalDate monthEnd = monthStart.plusMonths(1).minusDays(1);
+
+        // 시드 값에 기대지 않고 이 테스트 안에서 만기를 멀리 밀어둔다.
+        // (@Transactional 이라 롤백된다. 누군가 시드 만기를 이번 달로 바꿔도 안 깨진다)
+        jdbcTemplate.update("UPDATE T_DPT_ENROLL_M SET maturity_date = ? WHERE child_id = ?",
+                monthStart.plusMonths(6), memberIdOrNull(TEEN));
+        jdbcTemplate.update("UPDATE T_SVG_ENROLL_M SET maturity_date = ? WHERE child_id = ?",
+                monthStart.plusMonths(6), memberIdOrNull(JUNIOR));
+
+        assertThat(moneyReportMapper.selectClosingProducts(
+                memberIdOrNull(TEEN), monthStart, monthEnd)).isEmpty();
+        assertThat(moneyReportMapper.selectClosingProducts(
+                memberIdOrNull(JUNIOR), monthStart, monthEnd)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("만기일이 이번 달로 오면 잡힌다 (@Transactional 로 롤백된다)")
+    void picksUpProductMaturingThisMonth() {
+        Long teenId = memberIdOrNull(TEEN);
+        LocalDate monthStart = LocalDate.now().withDayOfMonth(1);
+        LocalDate monthEnd = monthStart.plusMonths(1).minusDays(1);
+
+        jdbcTemplate.update(
+                "UPDATE T_DPT_ENROLL_M SET maturity_date = ? WHERE child_id = ?",
+                monthEnd, teenId);
+
+        var closing = moneyReportMapper.selectClosingProducts(teenId, monthStart, monthEnd);
+
+        assertThat(closing).hasSize(1);
+        assertThat(closing.get(0).getProductType()).isEqualTo("DEPOSIT");
+        assertThat(closing.get(0).getMaturityDate()).isEqualTo(monthEnd);
+        assertThat(closing.get(0).getAmount()).isEqualTo(50_000L);
+        assertThat(closing.get(0).getProductName()).isNotBlank();
+    }
+
+    @Test
+    @DisplayName("적금도 같은 규칙으로 잡힌다")
+    void picksUpSavingMaturingThisMonth() {
+        Long juniorId = memberIdOrNull(JUNIOR);
+        LocalDate monthStart = LocalDate.now().withDayOfMonth(1);
+        LocalDate monthEnd = monthStart.plusMonths(1).minusDays(1);
+
+        jdbcTemplate.update(
+                "UPDATE T_SVG_ENROLL_M SET maturity_date = ? WHERE child_id = ?",
+                monthStart.plusDays(3), juniorId);
+
+        var closing = moneyReportMapper.selectClosingProducts(juniorId, monthStart, monthEnd);
+
+        assertThat(closing).hasSize(1);
+        assertThat(closing.get(0).getProductType()).isEqualTo("SAVING");
+        assertThat(closing.get(0).getAmount()).isEqualTo(30_000L);
+    }
+
+    @Test
     @DisplayName("자녀 프로필에서 연령 모드와 가입 월에 쓸 값을 읽는다")
     void readsChildProfile() {
         var profile = moneyReportMapper.selectChildProfile(memberIdOrNull(JUNIOR));

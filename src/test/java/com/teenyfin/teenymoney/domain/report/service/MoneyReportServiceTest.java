@@ -1,12 +1,21 @@
 package com.teenyfin.teenymoney.domain.report.service;
 
 import com.teenyfin.teenymoney.domain.family.service.FamilyAccessService;
+import com.teenyfin.teenymoney.domain.report.dto.response.InsightResponseDTO;
 import com.teenyfin.teenymoney.domain.report.dto.response.MoneyReportResponseDTO;
 import com.teenyfin.teenymoney.domain.report.dto.response.SpendingCategoryResponseDTO;
 import com.teenyfin.teenymoney.domain.report.dto.response.WatchCategoryResponseDTO;
 import com.teenyfin.teenymoney.domain.report.exception.MoneyReportErrorCode;
 import com.teenyfin.teenymoney.domain.report.mapper.MoneyReportMapper;
 import com.teenyfin.teenymoney.domain.report.vo.ChildProfileVO;
+import com.teenyfin.teenymoney.domain.report.vo.ClosingProductVO;
+import com.teenyfin.teenymoney.domain.report.vo.LoanOverdueVO;
+import com.teenyfin.teenymoney.domain.report.vo.LoanRepaymentVO;
+import com.teenyfin.teenymoney.domain.report.vo.MoneyFlowVO;
+import com.teenyfin.teenymoney.domain.report.vo.PermissionSummaryVO;
+import com.teenyfin.teenymoney.domain.report.vo.ProductPeriodVO;
+import com.teenyfin.teenymoney.domain.report.vo.QuestSummaryVO;
+import com.teenyfin.teenymoney.domain.report.vo.ScoreHistoryVO;
 import com.teenyfin.teenymoney.domain.report.vo.SpendingCategoryVO;
 import com.teenyfin.teenymoney.domain.report.vo.SpendingTotalVO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
@@ -70,6 +79,21 @@ class MoneyReportServiceTest {
                 .thenReturn(SpendingTotalVO.builder().totalAmount(0).paymentCount(0).build());
         when(mapper.selectSpendingByCategory(anyLong(), any(), any())).thenReturn(List.of());
         when(mapper.selectDailySpending(anyLong(), any(), any())).thenReturn(List.of());
+
+        // 2차 집계의 기본값은 "아무 활동 없음"이다. 각 테스트가 필요한 것만 덮어쓴다.
+        when(mapper.selectMoneyFlow(anyLong(), any(), any()))
+                .thenReturn(MoneyFlowVO.builder().build());
+        when(mapper.selectLoanRepayment(anyLong(), any(), any()))
+                .thenReturn(LoanRepaymentVO.builder().build());
+        when(mapper.selectPermissionSummary(anyLong(), any(), any()))
+                .thenReturn(PermissionSummaryVO.builder().build());
+        when(mapper.selectQuestSummary(anyLong(), any(), any()))
+                .thenReturn(QuestSummaryVO.builder().build());
+        when(mapper.selectScoreHistory(anyLong(), any(), any())).thenReturn(List.of());
+        when(mapper.selectActivityMonths(anyLong())).thenReturn(List.of());
+        when(mapper.selectProductPeriods(anyLong())).thenReturn(List.of());
+        when(mapper.selectClosingProducts(anyLong(), any(), any())).thenReturn(List.of());
+        when(mapper.selectLoanOverdue(anyLong())).thenReturn(LoanOverdueVO.builder().build());
     }
 
     private void givenTotals(long amount, int count, long comparisonAmount, int comparisonCount) {
@@ -242,12 +266,244 @@ class MoneyReportServiceTest {
     }
 
     @Test
-    @DisplayName("월 목록은 가입 월부터 현재 월까지")
+    @DisplayName("월 목록은 가입 월부터 현재 월까지, 활동 없는 달은 기록 없음")
     void availableMonths() {
+        when(mapper.selectActivityMonths(CHILD_ID)).thenReturn(List.of("2026-07", "2026-03"));
+
         var months = service.getMoneyReport(CHILD, CHILD_ID, null).getAvailableMonths();
 
         assertThat(months).extracting(m -> m.getYearMonth())
                 .containsExactly("2026-08", "2026-07", "2026-06",
                                  "2026-05", "2026-04", "2026-03", "2026-02", "2026-01");
+        assertThat(months).extracting(m -> m.getStatus())
+                .containsExactly("IN_PROGRESS", "COMPLETED", "NO_RECORD", "NO_RECORD",
+                                 "NO_RECORD", "COMPLETED", "NO_RECORD", "NO_RECORD");
+    }
+
+    // ---- 2차: 한눈에 보기 / 인사이트 / 티니점수 ----------------------------------
+
+    @Test
+    @DisplayName("한눈에 보기는 예금·적금을 합쳐 모은 돈, 원금·이자를 합쳐 갚은 돈을 만든다")
+    void summaryMergesFlows() {
+        givenTotals(52000, 4, 0, 0);
+        when(mapper.selectMoneyFlow(eq(CHILD_ID), any(), any())).thenReturn(
+                MoneyFlowVO.builder().depositAmount(50000).savingAmount(10000)
+                        .earnedAmount(4000).questRewardCount(1).build());
+        when(mapper.selectLoanRepayment(eq(CHILD_ID), any(), any())).thenReturn(
+                LoanRepaymentVO.builder().paidPrincipal(10000).paidInterest(1000)
+                        .repaidCount(1).build());
+
+        var summary = service.getMoneyReport(CHILD, CHILD_ID, "2026-08").getSummary();
+
+        assertThat(summary.getSpentAmount()).isEqualTo(52000L);
+        assertThat(summary.getSavedAmount()).isEqualTo(60000L);
+        assertThat(summary.getDepositAmount()).isEqualTo(50000L);
+        assertThat(summary.getSavingAmount()).isEqualTo(10000L);
+        assertThat(summary.getEarnedAmount()).isEqualTo(4000L);
+        assertThat(summary.getRepaidAmount()).isEqualTo(11000L);
+        assertThat(summary.getRepaidPrincipal()).isEqualTo(10000L);
+        assertThat(summary.getRepaidInterest()).isEqualTo(1000L);
+    }
+
+    @Test
+    @DisplayName("활동이 없으면 한눈에 보기는 전부 0이고 숨기지 않는다")
+    void summaryStaysWithZeros() {
+        var summary = service.getMoneyReport(CHILD, CHILD_ID, "2026-08").getSummary();
+
+        assertThat(summary).isNotNull();
+        assertThat(summary.getSavedAmount()).isZero();
+        assertThat(summary.getEarnedAmount()).isZero();
+        assertThat(summary.getRepaidAmount()).isZero();
+    }
+
+    @Test
+    @DisplayName("보여줄 사실이 없는 인사이트 카드는 아예 넣지 않는다")
+    void insightsSkipEmptyFacts() {
+        var insights = service.getMoneyReport(CHILD, CHILD_ID, "2026-08").getInsights();
+
+        assertThat(insights).isEmpty();
+    }
+
+    @Test
+    @DisplayName("인사이트는 화면 순서대로 나온다: 소비 → 소통 → 저축 → 상환 → 책임")
+    void insightsAreOrdered() {
+        givenTotals(10000, 1, 0, 0);
+        givenCategories(List.of(row(1L, "편의점", "ALLOW", 10000, 1)));
+        when(mapper.selectPermissionSummary(eq(CHILD_ID), any(), any())).thenReturn(
+                PermissionSummaryVO.builder().requestCount(1).approvedCount(1)
+                        .reasonWrittenCount(1).build());
+        when(mapper.selectMoneyFlow(eq(CHILD_ID), any(), any())).thenReturn(
+                MoneyFlowVO.builder().savingAmount(10000).savingProductCount(1)
+                        .savingPaymentCount(1).build());
+        when(mapper.selectLoanRepayment(eq(CHILD_ID), any(), any())).thenReturn(
+                LoanRepaymentVO.builder().paidPrincipal(10000).paidInterest(1000)
+                        .repaidCount(1).build());
+        when(mapper.selectQuestSummary(eq(CHILD_ID), any(), any())).thenReturn(
+                QuestSummaryVO.builder().completedCount(2).inProgressCount(1).build());
+
+        var insights = service.getMoneyReport(CHILD, CHILD_ID, "2026-08").getInsights();
+
+        assertThat(insights).extracting(InsightResponseDTO::getInsightCode)
+                .containsExactly("SPENDING_TOP_CATEGORY", "PERMISSION_STATUS_SUMMARY",
+                                 "SAVING_PAYMENT", "LOAN_REPAYMENT",
+                                 "QUEST_COMPLETED");
+    }
+
+    @Test
+    @DisplayName("저축 카드는 상품을 고르지 않고 그 달에 넣은 총액과 상품 개수를 준다")
+    void savingCardIsMonthlyFlowAcrossProducts() {
+        // 적금 2개에 각각 넣고 예금에도 넣은 달
+        when(mapper.selectMoneyFlow(eq(CHILD_ID), any(), any())).thenReturn(
+                MoneyFlowVO.builder()
+                        .savingAmount(20000).savingProductCount(2).savingPaymentCount(3)
+                        .depositAmount(50000).depositProductCount(1).depositPaymentCount(1)
+                        .build());
+
+        var insight = findInsight("SAVING_PAYMENT");
+
+        assertThat(insight.getMetrics())
+                .containsEntry("amount", 70000L)          // 적금 20,000 + 예금 50,000
+                .containsEntry("savingAmount", 20000L)
+                .containsEntry("savingProductCount", 2)   // 상품 하나만 고르지 않는다
+                .containsEntry("savingPaymentCount", 3)
+                .containsEntry("depositAmount", 50000L);
+        assertThat(insight.getDeepLink()).isEqualTo("/child/finance/my-products");
+    }
+
+    @Test
+    @DisplayName("상환 카드는 그 달에 갚은 금액을 원금과 이자로 나눠 준다")
+    void loanCardIsMonthlyRepaidAmount() {
+        when(mapper.selectLoanRepayment(eq(CHILD_ID), any(), any())).thenReturn(
+                LoanRepaymentVO.builder().paidPrincipal(10000).paidInterest(1000)
+                        .repaidCount(1).build());
+
+        assertThat(findInsight("LOAN_REPAYMENT").getMetrics())
+                .containsEntry("amount", 11000L)
+                .containsEntry("principal", 10000L)
+                .containsEntry("interest", 1000L)
+                .containsEntry("repaidCount", 1);
+    }
+
+    @Test
+    @DisplayName("그 달에 넣거나 갚은 게 없으면 저축·상환 카드가 없다")
+    void noSavingOrLoanCardWhenNothingMoved() {
+        var codes = service.getMoneyReport(CHILD, CHILD_ID, "2026-08").getInsights().stream()
+                .map(InsightResponseDTO::getInsightCode).toList();
+
+        // 가입 상품이 있어도 그 달에 움직이지 않았으면 카드가 안 나온다
+        assertThat(codes).doesNotContain("SAVING_PAYMENT", "LOAN_REPAYMENT");
+    }
+
+    @Test
+    @DisplayName("연체는 진행 중인 달에만 붙는다")
+    void overdueOnlyOnCurrentMonth() {
+        when(mapper.selectLoanOverdue(CHILD_ID)).thenReturn(
+                LoanOverdueVO.builder().overdueCount(1).outstandingPrincipal(40000).build());
+
+        var current = service.getMoneyReport(CHILD, CHILD_ID, "2026-08").getInsights();
+        assertThat(current).extracting(InsightResponseDTO::getInsightCode)
+                .contains("LOAN_OVERDUE");
+        assertThat(findInsight("LOAN_OVERDUE").getMetrics())
+                .containsEntry("overdueCount", 1)
+                .containsEntry("outstandingPrincipal", 40000L);
+
+        // 과거 달에는 조회조차 하지 않는다. 오늘의 연체가 지난 달 리포트로 새면 안 된다.
+        var past = service.getMoneyReport(CHILD, CHILD_ID, "2026-07").getInsights();
+        assertThat(past).extracting(InsightResponseDTO::getInsightCode)
+                .doesNotContain("LOAN_OVERDUE");
+    }
+
+    @Test
+    @DisplayName("티니점수는 순변동과 증감 건수를 세고 대표 원인을 변동 폭 순으로 2개만 준다")
+    void teenyScore() {
+        when(mapper.selectScoreHistory(eq(CHILD_ID), any(), any())).thenReturn(List.of(
+                score(3, "QUEST_COMPLETED", "퀘스트 성공"),
+                score(-4, "LOAN_INSTALLMENT_OVERDUE", "대출 월별 상환 결과"),
+                score(-2, "QUEST_FAILED", "퀘스트 최종 실패"),
+                score(1, "ETC", "기타")));
+
+        var score = service.getMoneyReport(CHILD, CHILD_ID, "2026-08").getTeenyScore();
+
+        assertThat(score.getNetChange()).isEqualTo(-2);
+        assertThat(score.getIncreaseEventCount()).isEqualTo(2);
+        assertThat(score.getDecreaseEventCount()).isEqualTo(2);
+        assertThat(score.getTopReasons()).hasSize(2);
+        assertThat(score.getTopReasons()).extracting(r -> r.getEventCode())
+                .containsExactly("LOAN_INSTALLMENT_OVERDUE", "QUEST_COMPLETED");
+    }
+
+    @Test
+    @DisplayName("기간 내 점수 이력이 없으면 teenyScore 는 null")
+    void teenyScoreNullWhenNoHistory() {
+        assertThat(service.getMoneyReport(CHILD, CHILD_ID, "2026-08").getTeenyScore()).isNull();
+    }
+
+    @Test
+    @DisplayName("그 달에 끝나는 상품이 있을 때만 만기 카드가 붙는다")
+    void maturityCardOnlyWhenSomethingCloses() {
+        // 평소에는 없다. 늘 떠 있는 잔액을 여기서 보여주지 않기 때문이다.
+        assertThat(service.getMoneyReport(CHILD, CHILD_ID, "2026-08").getInsights())
+                .extracting(InsightResponseDTO::getInsightCode)
+                .doesNotContain("DEPOSIT_MATURED", "SAVING_MATURED");
+
+        when(mapper.selectClosingProducts(eq(CHILD_ID), any(), any())).thenReturn(List.of(
+                ClosingProductVO.builder()
+                        .productType("DEPOSIT").enrollmentId(7L).productName("튼튼 정기예금")
+                        .status("ACTIVE").maturityDate(LocalDate.of(2026, 8, 31))
+                        .amount(50000).build()));
+
+        var insight = findInsight("DEPOSIT_MATURED");
+        assertThat(insight.getMetrics())
+                .containsEntry("productName", "튼튼 정기예금")
+                .containsEntry("amount", 50000L)
+                .containsEntry("maturityDate", "2026-08-31");
+        assertThat(insight.getDeepLink()).isEqualTo("/child/finance/deposit-enrollments/7");
+    }
+
+    @Test
+    @DisplayName("만기 카드 딥링크에는 상품 종류가 들어간다 — id 는 테이블마다 따로 증가해서 겹친다")
+    void maturityDeepLinksAreDisambiguatedByProductType() {
+        // 한 자녀가 예금 id=2, 적금 id=2 를 동시에 가질 수 있다 (실제 시드가 그렇다)
+        when(mapper.selectClosingProducts(eq(CHILD_ID), any(), any())).thenReturn(List.of(
+                ClosingProductVO.builder().productType("DEPOSIT").enrollmentId(2L)
+                        .status("ACTIVE").maturityDate(LocalDate.of(2026, 8, 31)).build(),
+                ClosingProductVO.builder().productType("SAVING").enrollmentId(2L)
+                        .status("MATURED").maturityDate(LocalDate.of(2026, 8, 20)).build()));
+
+        var links = service.getMoneyReport(CHILD, CHILD_ID, "2026-08").getInsights().stream()
+                .map(InsightResponseDTO::getDeepLink)
+                .filter(l -> l.contains("enrollments"))
+                .toList();
+
+        assertThat(links).containsExactlyInAnyOrder(
+                "/child/finance/deposit-enrollments/2",
+                "/child/finance/saving-enrollments/2");
+    }
+
+    @Test
+    @DisplayName("적금 만기는 SAVING_MATURED 로 구분된다")
+    void savingMaturityHasItsOwnCode() {
+        when(mapper.selectClosingProducts(eq(CHILD_ID), any(), any())).thenReturn(List.of(
+                ClosingProductVO.builder()
+                        .productType("SAVING").enrollmentId(21L).productName("티니 자유적금")
+                        .status("MATURED").maturityDate(LocalDate.of(2026, 8, 20))
+                        .closedOn(LocalDate.of(2026, 8, 20)).amount(60000).build()));
+
+        assertThat(findInsight("SAVING_MATURED").getMetrics())
+                .containsEntry("status", "MATURED")
+                .containsEntry("closedOn", "2026-08-20");
+    }
+
+    private InsightResponseDTO findInsight(String code) {
+        return service.getMoneyReport(CHILD, CHILD_ID, "2026-08").getInsights().stream()
+                .filter(i -> code.equals(i.getInsightCode()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError(code + " 인사이트가 없습니다"));
+    }
+
+    private ScoreHistoryVO score(int amount, String eventCode, String description) {
+        return ScoreHistoryVO.builder()
+                .amount(amount).eventCode(eventCode).description(description)
+                .createdAt(LocalDateTime.of(2026, 8, 10, 12, 0)).build();
     }
 }

@@ -1,7 +1,15 @@
 package com.teenyfin.teenymoney.domain.report.mapper;
 
 import com.teenyfin.teenymoney.domain.report.vo.ChildProfileVO;
+import com.teenyfin.teenymoney.domain.report.vo.ClosingProductVO;
 import com.teenyfin.teenymoney.domain.report.vo.DailySpendingVO;
+import com.teenyfin.teenymoney.domain.report.vo.LoanOverdueVO;
+import com.teenyfin.teenymoney.domain.report.vo.LoanRepaymentVO;
+import com.teenyfin.teenymoney.domain.report.vo.MoneyFlowVO;
+import com.teenyfin.teenymoney.domain.report.vo.PermissionSummaryVO;
+import com.teenyfin.teenymoney.domain.report.vo.ProductPeriodVO;
+import com.teenyfin.teenymoney.domain.report.vo.QuestSummaryVO;
+import com.teenyfin.teenymoney.domain.report.vo.ScoreHistoryVO;
 import com.teenyfin.teenymoney.domain.report.vo.SpendingCategoryVO;
 import com.teenyfin.teenymoney.domain.report.vo.SpendingTotalVO;
 import org.apache.ibatis.annotations.Mapper;
@@ -43,4 +51,49 @@ public interface MoneyReportMapper {
             @Param("childId") Long childId,
             @Param("from") LocalDate from,
             @Param("to") LocalDate to);
+
+    // 기간 내 예금·적금 이동과 퀘스트 보상 수령 (모은 돈 / 직접 얻은 돈)
+    MoneyFlowVO selectMoneyFlow(
+            @Param("childId") Long childId,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to);
+
+    // 기간 내 실제 납부한 대출 원금과 이자 (갚은 돈)
+    LoanRepaymentVO selectLoanRepayment(
+            @Param("childId") Long childId,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to);
+
+    // 지금 연체 중인 대출. 기간을 받지 않는다 — 진행 중인 달에만 부른다.
+    LoanOverdueVO selectLoanOverdue(@Param("childId") Long childId);
+
+    // 기간 내 오늘만 허용 요청의 상태별 건수
+    PermissionSummaryVO selectPermissionSummary(
+            @Param("childId") Long childId,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to);
+
+    // 기간 내 종료된 퀘스트와 진행 중인 퀘스트
+    QuestSummaryVO selectQuestSummary(
+            @Param("childId") Long childId,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to);
+
+    // 그 달에 만기·종료되는 예금·적금. monthEnd 는 조회 종료일이 아니라 그 달 말일이다.
+    List<ClosingProductVO> selectClosingProducts(
+            @Param("childId") Long childId,
+            @Param("from") LocalDate from,
+            @Param("monthEnd") LocalDate monthEnd);
+
+    // 기간 내 티니점수 변동 이력
+    List<ScoreHistoryVO> selectScoreHistory(
+            @Param("childId") Long childId,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to);
+
+    // 가입 상품이 살아 있던 기간. 활동 월 판정에 함께 쓴다.
+    List<ProductPeriodVO> selectProductPeriods(@Param("childId") Long childId);
+
+    // 활동이 하나라도 있었던 달 (yyyy-MM). 월 선택의 '기록 없음' 판정에 쓴다.
+    List<String> selectActivityMonths(@Param("childId") Long childId);
 }

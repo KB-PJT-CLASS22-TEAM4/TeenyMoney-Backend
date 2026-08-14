@@ -85,4 +85,273 @@
         ORDER BY spent_date
     </select>
 
+    <!--
+        모은 돈과 직접 얻은 돈. 둘 다 이체 기록에서 뽑는다.
+
+        예금은 적금과 달리 납입 이력 테이블이 없어서 T_WLT_TRF_L 말고는 소스가 없다.
+        적금도 같은 기준으로 맞춰야 '모은 돈'이 한 가지 규칙으로 설명된다.
+
+        방향이 중요하다. DEPOSIT·SAVING 은 자녀 지갑에서 빠져나가고,
+        QUEST_REWARD 는 부모 지갑에서 자녀 지갑으로 들어온다.
+        LOAN 도 자녀에게서 나가지만 여기서는 세지 않는다(갚은 돈은 상환 이력으로 센다).
+    -->
+    <select id="selectMoneyFlow"
+            resultType="com.teenyfin.teenymoney.domain.report.vo.MoneyFlowVO">
+        SELECT
+        COALESCE(SUM(CASE WHEN t.type = 'DEPOSIT' AND fw.member_id = #{childId}
+                          THEN t.amount ELSE 0 END), 0) AS deposit_amount,
+        COALESCE(SUM(CASE WHEN t.type = 'SAVING' AND fw.member_id = #{childId}
+                          THEN t.amount ELSE 0 END), 0) AS saving_amount,
+        COALESCE(SUM(CASE WHEN t.type = 'QUEST_REWARD' AND tw.member_id = #{childId}
+                          THEN t.amount ELSE 0 END), 0) AS earned_amount,
+        COALESCE(SUM(CASE WHEN t.type = 'QUEST_REWARD' AND tw.member_id = #{childId}
+                          THEN 1 ELSE 0 END), 0) AS quest_reward_count,
+        <!--
+            '이번 달 적금 2개에 20,000원' 같은 문장을 만들려면 개수와 횟수가 필요하다.
+            받는 지갑이 상품 계좌이므로 to_wallet_id 를 세면 상품 개수가 된다.
+        -->
+        COUNT(DISTINCT CASE WHEN t.type = 'SAVING' AND fw.member_id = #{childId}
+                            THEN t.to_wallet_id END) AS saving_product_count,
+        COALESCE(SUM(CASE WHEN t.type = 'SAVING' AND fw.member_id = #{childId}
+                          THEN 1 ELSE 0 END), 0) AS saving_payment_count,
+        COUNT(DISTINCT CASE WHEN t.type = 'DEPOSIT' AND fw.member_id = #{childId}
+                            THEN t.to_wallet_id END) AS deposit_product_count,
+        COALESCE(SUM(CASE WHEN t.type = 'DEPOSIT' AND fw.member_id = #{childId}
+                          THEN 1 ELSE 0 END), 0) AS deposit_payment_count
+        FROM T_WLT_TRF_L t
+        JOIN T_WLT_BASE_M fw ON fw.id = t.from_wallet_id
+        JOIN T_WLT_BASE_M tw ON tw.id = t.to_wallet_id
+        WHERE t.status = 'COMPLETED'
+        AND (fw.member_id = #{childId} OR tw.member_id = #{childId})
+        <!--
+            돈이 실제로 움직인 시점은 완료된 때다. created_at 은 '시도 일시'라
+            월말에 걸쳐 CHARGING 으로 대기하다 다음 달에 완료된 이체가 신청한 달로 잡힌다.
+            updated_at 이 비어 있는 예전 데이터는 created_at 으로 떨어진다.
+        -->
+        AND COALESCE(t.updated_at, t.created_at) &gt;= #{from}
+        AND COALESCE(t.updated_at, t.created_at) &lt; DATE_ADD(#{to}, INTERVAL 1 DAY)
+    </select>
+
+    <!--
+        갚은 돈. paid_at 이 채워진 행만 실제로 납부가 일어난 것이므로 상태를 따로 걸지 않는다.
+        PARTIAL(부분상환)도 실제 낸 금액이 있으므로 합계에 포함하고, 회차 완료 건수만 PAID 로 센다.
+    -->
+    <select id="selectLoanRepayment"
+            resultType="com.teenyfin.teenymoney.domain.report.vo.LoanRepaymentVO">
+        SELECT COALESCE(SUM(r.paid_principal_amount), 0)              AS paid_principal,
+               COALESCE(SUM(r.paid_interest_amount), 0)               AS paid_interest,
+               COALESCE(SUM(CASE WHEN r.status = 'PAID' THEN 1 ELSE 0 END), 0) AS repaid_count
+        FROM T_LON_REPAYHIST_H r
+        JOIN T_LON_ENROLL_M e ON e.id = r.loan_enrollment_id
+        WHERE e.child_id = #{childId}
+        AND r.paid_at &gt;= #{from}
+        AND r.paid_at &lt; DATE_ADD(#{to}, INTERVAL 1 DAY)
+    </select>
+
+    <!--
+        지금 연체 중인 대출.
+
+        기간을 받지 않는 유일한 집계다. 연체는 그 달의 사건이 아니라 지금 확인해야 할
+        상태라서, 호출부가 진행 중인 달에만 부른다. 그래서 status 와 캐시 컬럼
+        (outstanding_principal) 을 그대로 써도 과거 달로 새지 않는다.
+    -->
+    <select id="selectLoanOverdue"
+            resultType="com.teenyfin.teenymoney.domain.report.vo.LoanOverdueVO">
+        SELECT COALESCE(SUM(r.status = 'OVERDUE'), 0) AS overdue_count,
+               (SELECT COALESCE(SUM(e2.outstanding_principal), 0)
+                  FROM T_LON_ENROLL_M e2
+                 WHERE e2.child_id = #{childId}
+                   AND e2.status = 'OVERDUE')          AS outstanding_principal
+        FROM T_LON_REPAYHIST_H r
+        JOIN T_LON_ENROLL_M e ON e.id = r.loan_enrollment_id
+        WHERE e.child_id = #{childId}
+        AND e.status = 'OVERDUE'
+    </select>
+
+    <select id="selectPermissionSummary"
+            resultType="com.teenyfin.teenymoney.domain.report.vo.PermissionSummaryVO">
+        SELECT COUNT(*)                                                        AS request_count,
+               COALESCE(SUM(r.status = 'APPROVED'), 0)                         AS approved_count,
+               COALESCE(SUM(r.status = 'REJECTED'), 0)                         AS rejected_count,
+               COALESCE(SUM(r.status = 'PENDING'), 0)                          AS pending_count,
+               COALESCE(SUM(r.status = 'EXPIRED'), 0)                          AS expired_count,
+               COALESCE(SUM(r.reason IS NOT NULL AND r.reason &lt;&gt; ''), 0) AS reason_written_count
+        FROM T_TDP_REQ_L r
+        WHERE r.child_id = #{childId}
+        AND r.created_at &gt;= #{from}
+        AND r.created_at &lt; DATE_ADD(#{to}, INTERVAL 1 DAY)
+    </select>
+
+    <!--
+        종료된 퀘스트는 ended_at 이 조회 기간 안에 있는 것만 센다.
+        (T_QST_BASE_M 의 완료 일시 컬럼은 completed_at 이 아니라 ended_at 이다)
+
+        진행 중은 상태가 현재 값이라 기간으로 자를 수 없다. 조회 기간 종료일까지 만들어졌고
+        지금도 IN_PROGRESS 인 것을 센다. 과거 달을 볼 때는 '그 뒤로도 계속 진행 중인 퀘스트'가
+        잡힌다는 뜻이다.
+    -->
+    <select id="selectQuestSummary"
+            resultType="com.teenyfin.teenymoney.domain.report.vo.QuestSummaryVO">
+        SELECT
+        COALESCE(SUM(q.status = 'COMPLETED' AND q.ended_at IS NOT NULL
+                     AND q.ended_at &gt;= #{from}
+                     AND q.ended_at &lt; DATE_ADD(#{to}, INTERVAL 1 DAY)), 0) AS completed_count,
+        COALESCE(SUM(q.status = 'FAILED' AND q.ended_at IS NOT NULL
+                     AND q.ended_at &gt;= #{from}
+                     AND q.ended_at &lt; DATE_ADD(#{to}, INTERVAL 1 DAY)), 0) AS failed_count,
+        COALESCE(SUM(q.status = 'EXPIRED' AND q.ended_at IS NOT NULL
+                     AND q.ended_at &gt;= #{from}
+                     AND q.ended_at &lt; DATE_ADD(#{to}, INTERVAL 1 DAY)), 0) AS expired_count,
+        COALESCE(SUM(q.status = 'DECLINED' AND q.ended_at IS NOT NULL
+                     AND q.ended_at &gt;= #{from}
+                     AND q.ended_at &lt; DATE_ADD(#{to}, INTERVAL 1 DAY)), 0) AS declined_count,
+        <!--
+            진행 중은 "그 시점에 아직 끝나지 않은 퀘스트"로 센다.
+
+            status 는 현재값이라 그대로 쓰면 7월에 진행 중이다 8월에 완료된 퀘스트가
+            7월 리포트에서 0건이 된다. 대출 연체와 같은 종류의 오류다.
+            대신 그 시점까지 만들어졌고 아직 ended_at 이 없던 것을 센다.
+
+            ponytail: 상태 이력 테이블이 없어서 '그때 수락 상태였는가'까지는 복원하지 못한다.
+            지금 AVAILABLE(한 번도 수락 안 함)인 것만 제외한다. 정확도가 더 필요하면
+            퀘스트 상태 변경 이력을 남겨야 한다.
+        -->
+        COALESCE(SUM(q.status &lt;&gt; 'AVAILABLE'
+                     AND q.created_at &lt; DATE_ADD(#{to}, INTERVAL 1 DAY)
+                     AND (q.ended_at IS NULL
+                          OR q.ended_at &gt;= DATE_ADD(#{to}, INTERVAL 1 DAY))), 0)
+                     AS in_progress_count
+        FROM T_QST_BASE_M q
+        WHERE q.child_id = #{childId}
+    </select>
+
+
+    <!--
+        그 달에 끝나는 예금·적금.
+
+        기간의 끝을 조회 종료일(오늘)이 아니라 그 달 말일로 잡는다. 진행 중인 달이라면
+        "이번 달 안에 만기가 온다"가 지금 알아야 할 정보이지, 오늘까지 지난 것만 볼 이유가 없다.
+
+        만기일이 그 달에 걸리거나, 그 달에 실제로 종료(중도해지 포함)된 건을 모은다.
+        늘 떠 있는 상태(현재 잔액, 가입 개수)는 여기서 다루지 않는다. 그건 금융상품 화면 몫이다.
+    -->
+    <select id="selectClosingProducts"
+            resultType="com.teenyfin.teenymoney.domain.report.vo.ClosingProductVO">
+        SELECT 'DEPOSIT'      AS product_type,
+               e.id           AS enrollment_id,
+               p.name         AS product_name,
+               e.status       AS status,
+               e.maturity_date,
+               DATE(e.closed_at) AS closed_on,
+               COALESCE(w.balance, 0) AS amount
+        FROM T_DPT_ENROLL_M e
+        LEFT JOIN T_DPT_PROD_M p ON p.id = e.deposit_id
+        LEFT JOIN T_WLT_BASE_M w ON w.id = e.wallet_id
+        WHERE e.child_id = #{childId}
+        AND e.status IN ('ACTIVE', 'MATURED', 'TERMINATED')
+        AND (
+            (e.maturity_date &gt;= #{from} AND e.maturity_date &lt;= #{monthEnd})
+            OR (e.closed_at &gt;= #{from}
+                AND e.closed_at &lt; DATE_ADD(#{monthEnd}, INTERVAL 1 DAY))
+        )
+
+        UNION ALL
+
+        SELECT 'SAVING',
+               e.id,
+               p.name,
+               e.status,
+               e.maturity_date,
+               DATE(e.closed_at),
+               COALESCE(w.balance, 0)
+        FROM T_SVG_ENROLL_M e
+        LEFT JOIN T_SVG_PROD_M p ON p.id = e.saving_id
+        LEFT JOIN T_WLT_BASE_M w ON w.id = e.wallet_id
+        WHERE e.child_id = #{childId}
+        AND e.status IN ('ACTIVE', 'MATURED', 'TERMINATED')
+        AND (
+            (e.maturity_date &gt;= #{from} AND e.maturity_date &lt;= #{monthEnd})
+            OR (e.closed_at &gt;= #{from}
+                AND e.closed_at &lt; DATE_ADD(#{monthEnd}, INTERVAL 1 DAY))
+        )
+    </select>
+
+    <select id="selectScoreHistory"
+            resultType="com.teenyfin.teenymoney.domain.report.vo.ScoreHistoryVO">
+        SELECT h.amount,
+               h.event_code,
+               h.description,
+               h.created_at
+        FROM T_TNY_SCOREHIST_H h
+        WHERE h.child_id = #{childId}
+        AND h.created_at &gt;= #{from}
+        AND h.created_at &lt; DATE_ADD(#{to}, INTERVAL 1 DAY)
+        ORDER BY h.created_at
+    </select>
+
+    <!--
+        '기록 없음' 판정용. 리포트가 보여주는 모든 도메인을 훑어 활동이 하나라도 있었던 달을 모은다.
+        결제만 보고 판정하면 저축이나 퀘스트만 한 달이 '기록 없음'으로 잘못 나온다.
+    -->
+    <select id="selectActivityMonths" resultType="java.lang.String">
+        SELECT DISTINCT ym FROM (
+            SELECT DATE_FORMAT(p.created_at, '%Y-%m') AS ym
+            FROM T_PAY_TRAN_L p
+            JOIN T_WLT_BASE_M w ON w.id = p.wallet_id AND w.type = 'MEMBER'
+            WHERE w.member_id = #{childId} AND p.status = 'SUCCESS'
+            UNION ALL
+            SELECT DATE_FORMAT(t.created_at, '%Y-%m')
+            FROM T_WLT_TRF_L t
+            JOIN T_WLT_BASE_M fw ON fw.id = t.from_wallet_id
+            JOIN T_WLT_BASE_M tw ON tw.id = t.to_wallet_id
+            WHERE t.status = 'COMPLETED'
+            AND (fw.member_id = #{childId} OR tw.member_id = #{childId})
+            UNION ALL
+            SELECT DATE_FORMAT(r.paid_at, '%Y-%m')
+            FROM T_LON_REPAYHIST_H r
+            JOIN T_LON_ENROLL_M le ON le.id = r.loan_enrollment_id
+            WHERE le.child_id = #{childId} AND r.paid_at IS NOT NULL
+            UNION ALL
+            SELECT DATE_FORMAT(q.ended_at, '%Y-%m')
+            FROM T_QST_BASE_M q
+            WHERE q.child_id = #{childId} AND q.ended_at IS NOT NULL
+            UNION ALL
+            SELECT DATE_FORMAT(pr.created_at, '%Y-%m')
+            FROM T_TDP_REQ_L pr
+            WHERE pr.child_id = #{childId}
+            UNION ALL
+            SELECT DATE_FORMAT(sh.created_at, '%Y-%m')
+            FROM T_TNY_SCOREHIST_H sh
+            WHERE sh.child_id = #{childId}
+        ) months
+        WHERE ym IS NOT NULL
+    </select>
+
+    <!--
+        가입 상품이 살아 있던 기간.
+
+        활동 월 판정에 이게 빠져 있으면 결제도 퀘스트도 없던 달이 '기록 없음'으로 표시되는데
+        정작 열어보면 적금 진행 카드가 떠 있다. 진행 카드는 그 달에 상품이 있었으면 나오므로
+        '기록 없음' 판정도 같은 기준을 봐야 한다.
+
+        끝 날짜가 NULL 이면 아직 진행 중이라는 뜻이고, 호출부가 현재 월까지로 본다.
+        대출에는 closed_at 이 없어서 만기일을 끝으로 쓴다. 조기 완제한 대출은 만기까지
+        살아 있던 것으로 잡히는데, '기록 없음'을 잘못 붙이는 것보다 낫다.
+    -->
+    <select id="selectProductPeriods"
+            resultType="com.teenyfin.teenymoney.domain.report.vo.ProductPeriodVO">
+        SELECT e.start_date AS start_date,
+               COALESCE(DATE(e.closed_at), e.maturity_date) AS end_date
+        FROM T_DPT_ENROLL_M e
+        WHERE e.child_id = #{childId} AND e.start_date IS NOT NULL
+        UNION ALL
+        SELECT e.start_date, COALESCE(DATE(e.closed_at), e.maturity_date)
+        FROM T_SVG_ENROLL_M e
+        WHERE e.child_id = #{childId} AND e.start_date IS NOT NULL
+        UNION ALL
+        SELECT e.start_date, e.maturity_date
+        FROM T_LON_ENROLL_M e
+        WHERE e.child_id = #{childId} AND e.start_date IS NOT NULL
+    </select>
+
 </mapper>
