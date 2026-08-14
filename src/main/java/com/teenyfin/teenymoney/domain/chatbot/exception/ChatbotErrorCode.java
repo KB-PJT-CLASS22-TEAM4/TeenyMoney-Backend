@@ -18,7 +18,8 @@ public enum ChatbotErrorCode implements ErrorCode {    // Dify가 4xx/5xx로 응
     // conversationId는 있는데, Redis에 저장된 소유자가 없거나(=모름) 나와 다른 경우.
     // 403을 씀 - 인증(로그인) 문제가 아니라 "너는 이 자원에 접근 권한이 없다"는 뜻이라 401이 아니라 403이 맞음.
     CHATBOT_CONVERSATION_FORBIDDEN(
-            HttpStatus.FORBIDDEN, "본인 소유의 대화가 아닙니다.");
+            HttpStatus.FORBIDDEN, "본인 소유의 대화가 아닙니다."),
+    CHATBOT_API_KEY_MISSING(HttpStatus.SERVICE_UNAVAILABLE, "챗봇 API 설정이 필요합니다.");
 
     private final HttpStatus status;
     private final String message;

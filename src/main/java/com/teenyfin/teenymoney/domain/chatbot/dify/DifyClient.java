@@ -37,9 +37,18 @@ public class DifyClient {
         this.baseUrl = baseUrl;
     }
 
+    public boolean isConfigured() {
+        return apiKey != null && !apiKey.isBlank();
+    }
+
     // query(이번 턴 질문), conversationId(이전 대화 이어가기용, 없으면 null), user(Dify쪽 사용자 식별자)를
     // 받아서 Dify에 질문을 보내고 답변을 받아온다.
     public DifyChatResponseDTO sendMessage(String query, String conversationId, String user) {
+
+        if(!isConfigured()) {
+            throw new BusinessException(ChatbotErrorCode.CHATBOT_API_KEY_MISSING);
+        }
+
         String url = baseUrl + "/chat-messages";
         DifyChatRequestDTO request = new DifyChatRequestDTO(query, conversationId, user);
 

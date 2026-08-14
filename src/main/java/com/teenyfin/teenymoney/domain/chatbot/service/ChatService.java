@@ -44,13 +44,17 @@ public class ChatService {
             }
         }
 
-        // memberId를 "member-{memberId}"로 매핑 - 우리 서버 접근 제어(로그인 여부)와는 별개로,
-        // Dify 쪽에서 대화 소유자를 구분하기 위한 식별자다. 가족 구성원끼리 conversation_id가
-        // 섞이지 않게 하는 역할 (예: 아빠가 자녀의 conversation_id를 알아도 이어갈 수 없음).
+        // memberId를 "member-{memberId}"로 매핑 - Dify 쪽에서 대화 소유자를 구분하기 위한 식별자.
+        // (가족 구성원끼리 conversation_id가 안 섞이는 건 이 값이 아니라 위쪽 Redis 소유권 체크가 보장함 -
+        //  이건 Dify 내부용 보조 식별자 역할만 함)
 
         String user = "member-" + memberId;
 
         DifyChatResponseDTO response = difyClient.sendMessage(request.getQuery(), conversationId, user);
+
+        // 매번(새 대화든 이어가는 대화든) 저장 - 이어가는 대화는 위에서 이미 소유자가 나임을 확인했으므로
+        // 여기서 다시 저장하는 건 사실상 TTL 갱신 효과(계속 쓰는 대화가 세션 내내 안 만료되게).
+        conversationOwnerStore.saveOwner(response.getConversationId(), memberId);
 
         return new ChatMessageResponseDTO(response.getAnswer(), response.getConversationId());
     }
