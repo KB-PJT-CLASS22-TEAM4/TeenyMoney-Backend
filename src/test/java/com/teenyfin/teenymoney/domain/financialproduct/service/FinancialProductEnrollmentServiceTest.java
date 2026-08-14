@@ -71,7 +71,7 @@ class FinancialProductEnrollmentServiceTest {
     }
 
     @Test
-    @DisplayName("예금 가입 요청은 등급 우대금리를 반영한 PENDING 계약과 송금을 생성한다")
+    @DisplayName("예금 가입 시 우대금리와 중도해지 기준금리를 계약에 저장하고 송금을 생성한다")
     void requestDepositCreatesPendingEnrollmentAndTransfer() {
         DepositProductVO product = new DepositProductVO();
         product.setId(1L);
@@ -89,12 +89,15 @@ class FinancialProductEnrollmentServiceTest {
         assertEquals(100L, response.getEnrollmentId());
         assertEquals("PENDING", response.getStatus());
         assertEquals(new BigDecimal("4.20"), response.getExpectedAppliedRate());
+        verify(mapper).insertDepositEnrollment(argThat(command ->
+                new BigDecimal("0.50").equals(
+                        command.getAppliedEarlyTerminationRate())));
         verify(transferService).createPendingTransfer(eq(10L), eq(20L),
                 eq(50_000L), any(), anyString());
     }
 
     @Test
-    @DisplayName("적금 가입 요청은 상품 지갑만 생성하고 대기 송금을 생성하지 않는다")
+    @DisplayName("적금 가입 시 중도해지 기준금리를 계약에 저장하고 상품 지갑만 생성한다")
     void requestSavingDoesNotCreatePendingTransfer() {
         SavingProductVO product = new SavingProductVO();
         product.setId(1L);
@@ -116,6 +119,9 @@ class FinancialProductEnrollmentServiceTest {
 
         assertEquals(101L, response.getEnrollmentId());
         assertEquals("PENDING", response.getStatus());
+        verify(mapper).insertSavingEnrollment(argThat(command ->
+                new BigDecimal("1.00").equals(
+                        command.getAppliedEarlyTerminationRate())));
         verify(walletService).createWallet(2L,
                 com.teenyfin.teenymoney.domain.wallet.vo.WalletType.SAVING);
         verifyNoInteractions(transferService);
@@ -202,8 +208,8 @@ class FinancialProductEnrollmentServiceTest {
     }
 
     @Test
-    @DisplayName("Parent custom loan stores the monthly grade loan rate at request time")
-    void parentLoanEnrollmentUsesGradeLoanRate() {
+    @DisplayName("부모 대출 가입 시 자녀 등급 금리 대신 부모 설정 금리 5.00%를 저장한다")
+    void parentLoanEnrollmentUsesConfiguredProductRate() {
         LoanProductVO product = new LoanProductVO();
         product.setId(1L);
         product.setProductSource(FinancialProductSource.PARENT);
@@ -224,10 +230,10 @@ class FinancialProductEnrollmentServiceTest {
                 service.requestLoan(CHILD, new LoanEnrollmentRequestDTO(
                         1L, 100_000L, 12, 25, true));
 
-        assertEquals(new BigDecimal("7.00"),
+        assertEquals(new BigDecimal("5.00"),
                 response.getExpectedAppliedRate());
         verify(mapper).insertLoanEnrollment(argThat(command ->
-                new BigDecimal("7.00").equals(command.getAppliedRate())));
+                new BigDecimal("5.00").equals(command.getAppliedRate())));
     }
 
     @Test

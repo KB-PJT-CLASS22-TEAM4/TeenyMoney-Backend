@@ -129,8 +129,10 @@ public class FinancialProductEnrollmentService {
         ensureNoPending(financialProductMapper.countPendingLoanEnrollment(
                 childId, product.getId()));
         FinancialProductBenefitVO benefit = benefit(childId);
+        // 자녀 등급은 대출 가입 가능 여부만 판단하며 계약 금리를 변경하지 않는다.
         validateLoanGrade(product, benefit);
-        BigDecimal rate = loanRate(product, benefit);
+        // 부모 생성 대출도 부모가 상품에 입력한 baseRate를 가입 시점 확정금리로 저장한다.
+        BigDecimal rate = loanRate(product);
         FinancialProductEnrollmentCommandVO command = baseCommand(
                 product.getId(), parentId, childId, null, rate,
                 request.getTermMonths());
@@ -184,16 +186,10 @@ public class FinancialProductEnrollmentService {
         }
     }
 
-    /**
-     * 부모 생성 대출은 상품 기본금리에 bonusRate를 더하지 않는다.
-     * 가입 요청 당시 월간 적용 등급의 대출금리를 계약 확정금리로 저장한다.
-     */
-    private BigDecimal loanRate(LoanProductVO product,
-                                FinancialProductBenefitVO benefit) {
-        if (product.getProductSource() != FinancialProductSource.PARENT) {
-            return product.getBaseRate();
-        }
-        return benefit.getLoanRate();
+    /** 부모가 설정한 상품 금리를 포함해 상품의 기본금리를 계약 확정금리로 저장한다. */
+    private BigDecimal loanRate(LoanProductVO product) {
+        // benefit.loanRate를 사용하면 자녀 등급에 따라 부모 상품의 금리가 바뀌므로 사용하지 않는다.
+        return product.getBaseRate();
     }
 
     private void validateAmount(Long amount, Long minimum, Long maximum) {

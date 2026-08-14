@@ -1,6 +1,7 @@
 package com.teenyfin.teenymoney.domain.financialproduct.dto.request;
 
 import io.swagger.annotations.ApiModel;
+import io.swagger.annotations.ApiModelProperty;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -27,6 +28,8 @@ public class CustomDepositProductRequestDTO {
     @NotEmpty @Size(max = 4) @Valid
     private List<CustomProductRateRequestDTO> rates;
     @NotNull @DecimalMin(value = "0.00", inclusive = false)
+    @ApiModelProperty(value = "진행률별 중도해지 정책을 적용하기 전 부모 설정 기준금리(%)",
+            example = "1.00")
     private BigDecimal earlyTerminationRate;
     @NotNull @Positive private Long minimumAmount;
     @NotNull @Positive private Long maximumAmount;
