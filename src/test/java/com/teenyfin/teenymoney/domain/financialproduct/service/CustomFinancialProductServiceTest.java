@@ -46,7 +46,7 @@ class CustomFinancialProductServiceTest {
     }
 
     @Test
-    @DisplayName("부모는 예금의 1·3·6·12개월 금리를 각각 설정할 수 있다")
+    @DisplayName("부모 예금 생성 시 기간별 금리와 중도해지 기준금리를 상품에 저장한다")
     void createParentDepositProductWithTermRates() {
         doAnswer(invocation -> {
             DepositProductVO product = invocation.getArgument(0);
@@ -72,6 +72,7 @@ class CustomFinancialProductServiceTest {
         assertEquals(new BigDecimal("2.50"), product.getRate3m());
         assertEquals(new BigDecimal("3.00"), product.getRate6m());
         assertEquals(new BigDecimal("4.00"), product.getRate12m());
+        assertEquals(new BigDecimal("1.00"), product.getEarlyTerminationRate());
         assertEquals(15L, response.getProductId());
         assertEquals("PARENT", response.getProductSource());
     }

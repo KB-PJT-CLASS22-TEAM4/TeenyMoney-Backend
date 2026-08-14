@@ -148,21 +148,22 @@ class FinancialProductServiceTest {
     }
 
     @Test
-    @DisplayName("부모 생성 대출은 부모가 선택한 가입기간들을 반환한다")
-    void parentLoanReturnsConfiguredTerms() {
+    @DisplayName("부모 대출 조회 시 부모가 설정한 가입기간과 고정금리 4.25%를 반환한다")
+    void parentLoanReturnsConfiguredTermsAndRate() {
         LoanProductVO loan = loan();
         loan.setProductSource(FinancialProductSource.PARENT);
         loan.setAvailable1m(true);
         loan.setAvailable3m(true);
         loan.setAvailable6m(false);
         loan.setAvailable12m(true);
+        loan.setBaseRate(new BigDecimal("4.25"));
         when(mapper.selectVisibleLoanProducts(2L)).thenReturn(List.of(loan));
 
         FinancialProductListResponseDTO response =
                 service.getLoanProducts(CHILD).get(0);
 
         assertEquals(List.of(1, 3, 12), response.getAvailableTerms());
-        assertEquals(new BigDecimal("5.00"),
+        assertEquals(new BigDecimal("4.25"),
                 response.getExpectedAppliedRate());
     }
 

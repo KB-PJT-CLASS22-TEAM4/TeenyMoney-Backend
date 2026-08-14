@@ -418,7 +418,7 @@ public class FinancialProductService {
                 .ineligibleReason(loanIneligibleReason(product, benefit))
                 .availableTerms(loanTerms(product))
                 .baseRate(product.getBaseRate())
-                .expectedAppliedRate(loanRate(product, benefit))
+                .expectedAppliedRate(loanRate(product))
                 .lateFeeRate(product.getLateFeeRate())
                 .minimumAmount(product.getMinAmount())
                 .maximumAmount(product.getMaxAmount())
@@ -502,7 +502,7 @@ public class FinancialProductService {
                 .ineligibleReason(loanIneligibleReason(product, benefit))
                 .availableTerms(loanTerms(product))
                 .baseRate(product.getBaseRate())
-                .expectedAppliedRate(loanRate(product, benefit))
+                .expectedAppliedRate(loanRate(product))
                 .lateFeeRate(product.getLateFeeRate())
                 .minimumAmount(product.getMinAmount())
                 .maximumAmount(product.getMaxAmount())
@@ -519,13 +519,10 @@ public class FinancialProductService {
                 && benefit.getGradeId() >= product.getRequiredGradeId();
     }
 
-    /** 부모 생성 대출의 예상금리는 자녀 월간 적용 등급의 loanRate를 사용한다. */
-    private BigDecimal loanRate(LoanProductVO product,
-                                FinancialProductBenefitVO benefit) {
-        if (product.getProductSource() != FinancialProductSource.PARENT) {
-            return product.getBaseRate();
-        }
-        return benefit.getLoanRate();
+    /** 부모 생성 상품을 포함한 대출의 예상금리는 상품에 설정된 기본금리를 사용한다. */
+    private BigDecimal loanRate(LoanProductVO product) {
+        // 목록·상세의 예상금리도 가입 시 저장될 계약 금리와 동일해야 한다.
+        return product.getBaseRate();
     }
 
     /** 기간별 Boolean 컬럼을 API의 availableTerms 배열로 변환한다. */

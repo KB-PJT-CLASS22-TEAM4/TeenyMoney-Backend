@@ -41,6 +41,7 @@ public class FinancialProductDetailResponseDTO {
     private final BigDecimal baseRate;
     @ApiModelProperty(value = "대출상품 예상 적용금리(%)")
     private final BigDecimal expectedAppliedRate;
+    @ApiModelProperty(value = "진행률별 중도해지 정책을 적용하기 전 기준금리(%)")
     private final BigDecimal earlyTerminationRate;
     private final BigDecimal lateFeeRate;
     private final Long minimumAmount;
