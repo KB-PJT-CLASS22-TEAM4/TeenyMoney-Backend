@@ -12,6 +12,7 @@ import com.teenyfin.teenymoney.domain.permission.dto.response.PermissionResponse
 import com.teenyfin.teenymoney.domain.permission.exception.PermissionErrorCode;
 import com.teenyfin.teenymoney.domain.permission.mapper.PermissionMapper;
 import com.teenyfin.teenymoney.domain.permission.vo.PermissionInsertVO;
+import com.teenyfin.teenymoney.domain.permission.vo.PermissionStatus;
 import com.teenyfin.teenymoney.domain.permission.vo.PermissionVO;
 import com.teenyfin.teenymoney.domain.teenyscore.mapper.TeenyScoreMapper;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
@@ -142,7 +143,7 @@ public class PermissionService {
         validatePermission(memberId, role, permissionVO);
 
         // 상태 변경
-        permissionMapper.updatePermissionStatus(permissionId, "APPROVED");
+        permissionMapper.updatePermissionStatus(permissionId, PermissionStatus.APPROVED);
 
         // 자녀에게 알림 발송
         String title = "오늘만 허용이 승인되었어요";
@@ -167,7 +168,7 @@ public class PermissionService {
         validatePermission(memberId, role, permissionVO);
 
         // 상태 변경
-        permissionMapper.updatePermissionStatus(permissionId, "REJECTED");
+        permissionMapper.updatePermissionStatus(permissionId, PermissionStatus.REJECTED);
 
         // 자녀에게 알림 발송
         String title = "오늘만 허용이 거절되었어요";
@@ -217,7 +218,7 @@ public class PermissionService {
         }
 
         // 대기 상태의 오늘만 허용 요청만 처리 가능
-        if (!permissionVO.getStatus().equals("PENDING")) {
+        if (permissionVO.getStatus() != PermissionStatus.PENDING) {
             throw new BusinessException(PermissionErrorCode.ONLY_CAN_PROCESS_PENDING_PERMISSION);
         }
     }

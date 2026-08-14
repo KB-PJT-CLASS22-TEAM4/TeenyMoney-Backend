@@ -1,5 +1,6 @@
 package com.teenyfin.teenymoney.domain.permission.dto.response;
 
+import com.teenyfin.teenymoney.domain.permission.vo.PermissionStatus;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Builder;
@@ -22,7 +23,7 @@ public class PermissionResponseDTO {
     private String reason;
 
     @ApiModelProperty(value = "오늘만 허용 요청의 현재 상태, PENDING(대기)/APPROVED(승인)/REJECTED(거절)/EXPIRED(만료)", example = "PENDING")
-    private String status;
+    private PermissionStatus status;
 
     @ApiModelProperty(value = "오늘만 허용 요청 일시", example = "2026-08-07T02:10:29.109Z")
     private LocalDateTime createdAt;

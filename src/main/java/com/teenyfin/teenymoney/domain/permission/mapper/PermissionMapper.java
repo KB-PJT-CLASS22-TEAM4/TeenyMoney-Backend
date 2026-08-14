@@ -1,6 +1,7 @@
 package com.teenyfin.teenymoney.domain.permission.mapper;
 
 import com.teenyfin.teenymoney.domain.permission.vo.PermissionInsertVO;
+import com.teenyfin.teenymoney.domain.permission.vo.PermissionStatus;
 import com.teenyfin.teenymoney.domain.permission.vo.PermissionVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -29,7 +30,7 @@ public interface PermissionMapper {
     void updatePermissionReason(@Param("permissionId") Long permissionId, @Param("reason") String reason);
 
     // 오늘만 허용 요청의 상태 수정
-    void updatePermissionStatus(@Param("permissionId") Long permissionId, @Param("status") String status);
+    void updatePermissionStatus(@Param("permissionId") Long permissionId, @Param("status") PermissionStatus status);
 
     // 오늘만 허용 요청 삭제
     void deletePermissionById(@Param("permissionId") Long permissionId);

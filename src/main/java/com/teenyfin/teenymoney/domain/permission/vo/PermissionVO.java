@@ -14,6 +14,6 @@ public class PermissionVO {
     private Long childId;
     private String category;
     private String reason;
-    private String status;
+    private PermissionStatus status;
     private LocalDateTime createdAt;
 }
