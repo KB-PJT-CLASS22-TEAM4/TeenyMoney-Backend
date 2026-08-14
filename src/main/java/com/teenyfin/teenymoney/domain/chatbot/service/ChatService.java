@@ -5,6 +5,9 @@ import com.teenyfin.teenymoney.domain.chatbot.dify.DifyClient;
 import com.teenyfin.teenymoney.domain.chatbot.dify.dto.DifyChatResponseDTO;
 import com.teenyfin.teenymoney.domain.chatbot.dto.request.ChatMessageRequestDTO;
 import com.teenyfin.teenymoney.domain.chatbot.dto.response.ChatMessageResponseDTO;
+import com.teenyfin.teenymoney.domain.chatbot.exception.ChatbotErrorCode;
+import com.teenyfin.teenymoney.domain.chatbot.store.ChatConversationOwnerStore;
+import com.teenyfin.teenymoney.global.exception.BusinessException;
 import com.teenyfin.teenymoney.global.security.MemberPrincipal;
 import org.springframework.stereotype.Service;
 
@@ -15,18 +18,39 @@ import org.springframework.stereotype.Service;
 public class ChatService {
 
     private final DifyClient difyClient;
+    private final ChatConversationOwnerStore conversationOwnerStore; //
 
-    public ChatService(DifyClient difyClient) {
+    public ChatService(DifyClient difyClient, ChatConversationOwnerStore conversationOwnerStore) {
         this.difyClient = difyClient;
+        this.conversationOwnerStore = conversationOwnerStore;
+
     }
 
     public ChatMessageResponseDTO sendMessage(MemberPrincipal principal, ChatMessageRequestDTO request) {
+        Long memberId = principal.memberId();
+        String conversationId = request.getConversationId();
+
+        // conversationId가 왔다는 건 "이전 대화 이어가기"라는 뜻 - Dify에 보내기 전에
+        // 우리 쪽에서 먼저 이 conversationId가 진짜 내 것인지 확인한다.
+        // (클라이언트가 보낸 conversationId는 "주장"일 뿐이고, 이 Redis 조회가 그 주장을 검증하는 부분 -
+        //  JwtProvider가 JWT의 서명을 검증하는 것과 같은 역할)
+        if (conversationId != null) {
+            Long ownerId = conversationOwnerStore.findOwner(conversationId);
+
+            // ownerId == null: 저장된 적 없거나 TTL 만료 -> "모름"도 내 것이 아닌 걸로 취급
+            // !ownerId.equals(memberId): 다른 사람 소유
+            if (ownerId == null || !ownerId.equals(memberId)) {
+                throw new BusinessException(ChatbotErrorCode.CHATBOT_CONVERSATION_FORBIDDEN);
+            }
+        }
+
         // memberId를 "member-{memberId}"로 매핑 - 우리 서버 접근 제어(로그인 여부)와는 별개로,
         // Dify 쪽에서 대화 소유자를 구분하기 위한 식별자다. 가족 구성원끼리 conversation_id가
         // 섞이지 않게 하는 역할 (예: 아빠가 자녀의 conversation_id를 알아도 이어갈 수 없음).
-        String user = "member-" + principal.memberId();
 
-        DifyChatResponseDTO response = difyClient.sendMessage(request.getQuery(), request.getConversationId(), user);
+        String user = "member-" + memberId;
+
+        DifyChatResponseDTO response = difyClient.sendMessage(request.getQuery(), conversationId, user);
 
         return new ChatMessageResponseDTO(response.getAnswer(), response.getConversationId());
     }

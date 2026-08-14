@@ -47,6 +47,7 @@ public class ChatController {
             @io.swagger.annotations.ApiResponse(code = 200, message = "답변 성공"),
             @io.swagger.annotations.ApiResponse(code = 400, message = "질문 내용이 비어있음"),
             @io.swagger.annotations.ApiResponse(code = 401, message = "로그인 필요"),
+            @io.swagger.annotations.ApiResponse(code = 403, message = "본인 소유의 대화가 아님"),
             @io.swagger.annotations.ApiResponse(code = 502, message = "챗봇 응답을 받아오지 못함") })
     public ApiResponse<ChatMessageResponseDTO> sendMessage(
             @AuthenticationPrincipal MemberPrincipal principal,
