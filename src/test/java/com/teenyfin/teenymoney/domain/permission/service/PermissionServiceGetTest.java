@@ -1,12 +1,15 @@
 package com.teenyfin.teenymoney.domain.permission.service;
 
+import com.teenyfin.teenymoney.domain.categoryPolicy.mapper.CategoryPolicyMapper;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
-import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
-import com.teenyfin.teenymoney.domain.permission.dto.response.PermissionResponseWrapperDTO;
+import com.teenyfin.teenymoney.domain.member.vo.MemberParentVO;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
+import com.teenyfin.teenymoney.domain.permission.dto.response.PermissionResponseDTO;
 import com.teenyfin.teenymoney.domain.permission.mapper.PermissionMapper;
+import com.teenyfin.teenymoney.domain.permission.vo.PermissionStatus;
 import com.teenyfin.teenymoney.domain.permission.vo.PermissionVO;
+import com.teenyfin.teenymoney.domain.teenyscore.mapper.TeenyScoreMapper;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
-import com.teenyfin.teenymoney.global.storage.S3Storage;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -15,8 +18,8 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -24,112 +27,111 @@ class PermissionServiceGetTest {
 
     private final PermissionMapper permissionMapper = Mockito.mock(PermissionMapper.class);
     private final MemberMapper memberMapper = Mockito.mock(MemberMapper.class);
-    private final S3Storage s3Storage = Mockito.mock(S3Storage.class);
-    private final PermissionService permissionService =
-            new PermissionService(permissionMapper, memberMapper, s3Storage);
+    private final TeenyScoreMapper teenyScoreMapper = Mockito.mock(TeenyScoreMapper.class);
+    private final CategoryPolicyMapper categoryPolicyMapper = Mockito.mock(CategoryPolicyMapper.class);
+    private final NotificationService notificationService = Mockito.mock(NotificationService.class);
+    private final PermissionService permissionService = new PermissionService(
+            permissionMapper, memberMapper, teenyScoreMapper, categoryPolicyMapper, notificationService);
 
-    private MemberVO createChildVO(Long id, String name, String profileImageKey) {
-        MemberVO vo = new MemberVO();
-        vo.setId(id);
-        vo.setName(name);
-        vo.setProfileImageKey(profileImageKey);
+    private MemberParentVO parentOf(Long parentId) {
+        MemberParentVO vo = new MemberParentVO();
+        vo.setParentId(parentId);
         return vo;
     }
 
     @Test
-    void 부모가_조회하면_카테고리_목록과_함께_반환된다() {
+    void 자녀가_조회하면_childId_파라미터와_무관하게_본인_기준으로_조회한다() {
         // given
-        Long parentId = 1L;
         Long childId = 2L;
-        Long permissionId = 10L;
         LocalDateTime now = LocalDateTime.now();
 
         PermissionVO permissionVO = PermissionVO.builder()
-                .id(permissionId)
+                .id(10L)
                 .childId(childId)
-                .reason("친구 생일이라 PC방에서 놀기로 했어요")
-                .status("PENDING")
-                .createdAt(now)
-                .build();
-
-        MemberVO childVO = createChildVO(childId, "김민지", "profile/2.jpg");
-
-        given(permissionMapper.selectCreatedTodayByParentId(parentId)).willReturn(permissionVO);
-        given(memberMapper.selectById(childId)).willReturn(childVO);
-        given(permissionMapper.selectPermissionCategoriesByPermissionId(permissionId))
-                .willReturn(List.of("PC방", "노래방"));
-        given(s3Storage.presignedUrl("profile/2.jpg")).willReturn("https://presigned.url/2.jpg");
-
-        // when
-        PermissionResponseWrapperDTO result = permissionService.getPermission(parentId, "PARENT");
-
-        // then
-        assertThat(result.getIsExist()).isTrue();
-        assertThat(result.getPermission().getId()).isEqualTo(permissionId);
-        assertThat(result.getPermission().getCategories()).containsExactly("PC방", "노래방");
-        assertThat(result.getPermission().getChild().getName()).isEqualTo("김민지");
-        assertThat(result.getPermission().getChild().getProfileImageUrl()).isEqualTo("https://presigned.url/2.jpg");
-
-        verify(permissionMapper).selectCreatedTodayByParentId(parentId);
-        verify(permissionMapper, never()).selectCreatedTodayByChildId(any());
-    }
-
-    @Test
-    void 자녀가_조회하면_selectCreatedTodayByChildId를_호출한다() {
-        // given
-        Long childId = 2L;
-        Long permissionId = 10L;
-        LocalDateTime now = LocalDateTime.now();
-
-        PermissionVO permissionVO = PermissionVO.builder()
-                .id(permissionId)
-                .childId(childId)
+                .category("PC방·노래방")
                 .reason("사유")
-                .status("PENDING")
+                .status(PermissionStatus.PENDING)
                 .createdAt(now)
                 .build();
 
-        MemberVO childVO = createChildVO(childId, "김민지", "profile/2.jpg");
+        given(permissionMapper.selectCreatedTodayByChildId(childId)).willReturn(List.of(permissionVO));
 
-        given(permissionMapper.selectCreatedTodayByChildId(childId)).willReturn(permissionVO);
-        given(memberMapper.selectById(childId)).willReturn(childVO);
-        given(permissionMapper.selectPermissionCategoriesByPermissionId(permissionId))
-                .willReturn(List.of("PC방"));
-        given(s3Storage.presignedUrl("profile/2.jpg")).willReturn("https://presigned.url/2.jpg");
-
-        // when
-        PermissionResponseWrapperDTO result = permissionService.getPermission(childId, "CHILD");
+        // when: 자녀는 childId를 넘겨도 무시되고 본인 id로 조회돼야 한다
+        List<PermissionResponseDTO> result = permissionService.getPermission(childId, "CHILD", 999L);
 
         // then
-        assertThat(result.getIsExist()).isTrue();
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getId()).isEqualTo(10L);
+        assertThat(result.get(0).getCategory()).isEqualTo("PC방·노래방");
+        assertThat(result.get(0).getReason()).isEqualTo("사유");
+        assertThat(result.get(0).getStatus()).isEqualTo(PermissionStatus.PENDING);
+
         verify(permissionMapper).selectCreatedTodayByChildId(childId);
-        verify(permissionMapper, never()).selectCreatedTodayByParentId(any());
+        verify(memberMapper, never()).selectActiveParentByChildId(any());
     }
 
     @Test
-    void 오늘_요청이_없으면_isExist_false를_반환하고_이후_로직은_실행되지_않는다() {
-        // given
-        Long parentId = 1L;
-        given(permissionMapper.selectCreatedTodayByParentId(parentId)).willReturn(null);
-
-        // when
-        PermissionResponseWrapperDTO result = permissionService.getPermission(parentId, "PARENT");
-
-        // then
-        assertThat(result.getIsExist()).isFalse();
-        assertThat(result.getPermission()).isNull();
-
-        verify(memberMapper, never()).selectById(any());
-        verify(permissionMapper, never()).selectPermissionCategoriesByPermissionId(any());
-        verify(s3Storage, never()).presignedUrl(any());
-    }
-
-    @Test
-    void 알수없는_role이면_예외를_던진다() {
-        assertThatThrownBy(() -> permissionService.getPermission(1L, "UNKNOWN"))
+    void 부모가_childId_없이_조회하면_예외를_던진다() {
+        // when & then
+        assertThatThrownBy(() -> permissionService.getPermission(1L, "PARENT", null))
                 .isInstanceOf(BusinessException.class);
 
-        verify(permissionMapper, never()).selectCreatedTodayByParentId(any());
         verify(permissionMapper, never()).selectCreatedTodayByChildId(any());
+    }
+
+    @Test
+    void 부모가_본인과_연동되지_않은_자녀의_childId로_조회하면_예외를_던진다() {
+        // given
+        Long parentId = 1L;
+        Long childId = 2L;
+
+        given(memberMapper.selectActiveParentByChildId(childId)).willReturn(parentOf(999L)); // 다른 부모
+
+        // when & then
+        assertThatThrownBy(() -> permissionService.getPermission(parentId, "PARENT", childId))
+                .isInstanceOf(BusinessException.class);
+
+        verify(permissionMapper, never()).selectCreatedTodayByChildId(any());
+    }
+
+    @Test
+    void 부모가_본인_자녀의_childId로_조회하면_그_자녀_기준으로_목록을_조회한다() {
+        // given
+        Long parentId = 1L;
+        Long childId = 2L;
+        LocalDateTime now = LocalDateTime.now();
+
+        given(memberMapper.selectActiveParentByChildId(childId)).willReturn(parentOf(parentId));
+
+        PermissionVO first = PermissionVO.builder()
+                .id(10L).childId(childId).category("PC방").reason("사유1").status(PermissionStatus.PENDING).createdAt(now)
+                .build();
+        PermissionVO second = PermissionVO.builder()
+                .id(11L).childId(childId).category("노래방").reason("사유2").status(PermissionStatus.PENDING).createdAt(now)
+                .build();
+        given(permissionMapper.selectCreatedTodayByChildId(childId)).willReturn(List.of(first, second));
+
+        // when
+        List<PermissionResponseDTO> result = permissionService.getPermission(parentId, "PARENT", childId);
+
+        // then
+        assertThat(result).hasSize(2);
+        assertThat(result).extracting(PermissionResponseDTO::getCategory)
+                .containsExactly("PC방", "노래방");
+
+        verify(permissionMapper).selectCreatedTodayByChildId(childId);
+    }
+
+    @Test
+    void 오늘_요청이_없으면_빈_목록을_반환한다() {
+        // given
+        Long childId = 2L;
+        given(permissionMapper.selectCreatedTodayByChildId(childId)).willReturn(List.of());
+
+        // when
+        List<PermissionResponseDTO> result = permissionService.getPermission(childId, "CHILD", null);
+
+        // then
+        assertThat(result).isEmpty();
     }
 }
