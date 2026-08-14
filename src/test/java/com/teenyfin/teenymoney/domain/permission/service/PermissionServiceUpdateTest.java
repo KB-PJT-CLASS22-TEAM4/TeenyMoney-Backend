@@ -1,13 +1,15 @@
 package com.teenyfin.teenymoney.domain.permission.service;
 
+import com.teenyfin.teenymoney.domain.categoryPolicy.mapper.CategoryPolicyMapper;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
-import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
-import com.teenyfin.teenymoney.domain.permission.dto.request.PermissionRequestDTO;
-import com.teenyfin.teenymoney.domain.permission.dto.response.PermissionResponseWrapperDTO;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
+import com.teenyfin.teenymoney.domain.permission.dto.request.PermissionUpdateRequestDTO;
+import com.teenyfin.teenymoney.domain.permission.dto.response.PermissionResponseDTO;
 import com.teenyfin.teenymoney.domain.permission.mapper.PermissionMapper;
+import com.teenyfin.teenymoney.domain.permission.vo.PermissionStatus;
 import com.teenyfin.teenymoney.domain.permission.vo.PermissionVO;
+import com.teenyfin.teenymoney.domain.teenyscore.mapper.TeenyScoreMapper;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
-import com.teenyfin.teenymoney.global.storage.S3Storage;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -26,24 +28,17 @@ class PermissionServiceUpdateTest {
 
     private final PermissionMapper permissionMapper = Mockito.mock(PermissionMapper.class);
     private final MemberMapper memberMapper = Mockito.mock(MemberMapper.class);
-    private final S3Storage s3Storage = Mockito.mock(S3Storage.class);
-    private final PermissionService permissionService =
-            new PermissionService(permissionMapper, memberMapper, s3Storage);
-
-    private MemberVO createChildVO(Long id, String name, String profileImageKey) {
-        MemberVO vo = new MemberVO();
-        vo.setId(id);
-        vo.setName(name);
-        vo.setProfileImageKey(profileImageKey);
-        return vo;
-    }
+    private final TeenyScoreMapper teenyScoreMapper = Mockito.mock(TeenyScoreMapper.class);
+    private final CategoryPolicyMapper categoryPolicyMapper = Mockito.mock(CategoryPolicyMapper.class);
+    private final NotificationService notificationService = Mockito.mock(NotificationService.class);
+    private final PermissionService permissionService = new PermissionService(
+            permissionMapper, memberMapper, teenyScoreMapper, categoryPolicyMapper, notificationService);
 
     @Test
     void 존재하지_않는_permissionId면_예외를_던진다() {
         // given
         Long permissionId = 999L;
-        PermissionRequestDTO requestDTO = PermissionRequestDTO.builder()
-                .categories(List.of(1L))
+        PermissionUpdateRequestDTO requestDTO = PermissionUpdateRequestDTO.builder()
                 .reason("사유")
                 .build();
 
@@ -61,15 +56,14 @@ class PermissionServiceUpdateTest {
         // given
         Long memberId = 2L;
         Long permissionId = 10L;
-        PermissionRequestDTO requestDTO = PermissionRequestDTO.builder()
-                .categories(List.of(1L))
+        PermissionUpdateRequestDTO requestDTO = PermissionUpdateRequestDTO.builder()
                 .reason("수정된 사유")
                 .build();
 
         PermissionVO permissionVO = PermissionVO.builder()
                 .id(permissionId)
                 .childId(999L) // memberId(2L)와 다름
-                .status("PENDING")
+                .status(PermissionStatus.PENDING)
                 .createdAt(LocalDateTime.now())
                 .build();
 
@@ -80,8 +74,6 @@ class PermissionServiceUpdateTest {
                 .isInstanceOf(BusinessException.class);
 
         verify(permissionMapper, never()).updatePermissionReason(anyLong(), any());
-        verify(permissionMapper, never()).deletePermissionCategoriesByPermissionId(anyLong());
-        verify(permissionMapper, never()).insertPermissionCategories(anyLong(), any());
     }
 
     @Test
@@ -89,15 +81,14 @@ class PermissionServiceUpdateTest {
         // given
         Long memberId = 2L;
         Long permissionId = 10L;
-        PermissionRequestDTO requestDTO = PermissionRequestDTO.builder()
-                .categories(List.of(1L))
+        PermissionUpdateRequestDTO requestDTO = PermissionUpdateRequestDTO.builder()
                 .reason("수정된 사유")
                 .build();
 
         PermissionVO permissionVO = PermissionVO.builder()
                 .id(permissionId)
                 .childId(memberId)
-                .status("PENDING")
+                .status(PermissionStatus.PENDING)
                 .createdAt(LocalDateTime.now().minusDays(1)) // 어제 생성
                 .build();
 
@@ -115,15 +106,14 @@ class PermissionServiceUpdateTest {
         // given
         Long memberId = 2L;
         Long permissionId = 10L;
-        PermissionRequestDTO requestDTO = PermissionRequestDTO.builder()
-                .categories(List.of(1L))
+        PermissionUpdateRequestDTO requestDTO = PermissionUpdateRequestDTO.builder()
                 .reason("수정된 사유")
                 .build();
 
         PermissionVO permissionVO = PermissionVO.builder()
                 .id(permissionId)
                 .childId(memberId)
-                .status("APPROVED") // PENDING 아님
+                .status(PermissionStatus.APPROVED) // PENDING 아님
                 .createdAt(LocalDateTime.now())
                 .build();
 
@@ -137,53 +127,46 @@ class PermissionServiceUpdateTest {
     }
 
     @Test
-    void 정상_수정되면_사유와_카테고리가_갱신되고_최신_정보가_조회되어_반환된다() {
+    void 정상_수정되면_사유가_갱신되고_최신_정보가_조회되어_반환된다() {
         // given
         Long memberId = 2L;
         Long permissionId = 10L;
-        List<Long> newCategoryIds = List.of(3L, 4L);
         String newReason = "수정된 사유";
 
-        PermissionRequestDTO requestDTO = PermissionRequestDTO.builder()
-                .categories(newCategoryIds)
+        PermissionUpdateRequestDTO requestDTO = PermissionUpdateRequestDTO.builder()
                 .reason(newReason)
                 .build();
 
         PermissionVO beforeUpdate = PermissionVO.builder()
                 .id(permissionId)
                 .childId(memberId)
-                .status("PENDING")
-                .createdAt(LocalDateTime.now())
-                .build();
-
-        PermissionVO afterUpdate = PermissionVO.builder()
-                .id(permissionId)
-                .childId(memberId)
-                .reason(newReason)
-                .status("PENDING")
+                .status(PermissionStatus.PENDING)
                 .createdAt(LocalDateTime.now())
                 .build();
 
         given(permissionMapper.selectById(permissionId)).willReturn(beforeUpdate);
 
-        // updatePermission 내부에서 getPermission 재조회 시 사용
-        given(permissionMapper.selectCreatedTodayByChildId(memberId)).willReturn(afterUpdate);
-
-        MemberVO childVO = createChildVO(memberId, "김첫째", null);
-        given(memberMapper.selectById(memberId)).willReturn(childVO);
-        given(permissionMapper.selectPermissionCategoriesByPermissionId(permissionId))
-                .willReturn(List.of("PC방", "노래방"));
+        // updatePermission 내부에서 getPermission(memberId, role, null) 재조회 시 사용
+        PermissionVO afterUpdate = PermissionVO.builder()
+                .id(permissionId)
+                .childId(memberId)
+                .category("PC방")
+                .reason(newReason)
+                .status(PermissionStatus.PENDING)
+                .createdAt(LocalDateTime.now())
+                .build();
+        given(permissionMapper.selectCreatedTodayByChildId(memberId)).willReturn(List.of(afterUpdate));
 
         // when
-        PermissionResponseWrapperDTO result = permissionService.updatePermission(memberId, "CHILD", permissionId, requestDTO);
+        List<PermissionResponseDTO> result =
+                permissionService.updatePermission(memberId, "CHILD", permissionId, requestDTO);
 
         // then
         verify(permissionMapper).updatePermissionReason(permissionId, newReason);
-        verify(permissionMapper).deletePermissionCategoriesByPermissionId(permissionId);
-        verify(permissionMapper).insertPermissionCategories(permissionId, newCategoryIds);
+        verify(notificationService, never()).createNotification(any(), any(), any(), any(), any(), any());
 
-        assertThat(result.getIsExist()).isTrue();
-        assertThat(result.getPermission().getReason()).isEqualTo(newReason);
-        assertThat(result.getPermission().getCategories()).containsExactly("PC방", "노래방");
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getReason()).isEqualTo(newReason);
+        assertThat(result.get(0).getCategory()).isEqualTo("PC방");
     }
 }

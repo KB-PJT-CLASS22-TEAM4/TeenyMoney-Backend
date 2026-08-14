@@ -1,10 +1,13 @@
 package com.teenyfin.teenymoney.domain.permission.service;
 
+import com.teenyfin.teenymoney.domain.categoryPolicy.mapper.CategoryPolicyMapper;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
 import com.teenyfin.teenymoney.domain.permission.mapper.PermissionMapper;
+import com.teenyfin.teenymoney.domain.permission.vo.PermissionStatus;
 import com.teenyfin.teenymoney.domain.permission.vo.PermissionVO;
+import com.teenyfin.teenymoney.domain.teenyscore.mapper.TeenyScoreMapper;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
-import com.teenyfin.teenymoney.global.storage.S3Storage;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -20,9 +23,11 @@ class PermissionServiceDeleteTest {
 
     private final PermissionMapper permissionMapper = Mockito.mock(PermissionMapper.class);
     private final MemberMapper memberMapper = Mockito.mock(MemberMapper.class);
-    private final S3Storage s3Storage = Mockito.mock(S3Storage.class);
-    private final PermissionService permissionService =
-            new PermissionService(permissionMapper, memberMapper, s3Storage);
+    private final TeenyScoreMapper teenyScoreMapper = Mockito.mock(TeenyScoreMapper.class);
+    private final CategoryPolicyMapper categoryPolicyMapper = Mockito.mock(CategoryPolicyMapper.class);
+    private final NotificationService notificationService = Mockito.mock(NotificationService.class);
+    private final PermissionService permissionService = new PermissionService(
+            permissionMapper, memberMapper, teenyScoreMapper, categoryPolicyMapper, notificationService);
 
     @Test
     void 존재하지_않는_permissionId면_예외를_던진다() {
@@ -47,7 +52,7 @@ class PermissionServiceDeleteTest {
         PermissionVO permissionVO = PermissionVO.builder()
                 .id(permissionId)
                 .childId(999L) // memberId(2L)와 다름
-                .status("PENDING")
+                .status(PermissionStatus.PENDING)
                 .createdAt(LocalDateTime.now())
                 .build();
 
@@ -70,7 +75,7 @@ class PermissionServiceDeleteTest {
         PermissionVO permissionVO = PermissionVO.builder()
                 .id(permissionId)
                 .childId(memberId)
-                .status("PENDING")
+                .status(PermissionStatus.PENDING)
                 .createdAt(LocalDateTime.now().minusDays(1)) // 어제 생성
                 .build();
 
@@ -93,7 +98,7 @@ class PermissionServiceDeleteTest {
         PermissionVO permissionVO = PermissionVO.builder()
                 .id(permissionId)
                 .childId(memberId)
-                .status("APPROVED") // PENDING 아님
+                .status(PermissionStatus.APPROVED) // PENDING 아님
                 .createdAt(LocalDateTime.now())
                 .build();
 
@@ -116,7 +121,7 @@ class PermissionServiceDeleteTest {
         PermissionVO permissionVO = PermissionVO.builder()
                 .id(permissionId)
                 .childId(memberId)
-                .status("PENDING")
+                .status(PermissionStatus.PENDING)
                 .createdAt(LocalDateTime.now())
                 .build();
 

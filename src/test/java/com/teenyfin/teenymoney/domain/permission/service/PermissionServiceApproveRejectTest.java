@@ -1,11 +1,16 @@
 package com.teenyfin.teenymoney.domain.permission.service;
 
+import com.teenyfin.teenymoney.domain.categoryPolicy.mapper.CategoryPolicyMapper;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
-import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
+import com.teenyfin.teenymoney.domain.member.vo.MemberParentVO;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
+import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
+import com.teenyfin.teenymoney.domain.permission.dto.response.PermissionResponseDTO;
 import com.teenyfin.teenymoney.domain.permission.mapper.PermissionMapper;
+import com.teenyfin.teenymoney.domain.permission.vo.PermissionStatus;
 import com.teenyfin.teenymoney.domain.permission.vo.PermissionVO;
+import com.teenyfin.teenymoney.domain.teenyscore.mapper.TeenyScoreMapper;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
-import com.teenyfin.teenymoney.global.storage.S3Storage;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -14,8 +19,9 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -24,22 +30,22 @@ class PermissionServiceApproveRejectTest {
 
     private final PermissionMapper permissionMapper = Mockito.mock(PermissionMapper.class);
     private final MemberMapper memberMapper = Mockito.mock(MemberMapper.class);
-    private final S3Storage s3Storage = Mockito.mock(S3Storage.class);
-    private final PermissionService permissionService =
-            new PermissionService(permissionMapper, memberMapper, s3Storage);
+    private final TeenyScoreMapper teenyScoreMapper = Mockito.mock(TeenyScoreMapper.class);
+    private final CategoryPolicyMapper categoryPolicyMapper = Mockito.mock(CategoryPolicyMapper.class);
+    private final NotificationService notificationService = Mockito.mock(NotificationService.class);
+    private final PermissionService permissionService = new PermissionService(
+            permissionMapper, memberMapper, teenyScoreMapper, categoryPolicyMapper, notificationService);
 
-    private MemberVO createChildVO(Long id, String name, String profileImageKey) {
-        MemberVO vo = new MemberVO();
-        vo.setId(id);
-        vo.setName(name);
-        vo.setProfileImageKey(profileImageKey);
+    private MemberParentVO parentOf(Long parentId) {
+        MemberParentVO vo = new MemberParentVO();
+        vo.setParentId(parentId);
         return vo;
     }
 
     // ===== 승인 =====
 
     @Test
-    void 부모가_승인하면_상태가_APPROVED로_변경되고_최신정보가_반환된다() {
+    void 부모가_승인하면_상태가_APPROVED로_변경되고_자녀에게_알림이_발송된다() {
         // given
         Long parentId = 1L;
         Long childId = 2L;
@@ -49,34 +55,43 @@ class PermissionServiceApproveRejectTest {
                 .id(permissionId)
                 .parentId(parentId)
                 .childId(childId)
-                .status("PENDING")
+                .category("PC방")
+                .status(PermissionStatus.PENDING)
                 .createdAt(LocalDateTime.now())
                 .build();
 
         given(permissionMapper.selectById(permissionId)).willReturn(permissionVO);
 
+        // approvePermission()이 끝나면서 getPermission(memberId, role, childId)로 재조회할 때
+        // 자녀 소유권을 확인하므로, 승인한 부모가 그 자녀의 부모라는 관계를 stub해야 한다.
+        given(memberMapper.selectActiveParentByChildId(childId)).willReturn(parentOf(parentId));
+
         PermissionVO afterApprove = PermissionVO.builder()
                 .id(permissionId)
                 .parentId(parentId)
                 .childId(childId)
+                .category("PC방")
                 .reason("사유")
-                .status("APPROVED")
+                .status(PermissionStatus.APPROVED)
                 .createdAt(LocalDateTime.now())
                 .build();
-        given(permissionMapper.selectCreatedTodayByParentId(parentId)).willReturn(afterApprove);
-
-        MemberVO childVO = createChildVO(childId, "김첫째", null);
-        given(memberMapper.selectById(childId)).willReturn(childVO);
-        given(permissionMapper.selectPermissionCategoriesByPermissionId(permissionId))
-                .willReturn(List.of("PC방"));
+        given(permissionMapper.selectCreatedTodayByChildId(childId)).willReturn(List.of(afterApprove));
 
         // when
-        var result = permissionService.approvePermission(parentId, "PARENT", permissionId);
+        List<PermissionResponseDTO> result = permissionService.approvePermission(parentId, "PARENT", permissionId);
 
         // then
-        verify(permissionMapper).updatePermissionStatus(permissionId, "APPROVED");
-        assertThat(result.getIsExist()).isTrue();
-        assertThat(result.getPermission().getStatus()).isEqualTo("APPROVED");
+        verify(permissionMapper).updatePermissionStatus(permissionId, PermissionStatus.APPROVED);
+        verify(notificationService).createNotification(
+                eq(childId),
+                eq("오늘만 허용이 승인되었어요"),
+                eq("PC방"),
+                eq(NotificationReferenceType.TODAY_PERMISSION),
+                eq(null),
+                eq(true));
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getStatus()).isEqualTo(PermissionStatus.APPROVED);
     }
 
     @Test
@@ -88,7 +103,7 @@ class PermissionServiceApproveRejectTest {
                 .id(permissionId)
                 .parentId(999L) // 요청과 무관한 부모
                 .childId(2L)
-                .status("PENDING")
+                .status(PermissionStatus.PENDING)
                 .createdAt(LocalDateTime.now())
                 .build();
 
@@ -98,13 +113,14 @@ class PermissionServiceApproveRejectTest {
         assertThatThrownBy(() -> permissionService.approvePermission(1L, "PARENT", permissionId))
                 .isInstanceOf(BusinessException.class);
 
-        verify(permissionMapper, never()).updatePermissionStatus(anyLong(), anyString());
+        verify(permissionMapper, never()).updatePermissionStatus(anyLong(), any());
+        verify(notificationService, never()).createNotification(any(), any(), any(), any(), any(), any());
     }
 
     // ===== 거절 =====
 
     @Test
-    void 부모가_거절하면_상태가_REJECTED로_변경되고_최신정보가_반환된다() {
+    void 부모가_거절하면_상태가_REJECTED로_변경되고_자녀에게_알림이_발송된다() {
         // given
         Long parentId = 1L;
         Long childId = 2L;
@@ -114,34 +130,40 @@ class PermissionServiceApproveRejectTest {
                 .id(permissionId)
                 .parentId(parentId)
                 .childId(childId)
-                .status("PENDING")
+                .category("PC방")
+                .status(PermissionStatus.PENDING)
                 .createdAt(LocalDateTime.now())
                 .build();
 
         given(permissionMapper.selectById(permissionId)).willReturn(permissionVO);
+        given(memberMapper.selectActiveParentByChildId(childId)).willReturn(parentOf(parentId));
 
         PermissionVO afterReject = PermissionVO.builder()
                 .id(permissionId)
                 .parentId(parentId)
                 .childId(childId)
+                .category("PC방")
                 .reason("사유")
-                .status("REJECTED")
+                .status(PermissionStatus.REJECTED)
                 .createdAt(LocalDateTime.now())
                 .build();
-        given(permissionMapper.selectCreatedTodayByParentId(parentId)).willReturn(afterReject);
-
-        MemberVO childVO = createChildVO(childId, "김첫째", null);
-        given(memberMapper.selectById(childId)).willReturn(childVO);
-        given(permissionMapper.selectPermissionCategoriesByPermissionId(permissionId))
-                .willReturn(List.of("PC방"));
+        given(permissionMapper.selectCreatedTodayByChildId(childId)).willReturn(List.of(afterReject));
 
         // when
-        var result = permissionService.rejectPermission(parentId, "PARENT", permissionId);
+        List<PermissionResponseDTO> result = permissionService.rejectPermission(parentId, "PARENT", permissionId);
 
         // then
-        verify(permissionMapper).updatePermissionStatus(permissionId, "REJECTED");
-        assertThat(result.getIsExist()).isTrue();
-        assertThat(result.getPermission().getStatus()).isEqualTo("REJECTED");
+        verify(permissionMapper).updatePermissionStatus(permissionId, PermissionStatus.REJECTED);
+        verify(notificationService).createNotification(
+                eq(childId),
+                eq("오늘만 허용이 거절되었어요"),
+                eq("PC방"),
+                eq(NotificationReferenceType.TODAY_PERMISSION),
+                eq(null),
+                eq(true));
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getStatus()).isEqualTo(PermissionStatus.REJECTED);
     }
 
     @Test
@@ -154,7 +176,7 @@ class PermissionServiceApproveRejectTest {
         assertThatThrownBy(() -> permissionService.rejectPermission(1L, "PARENT", permissionId))
                 .isInstanceOf(BusinessException.class);
 
-        verify(permissionMapper, never()).updatePermissionStatus(anyLong(), anyString());
+        verify(permissionMapper, never()).updatePermissionStatus(anyLong(), any());
     }
 
     @Test
@@ -167,7 +189,7 @@ class PermissionServiceApproveRejectTest {
                 .id(permissionId)
                 .parentId(parentId)
                 .childId(2L)
-                .status("PENDING")
+                .status(PermissionStatus.PENDING)
                 .createdAt(LocalDateTime.now().minusDays(1)) // 어제 생성
                 .build();
 
@@ -177,7 +199,7 @@ class PermissionServiceApproveRejectTest {
         assertThatThrownBy(() -> permissionService.rejectPermission(parentId, "PARENT", permissionId))
                 .isInstanceOf(BusinessException.class);
 
-        verify(permissionMapper, never()).updatePermissionStatus(anyLong(), anyString());
+        verify(permissionMapper, never()).updatePermissionStatus(anyLong(), any());
     }
 
     @Test
@@ -190,7 +212,7 @@ class PermissionServiceApproveRejectTest {
                 .id(permissionId)
                 .parentId(parentId)
                 .childId(2L)
-                .status("APPROVED") // 이미 처리됨
+                .status(PermissionStatus.APPROVED) // 이미 처리됨
                 .createdAt(LocalDateTime.now())
                 .build();
 
@@ -200,6 +222,6 @@ class PermissionServiceApproveRejectTest {
         assertThatThrownBy(() -> permissionService.rejectPermission(parentId, "PARENT", permissionId))
                 .isInstanceOf(BusinessException.class);
 
-        verify(permissionMapper, never()).updatePermissionStatus(anyLong(), anyString());
+        verify(permissionMapper, never()).updatePermissionStatus(anyLong(), any());
     }
 }
