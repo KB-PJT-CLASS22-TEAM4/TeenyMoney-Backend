@@ -3,7 +3,13 @@ package com.teenyfin.teenymoney.domain.payment.service;
 import com.teenyfin.teenymoney.domain.categoryPolicy.dto.response.CategoryPolicyResponseDTO;
 import com.teenyfin.teenymoney.domain.categoryPolicy.exception.CategoryPolicyErrorCode;
 import com.teenyfin.teenymoney.domain.categoryPolicy.mapper.CategoryPolicyMapper;
+import com.teenyfin.teenymoney.domain.categoryPolicy.vo.CategoryPolicy;
 import com.teenyfin.teenymoney.domain.categoryPolicy.vo.CategoryPolicyVO;
+import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
+import com.teenyfin.teenymoney.domain.member.vo.MemberParentVO;
+import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
+import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
 import com.teenyfin.teenymoney.domain.payment.dto.request.PaymentQrRequestDTO;
 import com.teenyfin.teenymoney.domain.payment.dto.request.PaymentRequestDTO;
 import com.teenyfin.teenymoney.domain.payment.dto.response.PaymentQrResponseDTO;
@@ -13,6 +19,8 @@ import com.teenyfin.teenymoney.domain.payment.mapper.PaymentMapper;
 import com.teenyfin.teenymoney.domain.payment.vo.OrderVO;
 import com.teenyfin.teenymoney.domain.payment.vo.PaymentVO;
 import com.teenyfin.teenymoney.domain.paymentPassword.service.PaymentPasswordService;
+import com.teenyfin.teenymoney.domain.teenyscore.mapper.TeenyScoreMapper;
+import com.teenyfin.teenymoney.domain.teenyscore.vo.TeenyScoreGradeVO;
 import com.teenyfin.teenymoney.domain.wallet.exception.WalletErrorCode;
 import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
 import com.teenyfin.teenymoney.domain.wallet.service.WalletLedgerService;
@@ -36,9 +44,12 @@ public class PaymentService {
     private final PaymentMapper paymentMapper;
     private final CategoryPolicyMapper categoryPolicyMapper;
     private final WalletMapper walletMapper;
+    private final TeenyScoreMapper teenyScoreMapper;
+    private final MemberMapper memberMapper;
 
     private final WalletLedgerService walletLedgerService;
     private final PaymentPasswordService paymentPasswordService;
+    private final NotificationService notificationService;
     private final OrderStore orderStore;
 
     // QR 코드로 주문 정보를 Redis에 저장 후 반환
@@ -90,19 +101,14 @@ public class PaymentService {
             throw new BusinessException(WalletErrorCode.INSUFFICIENT_BALANCE);
         }
 
-        // 업종 카테고리 정책 단계 확인
-        CategoryPolicyVO categoryPolicyVO = categoryPolicyMapper.selectByCategoryIdAndChildId(orderVO.getCategoryId(), memberId);
-
-        // 해당 자녀에게 해당 업종 카테고리에 대해 정책이 설정되어있는지 검증
-        if (categoryPolicyVO == null) {
-            throw new BusinessException(CategoryPolicyErrorCode.CATEGORY_POLICY_NOT_FOUND);
-        }
+        CategoryPolicy categoryPolicy = checkCategoryPolicy(memberId, orderVO.getCategoryId());
+        String categoryName = categoryPolicyMapper.selectCategoryNameById(orderVO.getCategoryId());
 
         Integer totalCount = null;
         Long totalAmount = null;
 
         // 주의 단계인 경우 최근 30일 간 결제한 횟수와 총 금액 계산
-        if (categoryPolicyVO.getPolicy().equals("WATCH")) {
+        if (categoryPolicy == CategoryPolicy.WATCH) {
             totalCount = paymentMapper.countRecentTransactions(memberId, orderVO.getCategoryId());
             totalAmount = paymentMapper.sumRecentTransactionAmount(memberId, orderVO.getCategoryId());
         }
@@ -113,9 +119,8 @@ public class PaymentService {
                 .amount(orderVO.getAmount())
                 .balance(walletVO.getBalance())
                 .categoryPolicy(CategoryPolicyResponseDTO.builder()
-                        .id(categoryPolicyVO.getId())
-                        .categoryName(categoryPolicyVO.getCategoryName())
-                        .policy(categoryPolicyVO.getPolicy())
+                        .categoryName(categoryName)
+                        .policy(categoryPolicy)
                         .build())
                 .totalCount(totalCount)
                 .totalAmount(totalAmount)
@@ -164,14 +169,10 @@ public class PaymentService {
 
         paymentPasswordService.checkPaymentPassword(memberId, paymentRequestDTO.getPassword());
 
-        CategoryPolicyVO categoryPolicyVO = categoryPolicyMapper.selectByCategoryIdAndChildId(orderVO.getCategoryId(), memberId);
+        CategoryPolicy categoryPolicy = checkCategoryPolicy(memberId, orderVO.getCategoryId());
+        String categoryName = categoryPolicyMapper.selectCategoryNameById(orderVO.getCategoryId());
 
-        // 해당 카테고리 정책이 존재하는지 검증
-        if (categoryPolicyVO == null) {
-            throw new BusinessException(CategoryPolicyErrorCode.CATEGORY_POLICY_NOT_FOUND);
-        }
-
-        if (categoryPolicyVO.getPolicy().equals("BLOCK")) {
+        if (categoryPolicy == CategoryPolicy.BLOCK) {
             throw new BusinessException(PaymentErrorCode.BLOCKED_CATEGORY); // 차단된 카테고리
         }
 
@@ -188,7 +189,7 @@ public class PaymentService {
                 .orderId(paymentRequestDTO.getOrderId())
                 .idempotencyKey(paymentRequestDTO.getIdempotencyKey())
                 .merchantName(orderVO.getMerchantName())
-                .appliedPolicy(categoryPolicyVO.getPolicy())
+                .appliedPolicy(categoryPolicy)
                 .amount(orderVO.getAmount())
                 .status("SUCCESS")
                 .build();
@@ -215,6 +216,25 @@ public class PaymentService {
 
         paymentVO = paymentMapper.selectById(paymentVO.getId());
 
+        MemberVO memberVO = memberMapper.selectById(memberId);
+        TeenyScoreGradeVO teenyScoreGradeVO = teenyScoreMapper.selectTeenyScoreGradeByChildId(memberId);
+
+        // 주의 등급일 때 티니 등급이 3등급 이하면 부모에게 푸시 알림 발송
+        if (categoryPolicy == CategoryPolicy.WATCH && teenyScoreGradeVO.getGradeId() <= 3) {
+
+            String title = "자녀가 주의 업종에서 결제했어요";
+            String content = memberVO.getName() + " · " + orderVO.getMerchantName();
+            MemberParentVO memberParentVO = memberMapper.selectActiveParentByChildId(memberId);
+
+            notificationService.createNotification(memberParentVO.getParentId(), title, content, NotificationReferenceType.PAYMENT, paymentVO.getId(), true);
+        }
+
+        // 자녀에게 일반 알림 발송
+        String title = "결제가 완료됐어요";
+        String content = orderVO.getMerchantName() + " · " + orderVO.getAmount() + "원";
+
+        notificationService.createNotification(memberId, title, content, NotificationReferenceType.PAYMENT, paymentVO.getId(), false);
+
         // 최신 잔액 조회 (debit 이후 실제 반영된 값)
         walletVO = walletMapper.selectWalletForUpdate(walletVO.getId());
 
@@ -223,11 +243,22 @@ public class PaymentService {
                 .amount(paymentVO.getAmount())
                 .balance(walletVO.getBalance())
                 .categoryPolicy(CategoryPolicyResponseDTO.builder()
-                        .id(categoryPolicyVO.getId())
-                        .categoryName(categoryPolicyVO.getCategoryName())
-                        .policy(categoryPolicyVO.getPolicy())
+                        .categoryName(categoryName)
+                        .policy(categoryPolicy)
                         .build())
                 .createdAt(paymentVO.getCreatedAt())
                 .build();
+    }
+
+    public CategoryPolicy checkCategoryPolicy(Long memberId, Long categoryId) {
+        // 업종 카테고리 정책 단계 확인
+        CategoryPolicyVO categoryPolicyVO = categoryPolicyMapper.selectByCategoryIdAndChildId(categoryId, memberId);
+
+        // 해당 자녀에게 해당 업종 카테고리에 대해 정책이 설정되어있는지 검증
+        if (categoryPolicyVO == null) {
+            throw new BusinessException(CategoryPolicyErrorCode.CATEGORY_POLICY_NOT_FOUND);
+        }
+
+        return categoryPolicyVO.getPolicy();
     }
 }

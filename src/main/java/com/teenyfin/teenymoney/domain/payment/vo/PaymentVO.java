@@ -1,5 +1,6 @@
 package com.teenyfin.teenymoney.domain.payment.vo;
 
+import com.teenyfin.teenymoney.domain.categoryPolicy.vo.CategoryPolicy;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -15,7 +16,7 @@ public class PaymentVO {
     private String orderId;
     private String idempotencyKey;
     private String merchantName;
-    private String appliedPolicy;
+    private CategoryPolicy appliedPolicy;
     private Long amount;
     private String status;
     private String failureReason;
