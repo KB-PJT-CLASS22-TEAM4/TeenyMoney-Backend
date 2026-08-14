@@ -18,7 +18,6 @@ import org.springframework.web.client.RestTemplate;
 
 
 // Dify Chat Messages API(/v1/chat-messages)와 직접 통신하는 담당 클래스.
-// TossPaymentsClient/FinlifeClient랑 똑같은 역할 - "외부 API 하나를 감싸는 전용 컴포넌트".
 // ChatService는 Dify의 URL이나 인증 헤더 형식을 전혀 몰라도 되고, 이 클래스의 sendMessage()만 호출하면 됨.
 @Slf4j          // Lombok이 log.warn(...) 등을 쓸 수 있게 로거 필드를 자동 생성
 @Component      // 스프링 빈으로 등록 - @Autowired 없이도 생성자 주입 가능
