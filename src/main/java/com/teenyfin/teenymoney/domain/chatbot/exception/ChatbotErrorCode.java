@@ -14,7 +14,11 @@ public enum ChatbotErrorCode implements ErrorCode {    // Dify가 4xx/5xx로 응
             HttpStatus.BAD_GATEWAY, "챗봇 응답을 받아오지 못했습니다. 잠시 후 다시 시도해주세요."),
     // Dify가 200을 줬는데 응답 안에 answer 필드가 없는 등, 형식 자체가 이상한 경우
     CHATBOT_RESPONSE_INVALID(
-            HttpStatus.BAD_GATEWAY, "챗봇 응답이 올바르지 않습니다.");
+            HttpStatus.BAD_GATEWAY, "챗봇 응답이 올바르지 않습니다."),
+    // conversationId는 있는데, Redis에 저장된 소유자가 없거나(=모름) 나와 다른 경우.
+    // 403을 씀 - 인증(로그인) 문제가 아니라 "너는 이 자원에 접근 권한이 없다"는 뜻이라 401이 아니라 403이 맞음.
+    CHATBOT_CONVERSATION_FORBIDDEN(
+            HttpStatus.FORBIDDEN, "본인 소유의 대화가 아닙니다.");
 
     private final HttpStatus status;
     private final String message;
