@@ -5,6 +5,7 @@ import com.teenyfin.teenymoney.domain.categoryPolicy.dto.response.CategoryPolicy
 import com.teenyfin.teenymoney.domain.categoryPolicy.dto.response.CategoryPolicyResponseDTO;
 import com.teenyfin.teenymoney.domain.categoryPolicy.exception.CategoryPolicyErrorCode;
 import com.teenyfin.teenymoney.domain.categoryPolicy.mapper.CategoryPolicyMapper;
+import com.teenyfin.teenymoney.domain.categoryPolicy.vo.CategoryPolicy;
 import com.teenyfin.teenymoney.domain.categoryPolicy.vo.CategoryPolicyVO;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
@@ -25,7 +26,7 @@ public class CategoryPolicyService {
     private final CategoryPolicyMapper categoryPolicyMapper;
     private final MemberMapper memberMapper;
 
-    private static final List<String> POLICY_ORDER = List.of("ALLOW", "WATCH", "BLOCK");
+    private static final List<CategoryPolicy> POLICY_ORDER = List.of(CategoryPolicy.ALLOW, CategoryPolicy.WATCH, CategoryPolicy.BLOCK);
 
     // 단계 별 카테고리 정책 조회
     @Transactional(readOnly = true)
@@ -33,7 +34,7 @@ public class CategoryPolicyService {
 
         List<CategoryPolicyResponseDTO> categoryPolicyResponseDTOList = getCategoryPolicy(memberId, role, childId);
 
-        Map<String, List<CategoryPolicyResponseDTO>> grouped = categoryPolicyResponseDTOList.stream()
+        Map<CategoryPolicy, List<CategoryPolicyResponseDTO>> grouped = categoryPolicyResponseDTOList.stream()
                 .collect(Collectors.groupingBy(
                         CategoryPolicyResponseDTO::getPolicy,
                         LinkedHashMap::new,

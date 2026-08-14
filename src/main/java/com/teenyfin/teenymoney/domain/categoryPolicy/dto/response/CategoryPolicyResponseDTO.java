@@ -1,5 +1,6 @@
 package com.teenyfin.teenymoney.domain.categoryPolicy.dto.response;
 
+import com.teenyfin.teenymoney.domain.categoryPolicy.vo.CategoryPolicy;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Builder;
@@ -17,5 +18,5 @@ public class CategoryPolicyResponseDTO {
     private String categoryName;
 
     @ApiModelProperty(value = "정책 단계 (ALLOW/WATCH/BLOCK)", example = "ALLOW")
-    private String policy;
+    private CategoryPolicy policy;
 }

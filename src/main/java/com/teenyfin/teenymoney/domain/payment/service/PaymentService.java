@@ -33,9 +33,6 @@ import java.util.Objects;
 @RequiredArgsConstructor
 public class PaymentService {
 
-    private static final String DUMMY_PASSWORD_HASH =
-            "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
-
     private final PaymentMapper paymentMapper;
     private final CategoryPolicyMapper categoryPolicyMapper;
     private final WalletMapper walletMapper;
