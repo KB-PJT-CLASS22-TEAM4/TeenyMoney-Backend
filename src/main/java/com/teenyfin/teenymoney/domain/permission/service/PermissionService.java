@@ -70,7 +70,7 @@ public class PermissionService {
         }
 
         int count = permissionMapper.countCreatedAtThisMonth(memberId); // 이번 달에 오늘만 허용을 요청한 일수
-        int monthlyLimit = teenyScoreMapper.selectTeenyScoreByChildId(memberId).getMonthlyOverrideLimit();  // 이번 달에 요청할 수 있는 일수
+        int monthlyLimit = teenyScoreMapper.selectTeenyScoreGradeByChildId(memberId).getMonthlyOverrideLimit();  // 이번 달에 요청할 수 있는 일수
 
         if (count >= monthlyLimit) {
             throw new BusinessException(PermissionErrorCode.MONTHLY_LIMIT_EXCEEDED);

@@ -67,4 +67,10 @@
         WHERE p.merchant_category_id = #{categoryId} AND p.child_id = #{childId}
     </select>
 
+    <select id="selectCategoryNameById" resultType="java.lang.String">
+        SELECT name
+        FROM T_MCC_CTGR_C
+        WHERE id = #{categoryId}
+    </select>
+
 </mapper>

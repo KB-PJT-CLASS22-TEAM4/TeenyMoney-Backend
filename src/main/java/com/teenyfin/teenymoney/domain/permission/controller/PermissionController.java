@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import javax.validation.Valid;
 import java.util.List;
 
-@Api(tags = "오늘만 허용 요청")
+@Api(tags = "Permission", description = "오늘만 허용 요청 API")
 @RestController
 @RequestMapping("/permissions")
 @RequiredArgsConstructor
@@ -40,7 +40,7 @@ public class PermissionController {
         return ApiResponse.ok(permissionService.createPermission(memberPrincipal.memberId(), memberPrincipal.role(), permissionRequestDTO));
     }
 
-    @ApiOperation(value = "오늘만 허용 요청 내용 수정", notes = "아직 승인 혹은 거절되지 않은 오늘만 허용 요청의 카테고리와 사유를 수정합니다.")
+    @ApiOperation(value = "오늘만 허용 요청 내용 수정", notes = "아직 승인 혹은 거절되지 않은 오늘만 허용 요청의 사유를 수정합니다.")
     @PatchMapping("/{permissionId}")
     public ApiResponse<List<PermissionResponseDTO>> updatePermission(
             @AuthenticationPrincipal MemberPrincipal memberPrincipal,

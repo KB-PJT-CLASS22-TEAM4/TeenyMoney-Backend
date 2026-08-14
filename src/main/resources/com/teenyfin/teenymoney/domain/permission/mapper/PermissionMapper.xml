@@ -8,6 +8,7 @@
         <id property="id" column="id"/>
         <result property="parentId" column="parent_id"/>
         <result property="childId" column="child_id"/>
+        <result property="category" column="name"/>
         <result property="reason" column="reason"/>
         <result property="status" column="status"/>
         <result property="createdAt" column="created_at"/>
@@ -49,7 +50,7 @@
     </select>
 
     <select id="countCreatedAtThisMonth" resultType="int">
-        SELECT COUNT(*)
+        SELECT COUNT(DISTINCT DATE(created_at))
         FROM T_TDP_REQ_L
         WHERE child_id = #{childId}
         AND YEAR(created_at) = YEAR(CURDATE())
@@ -73,7 +74,7 @@
         VALUES (
             #{permissionId},
             #{categoryId},
-            NOW())
+            NOW()
         )
     </insert>
 

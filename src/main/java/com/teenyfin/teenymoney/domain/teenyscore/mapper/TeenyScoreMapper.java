@@ -51,4 +51,6 @@ public interface TeenyScoreMapper {
             @Param("description") String description,
             @Param("referenceType") String referenceType,
             @Param("referenceId") Long referenceId);
+
+    TeenyScoreGradeVO selectTeenyScoreGradeByChildId(@Param("childId") Long childId);
 }

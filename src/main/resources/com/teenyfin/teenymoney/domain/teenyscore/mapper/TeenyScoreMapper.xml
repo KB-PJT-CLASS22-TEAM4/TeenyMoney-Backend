@@ -101,6 +101,23 @@
         ORDER BY score_month ASC
     </select>
 
+    <select id="selectTeenyScoreGradeByChildId"
+            resultMap="teenyScoreGradeResultMap">
+        SELECT
+            grade.grade_id,
+            grade.grade_name,
+            grade.min_score,
+            grade.max_score,
+            grade.bonus_rate,
+            grade.loan_rate,
+            grade.monthly_override_limit,
+            grade.color
+        FROM T_MBR_INFO_M member
+        INNER JOIN T_TNY_GRADE_A grade
+            ON member.applied_grade_id = grade.grade_id
+        WHERE member.id = #{childId}
+    </select>
+
     <select id="selectAllGrades"
             resultMap="teenyScoreGradeResultMap">
         SELECT
