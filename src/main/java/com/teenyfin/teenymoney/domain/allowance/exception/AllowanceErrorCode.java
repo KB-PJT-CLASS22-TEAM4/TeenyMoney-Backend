@@ -24,7 +24,7 @@ public enum AllowanceErrorCode implements ErrorCode{
 
     // cycleType(WEEKLY/MONTHLY)이랑 paymentDay 범위가 안 맞을 때
     // (DB의 CK_ALW_SCHEDULE_M_PAYMENT_DAY CHECK 제약과 같은 규칙을 서비스 단에서 먼저 검증)
-    INVALID_PAYMENT_DAY(HttpStatus.BAD_REQUEST, "주기와 지급일이 올바르지 않습니다.");
+    INVALID_PAYMENT_DAY(HttpStatus.BAD_REQUEST, "날짜를 잘못 입력 하셨습니다.(일주일: 1~7 , 월단위:1~28)");
 
     private final HttpStatus status;
     private final String message;
