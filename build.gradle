@@ -43,6 +43,8 @@ war {
 
 dependencies {
 
+    implementation 'com.solapi:sdk:1.1.0'
+
     // AWS S3 - 프로필/인증사진 이미지 저장 (비공개 버킷)
     // BOM을 쓰면 s3와 그 안에 들어 있는 presigner의 버전이 어긋나지 않는다.
     //
