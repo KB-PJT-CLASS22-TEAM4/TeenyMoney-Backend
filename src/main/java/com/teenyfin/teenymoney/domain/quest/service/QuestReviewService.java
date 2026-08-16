@@ -2,6 +2,8 @@ package com.teenyfin.teenymoney.domain.quest.service;
 
 import com.teenyfin.teenymoney.domain.quest.dto.request.QuestRejectRequestDTO;
 import com.teenyfin.teenymoney.domain.quest.exception.QuestErrorCode;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
+import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
 import com.teenyfin.teenymoney.domain.quest.mapper.QuestMapper;
 import com.teenyfin.teenymoney.domain.quest.vo.AfterDeadlineAction;
 import com.teenyfin.teenymoney.domain.quest.vo.QuestStatus;
@@ -36,12 +38,18 @@ public class QuestReviewService {
     private static final String VERIFICATION_APPROVED = "APPROVED";
     private static final String VERIFICATION_REJECTED = "REJECTED";
     private static final String QUEST_REWARD_KEY_PREFIX = "QUEST_REWARD:";
+    private static final String QUEST_APPROVED_WITH_REWARD_TITLE = "퀘스트 완료! 보상이 지급됐어요";
+    private static final String QUEST_APPROVED_TITLE = "퀘스트를 완료했어요";
+    private static final String VERIFICATION_REJECTED_TITLE = "인증이 반려됐어요";
+    private static final String QUEST_FAILED_TITLE = "퀘스트가 실패했어요";
 
     private final QuestMapper questMapper;
     private final WalletMapper walletMapper;
     private final TransferService transferService;
     private final TeenyScorePolicyService teenyScorePolicyService;
     private final TeenyScoreChangeService teenyScoreChangeService;
+    // 심사 결과를 자녀에게 알린다. 수신자가 자녀라 이름을 따로 조회할 필요는 없다.
+    private final NotificationService notificationService;
     private final Clock clock;
 
     public QuestReviewService(
@@ -50,12 +58,14 @@ public class QuestReviewService {
             TransferService transferService,
             TeenyScorePolicyService teenyScorePolicyService,
             TeenyScoreChangeService teenyScoreChangeService,
+            NotificationService notificationService,
             Clock clock) {
         this.questMapper = questMapper;
         this.walletMapper = walletMapper;
         this.transferService = transferService;
         this.teenyScorePolicyService = teenyScorePolicyService;
         this.teenyScoreChangeService = teenyScoreChangeService;
+        this.notificationService = notificationService;
         this.clock = clock;
     }
 
@@ -95,6 +105,7 @@ public class QuestReviewService {
                     quest.getId(), parentId, now, now) != 1) {
                 throw new BusinessException(QuestErrorCode.QUEST_STATUS_CONFLICT);
             }
+            notifyApproved(quest);
         } catch (BusinessException e) {
             logReviewFailure("승인", questId, verificationId, parentId, e.getErrorCode().getCode(), e);
             throw e;
@@ -176,6 +187,39 @@ public class QuestReviewService {
                 now) != 1) {
             throw new BusinessException(QuestErrorCode.QUEST_STATUS_CONFLICT);
         }
+        notifyRejected(quest, decision.status, remainingCountAfterReview);
+    }
+
+    /** 승인은 현금 보상이 있을 때만 지급 문구를 붙인다. */
+    private void notifyApproved(QuestVO quest) {
+        Long rewardAmount = quest.getRewardAmount();
+        boolean hasCashReward = rewardAmount != null && rewardAmount > 0;
+        notifyChild(
+                quest,
+                hasCashReward ? QUEST_APPROVED_WITH_REWARD_TITLE : QUEST_APPROVED_TITLE,
+                hasCashReward
+                        ? String.format("%s · %,d원", quest.getTitle(), rewardAmount)
+                        : quest.getTitle());
+    }
+
+    /** 반려는 재도전이 남았는지에 따라 문구가 갈린다. */
+    private void notifyRejected(QuestVO quest, QuestStatus status, int remainingCount) {
+        if (status == QuestStatus.FAILED) {
+            notifyChild(quest, QUEST_FAILED_TITLE, quest.getTitle());
+            return;
+        }
+        notifyChild(quest, VERIFICATION_REJECTED_TITLE,
+                String.format("%s · 남은 기회 %d회", quest.getTitle(), remainingCount));
+    }
+
+    private void notifyChild(QuestVO quest, String title, String content) {
+        notificationService.createNotification(
+                quest.getChildId(),
+                title,
+                content,
+                NotificationReferenceType.QUEST,
+                quest.getId(),
+                true);
     }
 
     private RejectionDecision decideRejection(

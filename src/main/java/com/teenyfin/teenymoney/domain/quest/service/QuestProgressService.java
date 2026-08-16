@@ -1,5 +1,8 @@
 package com.teenyfin.teenymoney.domain.quest.service;
 
+import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
+import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
 import com.teenyfin.teenymoney.domain.quest.dto.request.QuestDeclineRequestDTO;
 import com.teenyfin.teenymoney.domain.quest.exception.QuestErrorCode;
 import com.teenyfin.teenymoney.domain.quest.mapper.QuestMapper;
@@ -25,10 +28,16 @@ public class QuestProgressService {
     private static final String IMAGE_KEY_PREFIX = "quest-verifications/";
     private static final int MAX_CONTENT_LENGTH = 500;
     private static final String VERIFICATION_PENDING = "PENDING";
+    private static final String QUEST_ACCEPTED_TITLE = "자녀가 퀘스트를 수락했어요";
+    private static final String QUEST_DECLINED_TITLE = "자녀가 퀘스트를 거절했어요";
+    private static final String VERIFICATION_SUBMITTED_TITLE = "인증을 확인해 주세요";
 
     private final QuestMapper questMapper;
     private final QuestStatePolicy questStatePolicy;
     private final S3Storage s3Storage;
+    // 부모에게 보내는 알림에 자녀 이름을 담는다. QuestVO 의 FOR UPDATE 조회에는 이름이 없다.
+    private final MemberMapper memberMapper;
+    private final NotificationService notificationService;
 
     // 인증 제출은 S3 업로드를 트랜잭션 밖에 둬야 해서 @Transactional 로 경계를 잡을 수 없다.
     private final TransactionTemplate transactionTemplate;
@@ -37,11 +46,15 @@ public class QuestProgressService {
     public QuestProgressService(QuestMapper questMapper,
                                 QuestStatePolicy questStatePolicy,
                                 S3Storage s3Storage,
+                                MemberMapper memberMapper,
+                                NotificationService notificationService,
                                 PlatformTransactionManager transactionManager,
                                 Clock clock) {
         this.questMapper = questMapper;
         this.questStatePolicy = questStatePolicy;
         this.s3Storage = s3Storage;
+        this.memberMapper = memberMapper;
+        this.notificationService = notificationService;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.clock = clock;
     }
@@ -56,6 +69,7 @@ public class QuestProgressService {
         if (questMapper.updateStatusByChild(questId, childId, QuestStatus.AVAILABLE, QuestStatus.IN_PROGRESS, now) != 1) {
             throw new BusinessException(QuestErrorCode.QUEST_STATUS_CONFLICT);
         }
+        notifyParent(quest, QUEST_ACCEPTED_TITLE, quest.getTitle());
     }
 
     // 자녀가 퀘스트를 거절한다.
@@ -77,6 +91,9 @@ public class QuestProgressService {
         if (questMapper.updateDeclineByChild(questId, childId, reasonCode, reasonDetail, now) != 1) {
             throw new BusinessException(QuestErrorCode.QUEST_STATUS_CONFLICT);
         }
+        // 자녀가 직접 쓴 사유가 있으면 그대로 보여 주고, 없으면 고른 항목의 설명을 대신 쓴다.
+        notifyParent(quest, QUEST_DECLINED_TITLE,
+                reasonDetail != null ? reasonDetail : reasonCode.getLabel());
     }
 
     /**
@@ -108,12 +125,15 @@ public class QuestProgressService {
         }
         // 람다가 잡는 값은 effectively final 이어야 한다.
         String storedKey = imageKey;
-        transactionTemplate.executeWithoutResult(
+        QuestVO quest = transactionTemplate.execute(
                 status -> recordSubmission(questId, childId, content, storedKey));
+
+        // 여기만 커밋이 끝난 뒤에 알림이 나간다. 트랜잭션 경계를 밖에서 직접 열기 때문이다.
+        notifyParent(quest, VERIFICATION_SUBMITTED_TITLE, quest.getTitle());
     }
 
     // transactionTemplate 안에서만 호출한다. @Transactional 을 붙여도 자기호출이라 무시된다.
-    private void recordSubmission(Long questId, Long childId, String content, String imageKey) {
+    private QuestVO recordSubmission(Long questId, Long childId, String content, String imageKey) {
         QuestVO quest = findOwnedForUpdate(questId, childId);
         LocalDateTime now = now();
         requireSubmittable(quest, content != null, imageKey != null, now);
@@ -135,6 +155,24 @@ public class QuestProgressService {
                 questId, childId, QuestStatus.IN_PROGRESS, QuestStatus.PENDING, now) != 1) {
             throw new BusinessException(QuestErrorCode.QUEST_STATUS_CONFLICT);
         }
+        return quest;
+    }
+
+    /**
+     * 부모에게 알린다. 내용은 "자녀이름 · 상세" 형식으로 맞춘다.
+     *
+     * 이름을 제목이 아니라 내용에 두는 것은 PermissionService 와 같은 형식이다.
+     * 제목에 이름을 넣으면 받침에 따라 조사를 골라야 한다.
+     */
+    private void notifyParent(QuestVO quest, String title, String detail) {
+        String childName = memberMapper.selectById(quest.getChildId()).getName();
+        notificationService.createNotification(
+                quest.getParentId(),
+                title,
+                childName + " · " + detail,
+                NotificationReferenceType.QUEST,
+                quest.getId(),
+                true);
     }
 
 

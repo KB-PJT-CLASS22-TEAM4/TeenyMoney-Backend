@@ -1,6 +1,10 @@
 package com.teenyfin.teenymoney.domain.quest.service;
 
 import com.teenyfin.teenymoney.domain.family.service.FamilyAccessService;
+import com.teenyfin.teenymoney.domain.notification.mapper.MemberNotificationMapper;
+import com.teenyfin.teenymoney.domain.notification.mapper.NotificationMapper;
+import com.teenyfin.teenymoney.domain.notification.service.FcmService;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
 import com.teenyfin.teenymoney.domain.quest.dto.request.QuestCreateRequestDTO;
 import com.teenyfin.teenymoney.domain.quest.dto.request.QuestRejectRequestDTO;
 import com.teenyfin.teenymoney.domain.quest.mapper.QuestMapper;
@@ -145,6 +149,24 @@ class QuestFlowIntegrationTest {
         // 티니점수 퀘스트라 성공 +3 이 한 번 붙는다.
         assertThat(scoreAmounts("QUEST_COMPLETED:" + questId)).containsExactly(3);
         assertThat(childScore()).isEqualTo(603);
+
+        // 각 단계의 알림이 실제로 T_NTF_NOTI_L 에 쌓인다.
+        // 픽스처 회원은 fcm_token 이 NULL 이라 푸시 전송은 건너뛰고 이력만 남는다.
+        assertThat(notifications(CHILD_ID)).extracting(row -> row.get("title"))
+                .containsExactly("새 퀘스트가 도착했어요", "퀘스트 완료! 보상이 지급됐어요");
+        assertThat(notifications(PARENT_ID)).extracting(row -> row.get("title"))
+                .containsExactly("자녀가 퀘스트를 수락했어요", "인증을 확인해 주세요");
+
+        Map<String, Object> created = notifications(CHILD_ID).get(0);
+        assertThat(created.get("content")).isEqualTo("방 청소하기 · 보상 1,000원");
+        assertThat(created.get("reference_type")).isEqualTo("QUEST");
+        assertThat(((Number) created.get("reference_id")).longValue()).isEqualTo(questId);
+        assertThat(created.get("is_read")).isEqualTo(Boolean.FALSE);
+        assertThat(created.get("created_at")).isNotNull();
+
+        // 부모에게 가는 알림에는 자녀 이름이 앞에 붙는다.
+        assertThat(notifications(PARENT_ID).get(0).get("content"))
+                .isEqualTo("흐름테스트자녀 · 방 청소하기");
     }
 
     @Test
@@ -282,6 +304,14 @@ class QuestFlowIntegrationTest {
         return new JdbcTemplate(dataSource);
     }
 
+    /** 알림 이력을 생성 순서대로 읽는다. */
+    private List<Map<String, Object>> notifications(Long memberId) {
+        return jdbc().queryForList(
+                "SELECT title, content, reference_type, reference_id, is_read, created_at "
+                        + "FROM T_NTF_NOTI_L WHERE member_id = ? ORDER BY id",
+                memberId);
+    }
+
     private Map<String, Object> quest(Long questId) {
         return jdbc().queryForMap(
                 "SELECT status, remaining_count, ended_at FROM T_QST_BASE_M WHERE id = ?",
@@ -324,13 +354,14 @@ class QuestFlowIntegrationTest {
 
     /**
      * DataSource·SqlSessionFactory·Clock·트랜잭션 매니저는 QuestDeadlineTestConfig 가 준다.
-     * 여기서는 그쪽이 훑지 않는 매퍼와, 유일한 목 하나만 더한다.
+     * 여기서는 그쪽이 훑지 않는 매퍼와, 목 두 개만 더한다.
      */
     @Configuration
     @MapperScan(
             basePackages = {
                     "com.teenyfin.teenymoney.domain.member.mapper",
-                    "com.teenyfin.teenymoney.domain.wallet.mapper"
+                    "com.teenyfin.teenymoney.domain.wallet.mapper",
+                    "com.teenyfin.teenymoney.domain.notification.mapper"
             },
             annotationClass = Mapper.class)
     static class FlowConfig {
@@ -339,6 +370,25 @@ class QuestFlowIntegrationTest {
         @Bean
         S3Storage s3Storage() {
             return mock(S3Storage.class);
+        }
+
+        /**
+         * 알림도 실제 빈을 쓴다. T_NTF_NOTI_L 에 진짜로 적재되는지가 확인 대상이다.
+         *
+         * FcmService 만 목이다. 진짜를 쓰면 FirebaseApp 초기화(S3에서 키를 받아 온다)까지
+         * 딸려 오는데, 여기서 볼 것은 푸시 전송이 아니라 DB 적재다.
+         * 픽스처 회원은 fcm_token 이 NULL 이라 어차피 발송 경로를 타지도 않는다.
+         */
+        @Bean
+        FcmService fcmService() {
+            return mock(FcmService.class);
+        }
+
+        @Bean
+        NotificationService notificationService(NotificationMapper notificationMapper,
+                                                MemberNotificationMapper memberNotificationMapper,
+                                                FcmService fcmService) {
+            return new NotificationService(notificationMapper, memberNotificationMapper, fcmService);
         }
     }
 }

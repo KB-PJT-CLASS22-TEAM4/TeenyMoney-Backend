@@ -1,5 +1,7 @@
 -- 흐름 테스트가 만든 행을 FK 역순으로 지운다.
 -- T_WLT_HIST_H 는 T_WLT_TRF_L 을 참조하므로 원장을 먼저 지운다.
+-- 알림은 회원을 ON DELETE RESTRICT 로 참조하므로 회원보다 먼저 지워야 한다.
+DELETE FROM `T_NTF_NOTI_L` WHERE `member_id` IN (900011, 900012);
 DELETE FROM `T_TNY_SCOREHIST_H` WHERE `child_id` = 900012;
 DELETE FROM `T_WLT_HIST_H` WHERE `wallet_id` IN (-900011, -900012);
 DELETE FROM `T_WLT_TRF_L`

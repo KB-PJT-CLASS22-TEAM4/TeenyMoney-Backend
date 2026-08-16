@@ -2,6 +2,8 @@ package com.teenyfin.teenymoney.domain.quest.service;
 
 import com.teenyfin.teenymoney.domain.family.service.FamilyAccessService;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
+import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
 import com.teenyfin.teenymoney.domain.quest.dto.request.QuestCreateRequestDTO;
 import com.teenyfin.teenymoney.domain.quest.dto.request.QuestUpdateRequestDTO;
 import com.teenyfin.teenymoney.domain.quest.exception.QuestErrorCode;
@@ -30,6 +32,8 @@ import java.util.UUID;
 @Service
 public class QuestCreationService {
 
+    private static final String QUEST_CREATED_TITLE = "새 퀘스트가 도착했어요";
+
     // 퀘스트 DB 조회, 생성, 삭제
     private final QuestMapper questMapper;
     // 부모 행을 잠가 같은 생성 요청이 동시에 처리되지 않도록 한다.
@@ -38,13 +42,16 @@ public class QuestCreationService {
     private final FamilyAccessService familyAccessService;
     // 수정, 삭제할 수 있는 상태와 기한인지 확인
     private final QuestStatePolicy questStatePolicy;
+    // 새 퀘스트가 생겼음을 자녀에게 알린다
+    private final NotificationService notificationService;
     private final Clock clock;
 
-    public QuestCreationService(QuestMapper questMapper, MemberMapper memberMapper, FamilyAccessService familyAccessService, QuestStatePolicy questStatePolicy, Clock clock) {
+    public QuestCreationService(QuestMapper questMapper, MemberMapper memberMapper, FamilyAccessService familyAccessService, QuestStatePolicy questStatePolicy, NotificationService notificationService, Clock clock) {
         this.questMapper = questMapper;
         this.memberMapper = memberMapper;
         this.familyAccessService = familyAccessService;
         this.questStatePolicy = questStatePolicy;
+        this.notificationService = notificationService;
         this.clock = clock;
     }
 
@@ -97,8 +104,24 @@ public class QuestCreationService {
                 throw new IllegalStateException("퀘스트 생성 결과가 올바르지 않습니다.");
             }
             questIds.add(quest.getId());
+            // 재요청(resolveRetry)은 여기까지 오지 않는다. 같은 요청 키의 재시도마다 알림이 가면 안 된다.
+            notificationService.createNotification(
+                    childId,
+                    QUEST_CREATED_TITLE,
+                    createdContent(normalized.title(), normalized.rewardAmount()),
+                    NotificationReferenceType.QUEST,
+                    quest.getId(),
+                    true);
         }
         return questIds;
+    }
+
+    // 현금 보상이 없는 퀘스트(티니점수만 있는 경우)는 보상 문구를 붙이지 않는다.
+    private String createdContent(String title, Long rewardAmount) {
+        if (rewardAmount == null || rewardAmount == 0) {
+            return title;
+        }
+        return String.format("%s · 보상 %,d원", title, rewardAmount);
     }
 
     //  부모가 이미 생성된 퀘스트에 변화를 주는 함수 메서드
