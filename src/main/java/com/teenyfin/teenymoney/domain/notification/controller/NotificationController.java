@@ -1,6 +1,6 @@
 package com.teenyfin.teenymoney.domain.notification.controller;
 
-import com.teenyfin.teenymoney.domain.notification.dto.response.NotificationResponseDTO;
+import com.teenyfin.teenymoney.domain.notification.dto.response.NotificationListResponseDTO;
 import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
 import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
 import com.teenyfin.teenymoney.global.response.ApiResponse;
@@ -10,8 +10,6 @@ import io.swagger.annotations.ApiOperation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @Api(tags = "Notification", description = "알림 API")
 @RestController
@@ -29,11 +27,14 @@ public class NotificationController {
         return ApiResponse.ok();
     }
 
-    @ApiOperation(value = "내 알림 최신순 조회", notes = "최근 30일 간의 알림 내역을 조회합니다. 최신순으로 정렬하여 10건씩 조회합니다.")
+    @ApiOperation(value = "내 알림 최신순 조회", notes = "최근 30일 간의 알림 내역을 최신순으로 10건씩 커서 기반 조회합니다. " +
+            "cursor 없이 호출하면 첫 페이지를 반환하고, 응답의 nextCursor를 다음 요청의 cursor로 그대로 넘기면 다음 페이지를 받습니다. " +
+            "nextCursor가 없으면 마지막 페이지입니다.")
     @GetMapping
-    public ApiResponse<List<NotificationResponseDTO>> getNotifications(
-            @AuthenticationPrincipal MemberPrincipal memberPrincipal) {
-        return ApiResponse.ok(notificationService.getNotifications(memberPrincipal.memberId()));
+    public ApiResponse<NotificationListResponseDTO> getNotifications(
+            @AuthenticationPrincipal MemberPrincipal memberPrincipal,
+            @RequestParam(required = false) String cursor) {
+        return ApiResponse.ok(notificationService.getNotifications(memberPrincipal.memberId(), cursor));
     }
 
     @ApiOperation(value = "단일 알림 읽음 처리", notes = "하나의 알림을 읽음 처리합니다.")
