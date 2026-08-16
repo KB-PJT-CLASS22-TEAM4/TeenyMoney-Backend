@@ -75,7 +75,7 @@
         SELECT id
         FROM T_ALW_SCHEDULE_M
         WHERE is_active = TRUE
-        AND next_payment_date = #{paymentDate}
+        AND next_payment_date &lt;= #{paymentDate}
     </select>
 
 

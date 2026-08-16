@@ -64,6 +64,29 @@ class AllowanceScheduleProcessorTest {
         verifyNoInteractions(notificationService);
     }
 
+    // (missed-cycle 분기 검증) next_payment_date가 오늘(paymentDate)보다 과거면 - 서버가
+    // 그 날짜에 배치를 못 돌렸던 경우다. 이땐 송금 시도 자체를 안 하고(지갑 조회도 안 함),
+    // "미지급" 알림만 보낸 뒤 다음 정상 주기로 넘어가는지 확인한다.
+    @Test
+    @DisplayName("next_payment_date가 오늘보다 과거면(놓친 회차) 송금 시도 없이 미지급 알림만 보내고 다음 정상 주기로 넘어간다")
+    void missedCycleSkipsPaymentNotifiesAndAdvancesToNextCycle() {
+        LocalDate missedDate = LocalDate.of(2026, 8, 10); // 월요일 - 원래 지급됐어야 할 날
+        LocalDate paymentDate = LocalDate.of(2026, 8, 13); // 목요일 - 배치가 뒤늦게 도는 오늘
+        AllowanceScheduleVO schedule = dueSchedule(missedDate); // next_payment_date=8/10로 스케줄 세팅
+        when(mapper.selectById(5L)).thenReturn(schedule);
+
+        processor.process(5L, paymentDate);
+
+        // 송금 시도 자체가 없어야 한다 - 지갑 조회, 송금 둘 다 안 일어남
+        verifyNoInteractions(walletMapper, transferService);
+        // 미지급 알림은 가되, 실제 송금 시도가 없었으니 transferId는 null이어야 한다
+        verify(notificationService).createNotification(
+                eq(1L), anyString(), anyString(),
+                eq(NotificationReferenceType.TRANSFER), eq((Long) null), eq(true));
+        // 오늘(8/13, 목) 기준 다음 월요일인 8/17로 정상 갱신돼야 한다
+        verify(mapper).updateNextPaymentDate(5L, LocalDate.of(2026, 8, 17));
+    }
+
     // 잔액 부족 같은 BusinessException으로 실패하면 그 구체적인 사유로 부모에게 알림이 가고,
     // 그래도 다음 주기로 넘어가는지
     @Test
