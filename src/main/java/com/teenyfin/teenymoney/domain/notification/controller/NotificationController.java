@@ -3,6 +3,7 @@ package com.teenyfin.teenymoney.domain.notification.controller;
 import com.teenyfin.teenymoney.domain.notification.dto.request.NotificationFcmRequestDTO;
 import com.teenyfin.teenymoney.domain.notification.dto.request.NotificationSettingRequestDTO;
 import com.teenyfin.teenymoney.domain.notification.dto.response.NotificationListResponseDTO;
+import com.teenyfin.teenymoney.domain.notification.dto.response.NotificationSettingResponseDTO;
 import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
 import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
 import com.teenyfin.teenymoney.global.response.ApiResponse;
@@ -75,7 +76,14 @@ public class NotificationController {
         return ApiResponse.ok();
     }
 
-    @ApiOperation(value = "알림 수신 여부 변경", notes = "알림 수신 관련 설정을 변경합니다.")
+    @ApiOperation(value = "알림 수신 여부 조회", notes = "현재 알림 수신 여부 관련 설정을 조회합니다.")
+    @GetMapping("/setting")
+    public ApiResponse<NotificationSettingResponseDTO> getNotificationSetting(
+            @AuthenticationPrincipal MemberPrincipal memberPrincipal) {
+        return ApiResponse.ok(notificationService.getNotificationSetting(memberPrincipal.memberId()));
+    }
+
+    @ApiOperation(value = "알림 수신 여부 변경", notes = "알림 수신 여부 관련 설정을 변경합니다.")
     @PatchMapping("/setting")
     public ApiResponse<Void> modifyNotificationSetting(
             @AuthenticationPrincipal MemberPrincipal memberPrincipal,

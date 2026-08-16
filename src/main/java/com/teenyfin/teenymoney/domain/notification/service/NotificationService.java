@@ -5,6 +5,7 @@ import com.teenyfin.teenymoney.domain.notification.dto.request.NotificationFcmRe
 import com.teenyfin.teenymoney.domain.notification.dto.request.NotificationSettingRequestDTO;
 import com.teenyfin.teenymoney.domain.notification.dto.response.NotificationListResponseDTO;
 import com.teenyfin.teenymoney.domain.notification.dto.response.NotificationResponseDTO;
+import com.teenyfin.teenymoney.domain.notification.dto.response.NotificationSettingResponseDTO;
 import com.teenyfin.teenymoney.domain.notification.exception.NotificationErrorCode;
 import com.teenyfin.teenymoney.domain.notification.mapper.MemberNotificationMapper;
 import com.teenyfin.teenymoney.domain.notification.mapper.NotificationMapper;
@@ -188,7 +189,19 @@ public class NotificationService {
         memberNotificationMapper.updateFcmToken(memberId, notificationFcmRequestDTO.getFcmToken());
     }
 
-    // 알림 수신 여부 설정 수정
+    // 알림 수신 여부 조회
+    public NotificationSettingResponseDTO getNotificationSetting(Long memberId) {
+
+        MemberNotificationVO memberNotificationVO = memberNotificationMapper.selectNotificationInfo(memberId);
+
+        return NotificationSettingResponseDTO.builder()
+                .notificationQuest(memberNotificationVO.getNotiQuest())
+                .notificationFinance(memberNotificationVO.getNotiFinance())
+                .notificationPayment(memberNotificationVO.getNotiPayment())
+                .build();
+    }
+
+    // 알림 수신 여부 변경
     public void modifyNotificationSetting(Long memberId, NotificationSettingRequestDTO notificationSettingRequestDTO) {
 
         memberNotificationMapper.updateNotificationSetting(memberId, notificationSettingRequestDTO);
