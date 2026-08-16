@@ -7,11 +7,18 @@ import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductEnroll
 import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductApprovalVO;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.LoanProductVO;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.SavingProductVO;
+import com.teenyfin.teenymoney.domain.financialproduct.vo.FreeSavingPaymentVO;
+import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductMaturityVO;
+import com.teenyfin.teenymoney.domain.financialproduct.vo.FreeSavingMonthlyVO;
+import com.teenyfin.teenymoney.domain.financialproduct.vo.SavingContributionVO;
+import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductTerminationVO;
+import com.teenyfin.teenymoney.domain.financialproduct.vo.LoanRepaymentVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Mapper
 public interface FinancialProductMapper {
@@ -74,11 +81,13 @@ public interface FinancialProductMapper {
             @Param("parentId") Long parentId,
             @Param("enrollmentId") Long enrollmentId);
     int approveDepositEnrollment(@Param("enrollmentId") Long enrollmentId,
+                                 @Param("walletId") Long walletId,
                                  @Param("appliedRate") java.math.BigDecimal appliedRate,
                                  @Param("earlyTerminationRate") java.math.BigDecimal earlyTerminationRate,
                                  @Param("startDate") java.time.LocalDate startDate,
                                  @Param("maturityDate") java.time.LocalDate maturityDate);
     int approveSavingEnrollment(@Param("enrollmentId") Long enrollmentId,
+                                @Param("walletId") Long walletId,
                                 @Param("appliedRate") java.math.BigDecimal appliedRate,
                                 @Param("earlyTerminationRate") java.math.BigDecimal earlyTerminationRate,
                                 @Param("startDate") java.time.LocalDate startDate,
@@ -110,4 +119,83 @@ public interface FinancialProductMapper {
                                    @Param("status") String status);
     int upsertDepositProduct(DepositProductVO product);
     int upsertSavingProduct(SavingProductVO product);
+    // 자유적금 가입 행을 잠가 동시 납입 시 월 한도를 직렬화한다.
+    FreeSavingPaymentVO selectFreeSavingForPaymentForUpdate(
+            @Param("childId") Long childId,
+            @Param("enrollmentId") Long enrollmentId);
+    FreeSavingPaymentVO selectFreeSavingPaymentByIdempotencyKey(
+            @Param("enrollmentId") Long enrollmentId,
+            @Param("idempotencyKey") String idempotencyKey);
+    long selectFreeSavingPaidAmountInMonth(
+            @Param("enrollmentId") Long enrollmentId,
+            @Param("paymentDate") LocalDate paymentDate);
+    int insertFreeSavingPayment(@Param("enrollmentId") Long enrollmentId,
+                                @Param("transferId") Long transferId,
+                                @Param("installmentNo") Integer installmentNo,
+                                @Param("amount") Long amount);
+
+    List<Long> selectDueDepositMaturityIds(@Param("processingDate") LocalDate processingDate);
+    List<Long> selectDueSavingMaturityIds(@Param("processingDate") LocalDate processingDate);
+    FinancialProductMaturityVO selectDepositMaturityForUpdate(
+            @Param("enrollmentId") Long enrollmentId,
+            @Param("processingDate") LocalDate processingDate);
+    FinancialProductMaturityVO selectSavingMaturityForUpdate(
+            @Param("enrollmentId") Long enrollmentId,
+            @Param("processingDate") LocalDate processingDate);
+    List<SavingContributionVO> selectSavingContributions(
+            @Param("enrollmentId") Long enrollmentId);
+    Integer selectFirstMissedSavingInstallment(@Param("enrollmentId") Long enrollmentId);
+    int markDepositMatured(@Param("enrollmentId") Long enrollmentId);
+    int markSavingMatured(@Param("enrollmentId") Long enrollmentId);
+
+    List<Long> selectFreeSavingMonthlyTargetIds(
+            @Param("monthStart") LocalDate monthStart,
+            @Param("monthEndExclusive") LocalDate monthEndExclusive);
+    FreeSavingMonthlyVO selectFreeSavingMonthlyForUpdate(
+            @Param("enrollmentId") Long enrollmentId,
+            @Param("monthStart") LocalDate monthStart,
+            @Param("monthEndExclusive") LocalDate monthEndExclusive);
+    long selectSavingPaidAmountBetween(
+            @Param("enrollmentId") Long enrollmentId,
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to);
+
+    FinancialProductTerminationVO selectDepositTermination(
+            @Param("childId") Long childId, @Param("enrollmentId") Long enrollmentId);
+    FinancialProductTerminationVO selectSavingTermination(
+            @Param("childId") Long childId, @Param("enrollmentId") Long enrollmentId);
+    FinancialProductTerminationVO selectDepositTerminationForUpdate(
+            @Param("childId") Long childId, @Param("enrollmentId") Long enrollmentId);
+    FinancialProductTerminationVO selectSavingTerminationForUpdate(
+            @Param("childId") Long childId, @Param("enrollmentId") Long enrollmentId);
+    int markDepositTerminated(@Param("enrollmentId") Long enrollmentId);
+    int markSavingTerminated(@Param("enrollmentId") Long enrollmentId);
+
+    List<Long> selectLoanRepaymentTargetIds(@Param("processingDate") LocalDate processingDate);
+    LoanRepaymentVO selectLoanRepaymentForUpdate(@Param("enrollmentId") Long enrollmentId);
+    int countLoanRepaymentHistory(@Param("enrollmentId") Long enrollmentId,
+                                  @Param("installmentNo") Integer installmentNo);
+    int countLoanRepaymentHistoryOnDate(
+            @Param("enrollmentId") Long enrollmentId,
+            @Param("installmentNo") Integer installmentNo,
+            @Param("attemptDate") LocalDate attemptDate);
+    LocalDate selectLastLoanRepaymentAttemptDate(
+            @Param("enrollmentId") Long enrollmentId,
+            @Param("installmentNo") Integer installmentNo);
+    int insertLoanRepaymentHistory(
+            @Param("enrollmentId") Long enrollmentId,
+            @Param("transferId") Long transferId,
+            @Param("installmentNo") Integer installmentNo,
+            @Param("principalAmount") Long principalAmount,
+            @Param("paidPrincipalAmount") Long paidPrincipalAmount,
+            @Param("interestAmount") Long interestAmount,
+            @Param("paidInterestAmount") Long paidInterestAmount,
+            @Param("status") String status,
+            @Param("dueDate") LocalDate dueDate);
+    int updateLoanAfterRepayment(
+            @Param("enrollmentId") Long enrollmentId,
+            @Param("outstandingPrincipal") Long outstandingPrincipal,
+            @Param("overdueInterest") Long overdueInterest,
+            @Param("paidCount") Integer paidCount,
+            @Param("status") String status);
 }

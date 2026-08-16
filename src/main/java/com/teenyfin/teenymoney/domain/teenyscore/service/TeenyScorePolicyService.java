@@ -317,10 +317,26 @@ public class TeenyScorePolicyService {
             Long loanEnrollmentId) {
         return request(
                 childId,
-                TeenyScoreEventCode.LOAN_DEFAULTED, // 만기 후 유예기간이 끝나도 미상환 금액이 남은 상태
+                TeenyScoreEventCode.LOAN_DEFAULTED, // 만기일까지 원금 또는 이자를 완납하지 못한 상태
                 LOAN_DEFAULT_PENALTY,
                 "LOAN_DEFAULTED:" + loanEnrollmentId,
                 "대출 최종 만기 미상환",
+                "LOAN_ENROLLMENT",
+                loanEnrollmentId);
+    }
+
+    /** 만기 후에도 미상환 상태가 유지되는 동안 월별로 한 번만 추가 감점한다. */
+    public TeenyScoreChangeRequestDTO loanPostMaturityOverdue(
+            Long childId, Long loanEnrollmentId, YearMonth targetMonth) {
+        if (targetMonth == null) {
+            throw new IllegalArgumentException("targetMonth는 필수입니다.");
+        }
+        return request(
+                childId,
+                TeenyScoreEventCode.LOAN_POST_MATURITY_OVERDUE,
+                -5,
+                "LOAN_POST_MATURITY_OVERDUE:" + loanEnrollmentId + ":" + targetMonth,
+                "만기 후 대출 미상환",
                 "LOAN_ENROLLMENT",
                 loanEnrollmentId);
     }

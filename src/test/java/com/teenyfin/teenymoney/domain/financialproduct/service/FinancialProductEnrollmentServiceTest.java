@@ -10,8 +10,6 @@ import com.teenyfin.teenymoney.domain.financialproduct.vo.*;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.domain.member.vo.MemberParentVO;
 import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
-import com.teenyfin.teenymoney.domain.wallet.service.TransferService;
-import com.teenyfin.teenymoney.domain.wallet.service.WalletService;
 import com.teenyfin.teenymoney.domain.wallet.vo.WalletVO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import com.teenyfin.teenymoney.global.security.MemberPrincipal;
@@ -32,8 +30,6 @@ class FinancialProductEnrollmentServiceTest {
 
     private FinancialProductMapper mapper;
     private WalletMapper walletMapper;
-    private WalletService walletService;
-    private TransferService transferService;
     private FinancialProductEnrollmentService service;
 
     @BeforeEach
@@ -41,11 +37,9 @@ class FinancialProductEnrollmentServiceTest {
         mapper = mock(FinancialProductMapper.class);
         MemberMapper memberMapper = mock(MemberMapper.class);
         walletMapper = mock(WalletMapper.class);
-        walletService = mock(WalletService.class);
-        transferService = mock(TransferService.class);
         service = new FinancialProductEnrollmentService(mapper,
                 new FinancialProductRateCalculator(), memberMapper,
-                walletMapper, walletService, transferService);
+                walletMapper);
 
         MemberParentVO parent = new MemberParentVO();
         parent.setParentId(1L);
@@ -62,7 +56,6 @@ class FinancialProductEnrollmentServiceTest {
         wallet.setBalance(500_000L);
         when(walletMapper.selectMemberWalletByMemberId(2L)).thenReturn(wallet);
         when(walletMapper.selectWalletForUpdate(10L)).thenReturn(wallet);
-        when(walletService.createWallet(anyLong(), any())).thenReturn(20L);
         doAnswer(invocation -> {
             FinancialProductEnrollmentCommandVO command = invocation.getArgument(0);
             command.setId(100L);
@@ -71,8 +64,8 @@ class FinancialProductEnrollmentServiceTest {
     }
 
     @Test
-    @DisplayName("예금 가입 시 우대금리와 중도해지 기준금리를 계약에 저장하고 송금을 생성한다")
-    void requestDepositCreatesPendingEnrollmentAndTransfer() {
+    @DisplayName("예금 신청은 지갑을 만들지 않고 신청 금액을 PENDING 계약에 저장한다")
+    void requestDepositStoresAmountWithoutProductWallet() {
         DepositProductVO product = new DepositProductVO();
         product.setId(1L);
         product.setProductSource(FinancialProductSource.PARENT);
@@ -90,14 +83,14 @@ class FinancialProductEnrollmentServiceTest {
         assertEquals("PENDING", response.getStatus());
         assertEquals(new BigDecimal("4.20"), response.getExpectedAppliedRate());
         verify(mapper).insertDepositEnrollment(argThat(command ->
-                new BigDecimal("0.50").equals(
-                        command.getAppliedEarlyTerminationRate())));
-        verify(transferService).createPendingTransfer(eq(10L), eq(20L),
-                eq(50_000L), any(), anyString());
+                new BigDecimal("3.20").equals(
+                        command.getAppliedEarlyTerminationRate())
+                        && command.getWalletId() == null
+                        && Long.valueOf(50_000L).equals(command.getAmount())));
     }
 
     @Test
-    @DisplayName("적금 가입 시 중도해지 기준금리를 계약에 저장하고 상품 지갑만 생성한다")
+    @DisplayName("적금 가입 요청은 상품 지갑 없이 PENDING 계약만 저장한다")
     void requestSavingDoesNotCreatePendingTransfer() {
         SavingProductVO product = new SavingProductVO();
         product.setId(1L);
@@ -120,11 +113,9 @@ class FinancialProductEnrollmentServiceTest {
         assertEquals(101L, response.getEnrollmentId());
         assertEquals("PENDING", response.getStatus());
         verify(mapper).insertSavingEnrollment(argThat(command ->
-                new BigDecimal("1.00").equals(
-                        command.getAppliedEarlyTerminationRate())));
-        verify(walletService).createWallet(2L,
-                com.teenyfin.teenymoney.domain.wallet.vo.WalletType.SAVING);
-        verifyNoInteractions(transferService);
+                new BigDecimal("3.20").equals(
+                        command.getAppliedEarlyTerminationRate())
+                        && command.getWalletId() == null));
     }
 
     @Test
@@ -263,7 +254,7 @@ class FinancialProductEnrollmentServiceTest {
 
         assertEquals(FinancialProductErrorCode.FINANCIAL_PRODUCT_ENROLLMENT_DUPLICATED,
                 exception.getErrorCode());
-        verify(walletService, never()).createWallet(anyLong(), any());
+        verify(mapper, never()).insertDepositEnrollment(any());
     }
 
     @Test

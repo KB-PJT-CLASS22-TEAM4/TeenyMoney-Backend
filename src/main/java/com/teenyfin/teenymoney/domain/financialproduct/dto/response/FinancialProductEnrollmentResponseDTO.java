@@ -32,7 +32,7 @@ public class FinancialProductEnrollmentResponseDTO {
     private final String status;
     @ApiModelProperty(value = "가입 시점 확정금리(%)", example = "4.50")
     private final BigDecimal appliedRate;
-    @ApiModelProperty(value = "가입 시점에 저장한 중도해지 기준금리(%)", example = "1.00")
+    @ApiModelProperty(value = "가입 시점에 저장한 우대금리 제외 약정 기본금리(%)", example = "3.00")
     private final BigDecimal appliedEarlyTerminationRate;
     private final BigDecimal appliedLateFeeRate;
     private final Integer termMonths;

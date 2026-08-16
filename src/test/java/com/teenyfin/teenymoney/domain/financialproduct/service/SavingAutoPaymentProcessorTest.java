@@ -6,6 +6,8 @@ import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
 import com.teenyfin.teenymoney.domain.wallet.service.TransferService;
 import com.teenyfin.teenymoney.domain.wallet.vo.TransferVO;
 import com.teenyfin.teenymoney.domain.wallet.vo.WalletVO;
+import com.teenyfin.teenymoney.domain.teenyscore.service.TeenyScoreChangeService;
+import com.teenyfin.teenymoney.domain.teenyscore.service.TeenyScorePolicyService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,7 +31,9 @@ class SavingAutoPaymentProcessorTest {
         walletMapper = mock(WalletMapper.class);
         transferService = mock(TransferService.class);
         processor = new SavingAutoPaymentProcessor(
-                mapper, walletMapper, transferService);
+                mapper, walletMapper, transferService,
+                mock(TeenyScorePolicyService.class),
+                mock(TeenyScoreChangeService.class));
     }
 
     @Test

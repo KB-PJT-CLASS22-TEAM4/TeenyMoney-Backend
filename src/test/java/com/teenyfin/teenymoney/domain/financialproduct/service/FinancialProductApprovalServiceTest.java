@@ -6,7 +6,9 @@ import com.teenyfin.teenymoney.domain.financialproduct.mapper.FinancialProductMa
 import com.teenyfin.teenymoney.domain.financialproduct.vo.*;
 import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
 import com.teenyfin.teenymoney.domain.wallet.service.TransferService;
+import com.teenyfin.teenymoney.domain.wallet.service.WalletService;
 import com.teenyfin.teenymoney.domain.wallet.vo.TransferVO;
+import com.teenyfin.teenymoney.domain.wallet.vo.WalletVO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import com.teenyfin.teenymoney.global.security.MemberPrincipal;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,6 +30,8 @@ class FinancialProductApprovalServiceTest {
     private FinancialProductMapper mapper;
     private FamilyAccessService familyAccessService;
     private TransferService transferService;
+    private WalletService walletService;
+    private WalletMapper walletMapper;
     private FinancialProductApprovalService service;
 
     @BeforeEach
@@ -35,9 +39,12 @@ class FinancialProductApprovalServiceTest {
         mapper = mock(FinancialProductMapper.class);
         familyAccessService = mock(FamilyAccessService.class);
         transferService = mock(TransferService.class);
+        walletService = mock(WalletService.class);
+        walletMapper = mock(WalletMapper.class);
+        when(walletService.createWallet(anyLong(), any())).thenReturn(20L);
         service = new FinancialProductApprovalService(mapper,
                 familyAccessService,
-                mock(WalletMapper.class), transferService,
+                walletMapper, transferService, walletService,
                 Clock.fixed(Instant.parse("2026-08-11T00:00:00Z"), ZoneOffset.UTC));
     }
 
@@ -45,6 +52,7 @@ class FinancialProductApprovalServiceTest {
     @DisplayName("부모 승인 시 가입 요청 시점에 저장한 예금 확정금리를 유지한다")
     void approveDepositKeepsRateFromRequestDate() {
         FinancialProductApprovalVO approval = approval(FinancialProductType.DEPOSIT);
+        approval.setWalletId(20L);
         approval.setTransferId(30L);
         approval.setAppliedRate(new BigDecimal("4.20"));
         approval.setEarlyTerminationRate(new BigDecimal("0.50"));
@@ -57,13 +65,48 @@ class FinancialProductApprovalServiceTest {
         TransferVO transfer = new TransferVO();
         transfer.setId(30L);
         when(transferService.executeTransferAtomically(30L)).thenReturn(transfer);
-        when(mapper.approveDepositEnrollment(eq(7L), eq(new BigDecimal("4.20")),
+        when(mapper.approveDepositEnrollment(eq(7L), eq(20L), eq(new BigDecimal("4.20")),
                 eq(new BigDecimal("0.50")), any(), any())).thenReturn(1);
 
         service.approve(PARENT, "deposit", 7L);
 
         verify(familyAccessService).requireChildAccess(PARENT, 2L);
         verify(mapper).approveDepositEnrollment(eq(7L),
+                eq(20L),
+                eq(new BigDecimal("4.20")), eq(new BigDecimal("0.50")),
+                eq(java.time.LocalDate.of(2026, 8, 11)),
+                eq(java.time.LocalDate.of(2027, 8, 11)));
+    }
+
+    @Test
+    @DisplayName("신규 예금 승인은 신청 금액으로 상품 지갑을 만들고 원금을 송금한다")
+    void approveNewDepositCreatesWalletAndTransfersStoredAmount() {
+        FinancialProductApprovalVO approval = approval(FinancialProductType.DEPOSIT);
+        approval.setWalletId(null);
+        approval.setTransferId(null);
+        approval.setRequestedAmount(50_000L);
+        approval.setAppliedRate(new BigDecimal("4.20"));
+        approval.setEarlyTerminationRate(new BigDecimal("0.50"));
+        when(mapper.selectDepositApprovalForUpdate(1L, 7L)).thenReturn(approval);
+        DepositProductVO product = new DepositProductVO();
+        product.setId(3L);
+        when(mapper.selectActiveDepositProductById(3L)).thenReturn(product);
+        WalletVO childWallet = new WalletVO();
+        childWallet.setId(10L);
+        when(walletMapper.selectMemberWalletByMemberId(2L)).thenReturn(childWallet);
+        when(mapper.approveDepositEnrollment(eq(7L), eq(20L),
+                eq(new BigDecimal("4.20")), eq(new BigDecimal("0.50")),
+                any(), any())).thenReturn(1);
+
+        service.approve(PARENT, "DEPOSIT", 7L);
+
+        verify(walletService).createWallet(2L,
+                com.teenyfin.teenymoney.domain.wallet.vo.WalletType.DEPOSIT);
+        verify(transferService).transferInExistingTransaction(
+                10L, 20L, 50_000L,
+                com.teenyfin.teenymoney.domain.wallet.vo.TransferType.DEPOSIT,
+                "DEPOSIT_ENROLLMENT:7:PRINCIPAL");
+        verify(mapper).approveDepositEnrollment(eq(7L), eq(20L),
                 eq(new BigDecimal("4.20")), eq(new BigDecimal("0.50")),
                 eq(java.time.LocalDate.of(2026, 8, 11)),
                 eq(java.time.LocalDate.of(2027, 8, 11)));
@@ -82,7 +125,7 @@ class FinancialProductApprovalServiceTest {
         product.setRate12m(new BigDecimal("3.20"));
         product.setEarlyTerminationRate(new BigDecimal("1.00"));
         when(mapper.selectActiveSavingProductById(3L)).thenReturn(product);
-        when(mapper.approveSavingEnrollment(eq(7L), eq(new BigDecimal("4.20")),
+        when(mapper.approveSavingEnrollment(eq(7L), eq(20L), eq(new BigDecimal("4.20")),
                 eq(new BigDecimal("1.00")), any(), any())).thenReturn(1);
 
         service.approve(PARENT, "saving", 7L);
@@ -90,6 +133,7 @@ class FinancialProductApprovalServiceTest {
         verifyNoInteractions(transferService);
         verify(mapper, never()).insertFirstSavingPayment(anyLong(), anyLong(), anyLong());
         verify(mapper).approveSavingEnrollment(eq(7L),
+                eq(20L),
                 eq(new BigDecimal("4.20")), eq(new BigDecimal("1.00")),
                 eq(java.time.LocalDate.of(2026, 8, 25)),
                 eq(java.time.LocalDate.of(2027, 8, 25)));
@@ -106,13 +150,14 @@ class FinancialProductApprovalServiceTest {
         SavingProductVO product = new SavingProductVO();
         product.setId(3L);
         when(mapper.selectActiveSavingProductById(3L)).thenReturn(product);
-        when(mapper.approveSavingEnrollment(eq(7L), eq(new BigDecimal("4.20")),
+        when(mapper.approveSavingEnrollment(eq(7L), eq(20L), eq(new BigDecimal("4.20")),
                 eq(new BigDecimal("1.00")), any(), any())).thenReturn(1);
 
         service.approve(PARENT, "saving", 7L);
 
         verifyNoInteractions(transferService);
         verify(mapper).approveSavingEnrollment(eq(7L),
+                eq(20L),
                 eq(new BigDecimal("4.20")), eq(new BigDecimal("1.00")),
                 eq(java.time.LocalDate.of(2026, 9, 11)),
                 eq(java.time.LocalDate.of(2027, 9, 11)));
@@ -160,20 +205,18 @@ class FinancialProductApprovalServiceTest {
     }
 
     @Test
-    @DisplayName("예금 거절 시 대기 송금이 없으면 계약을 REJECTED로 변경하지 않는다")
-    void rejectDepositWithoutPendingTransferIsRejected() {
+    @DisplayName("신규 예금 거절은 대기 송금 없이 계약을 REJECTED로 변경한다")
+    void rejectDepositWithoutPendingTransferChangesStatus() {
         FinancialProductApprovalVO approval = approval(FinancialProductType.DEPOSIT);
         approval.setTransferId(null);
         when(mapper.selectDepositApprovalForUpdate(1L, 7L)).thenReturn(approval);
 
-        BusinessException exception = assertThrows(BusinessException.class,
-                () -> service.reject(PARENT, "DEPOSIT", 7L));
+        when(mapper.rejectDepositEnrollment(7L)).thenReturn(1);
 
-        assertEquals(
-                FinancialProductErrorCode.FINANCIAL_PRODUCT_PENDING_TRANSFER_NOT_FOUND,
-                exception.getErrorCode());
+        service.reject(PARENT, "DEPOSIT", 7L);
+
         verify(transferService, never()).cancelPendingTransfer(anyLong());
-        verify(mapper, never()).rejectDepositEnrollment(anyLong());
+        verify(mapper).rejectDepositEnrollment(7L);
     }
 
     @Test

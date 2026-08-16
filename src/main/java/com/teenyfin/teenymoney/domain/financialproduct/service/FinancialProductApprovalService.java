@@ -8,7 +8,9 @@ import com.teenyfin.teenymoney.domain.family.service.FamilyAccessService;
 import com.teenyfin.teenymoney.domain.wallet.exception.WalletErrorCode;
 import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
 import com.teenyfin.teenymoney.domain.wallet.service.TransferService;
+import com.teenyfin.teenymoney.domain.wallet.service.WalletService;
 import com.teenyfin.teenymoney.domain.wallet.vo.TransferType;
+import com.teenyfin.teenymoney.domain.wallet.vo.WalletType;
 import com.teenyfin.teenymoney.domain.wallet.vo.TransferVO;
 import com.teenyfin.teenymoney.domain.wallet.vo.WalletVO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
@@ -27,6 +29,7 @@ public class FinancialProductApprovalService {
     private final FamilyAccessService familyAccessService;
     private final WalletMapper walletMapper;
     private final TransferService transferService;
+    private final WalletService walletService;
     private final Clock clock;
 
     public FinancialProductApprovalService(
@@ -34,11 +37,13 @@ public class FinancialProductApprovalService {
             FamilyAccessService familyAccessService,
             WalletMapper walletMapper,
             TransferService transferService,
+            WalletService walletService,
             Clock clock) {
         this.financialProductMapper = financialProductMapper;
         this.familyAccessService = familyAccessService;
         this.walletMapper = walletMapper;
         this.transferService = transferService;
+        this.walletService = walletService;
         this.clock = clock;
     }
 
@@ -77,9 +82,11 @@ public class FinancialProductApprovalService {
                 DepositProductVO product = financialProductMapper
                         .selectActiveDepositProductById(approval.getProductId());
                 if (product == null) throw productNotFound();
-                executeExistingTransfer(approval);
+                // 신청 단계에는 상품 지갑을 만들지 않고, 승인 트랜잭션 안에서만 생성·원금 이체한다.
+                Long productWalletId = productWallet(approval, WalletType.DEPOSIT);
+                executeDepositTransfer(approval, productWalletId);
                 updated = financialProductMapper.approveDepositEnrollment(
-                        enrollmentId, approval.getAppliedRate(),
+                        enrollmentId, productWalletId, approval.getAppliedRate(),
                         approval.getEarlyTerminationRate(),
                         startDate, maturityDate);
             }
@@ -91,8 +98,10 @@ public class FinancialProductApprovalService {
                 SavingProductVO product = financialProductMapper
                         .selectActiveSavingProductById(approval.getProductId());
                 if (product == null) throw productNotFound();
+                // 적금도 승인된 계약만 전용 지갑을 가져 거절·대기 신청의 빈 지갑이 남지 않는다.
+                Long productWalletId = productWallet(approval, WalletType.SAVING);
                 updated = financialProductMapper.approveSavingEnrollment(
-                        enrollmentId, approval.getAppliedRate(),
+                        enrollmentId, productWalletId, approval.getAppliedRate(),
                         approval.getEarlyTerminationRate(),
                         startDate, maturityDate);
             }
@@ -133,13 +142,6 @@ public class FinancialProductApprovalService {
                 parentId, type, enrollmentId);
         validateOwnedPending(principal, approval);
         if (type == FinancialProductType.DEPOSIT) {
-            if (approval.getTransferId() == null) {
-                throw new BusinessException(
-                        FinancialProductErrorCode
-                                .FINANCIAL_PRODUCT_PENDING_TRANSFER_NOT_FOUND
-                );
-            }
-
             transferService.cancelPendingTransfer(approval.getTransferId());
         }
         int updated = switch (type) {
@@ -169,13 +171,23 @@ public class FinancialProductApprovalService {
         if (!"PENDING".equals(approval.getStatus())) throw notPending();
     }
 
-    private TransferVO executeExistingTransfer(
-            FinancialProductApprovalVO approval) {
-        if (approval.getTransferId() == null) {
-            throw new BusinessException(
-                    FinancialProductErrorCode.FINANCIAL_PRODUCT_PENDING_TRANSFER_NOT_FOUND);
+    private Long productWallet(FinancialProductApprovalVO approval, WalletType type) {
+        // 재시도 시 이미 연결된 지갑을 재사용하여 상품 지갑이 중복 생성되지 않게 한다.
+        return approval.getWalletId() != null
+                ? approval.getWalletId()
+                : walletService.createWallet(approval.getChildId(), type);
+    }
+
+    private TransferVO executeDepositTransfer(
+            FinancialProductApprovalVO approval, Long productWalletId) {
+        if (approval.getTransferId() != null) {
+            return transferService.executeTransferAtomically(approval.getTransferId());
         }
-        return transferService.executeTransferAtomically(approval.getTransferId());
+        WalletVO childWallet = memberWallet(approval.getChildId());
+        return transferService.transferInExistingTransaction(
+                childWallet.getId(), productWalletId, approval.getRequestedAmount(),
+                TransferType.DEPOSIT,
+                "DEPOSIT_ENROLLMENT:" + approval.getEnrollmentId() + ":PRINCIPAL");
     }
 
     /*

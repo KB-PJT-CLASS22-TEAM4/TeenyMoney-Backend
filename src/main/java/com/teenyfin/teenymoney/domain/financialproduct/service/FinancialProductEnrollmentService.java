@@ -11,10 +11,6 @@ import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.domain.member.vo.MemberParentVO;
 import com.teenyfin.teenymoney.domain.wallet.exception.WalletErrorCode;
 import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
-import com.teenyfin.teenymoney.domain.wallet.service.TransferService;
-import com.teenyfin.teenymoney.domain.wallet.service.WalletService;
-import com.teenyfin.teenymoney.domain.wallet.vo.TransferType;
-import com.teenyfin.teenymoney.domain.wallet.vo.WalletType;
 import com.teenyfin.teenymoney.domain.wallet.vo.WalletVO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import com.teenyfin.teenymoney.global.security.MemberPrincipal;
@@ -22,7 +18,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.util.UUID;
 
 @Service
 public class FinancialProductEnrollmentService {
@@ -30,22 +25,16 @@ public class FinancialProductEnrollmentService {
     private final FinancialProductRateCalculator rateCalculator;
     private final MemberMapper memberMapper;
     private final WalletMapper walletMapper;
-    private final WalletService walletService;
-    private final TransferService transferService;
 
     public FinancialProductEnrollmentService(
             FinancialProductMapper financialProductMapper,
             FinancialProductRateCalculator rateCalculator,
             MemberMapper memberMapper,
-            WalletMapper walletMapper,
-            WalletService walletService,
-            TransferService transferService) {
+            WalletMapper walletMapper) {
         this.financialProductMapper = financialProductMapper;
         this.rateCalculator = rateCalculator;
         this.memberMapper = memberMapper;
         this.walletMapper = walletMapper;
-        this.walletService = walletService;
-        this.transferService = transferService;
     }
 
     @Transactional
@@ -64,16 +53,18 @@ public class FinancialProductEnrollmentService {
         // 부모 생성 예금도 일반 예금과 동일하게 월간 적용 등급 우대금리를 더한다.
         BigDecimal rate = rateCalculator.depositRate(product,
                 request.getTermMonths(), benefit.getBonusRate());
+        // 중도해지는 우대금리를 제외한 가입 당시 약정 기본금리에 진행률 비율을 적용한다.
+        BigDecimal baseRate = rateCalculator.depositRate(
+                product, request.getTermMonths(), BigDecimal.ZERO);
         validateBalance(memberWallet, request.getAmount());
-        Long productWalletId = walletService.createWallet(childId, WalletType.DEPOSIT);
-
         FinancialProductEnrollmentCommandVO command = baseCommand(
-                product.getId(), parentId, childId, productWalletId, rate,
+                product.getId(), parentId, childId, null, rate,
                 request.getTermMonths());
-        command.setAppliedEarlyTerminationRate(product.getEarlyTerminationRate());
+        // 예전에는 PENDING 송금의 amount가 신청 금액 저장소 역할을 했다.
+        // 승인 전에는 상품 지갑과 송금을 만들지 않으므로, 신청 금액을 계약 행에 스냅샷으로 남긴다.
+        command.setAmount(request.getAmount());
+        command.setAppliedEarlyTerminationRate(baseRate);
         financialProductMapper.insertDepositEnrollment(command);
-        transferService.createPendingTransfer(memberWallet.getId(), productWalletId,
-                request.getAmount(), TransferType.DEPOSIT, UUID.randomUUID().toString());
         return response(command.getId(), FinancialProductType.DEPOSIT, rate);
     }
 
@@ -94,12 +85,13 @@ public class FinancialProductEnrollmentService {
         // 부모 생성 적금도 일반 적금과 동일하게 월간 적용 등급 우대금리를 더한다.
         BigDecimal rate = rateCalculator.savingRate(product,
                 request.getTermMonths(), benefit.getBonusRate());
-        Long productWalletId = walletService.createWallet(childId, WalletType.SAVING);
-
+        // appliedRate에는 우대금리를 포함하되, 중도해지 계산용 스냅샷에는 기본금리만 보관한다.
+        BigDecimal baseRate = rateCalculator.savingRate(
+                product, request.getTermMonths(), BigDecimal.ZERO);
         FinancialProductEnrollmentCommandVO command = baseCommand(
-                product.getId(), parentId, childId, productWalletId, rate,
+                product.getId(), parentId, childId, null, rate,
                 request.getTermMonths());
-        command.setAppliedEarlyTerminationRate(product.getEarlyTerminationRate());
+        command.setAppliedEarlyTerminationRate(baseRate);
         command.setAmount(request.getMonthlyAmount());
         command.setPaymentDay(request.getPaymentDay());
         command.setAutoTransfer(request.getAutoTransfer());

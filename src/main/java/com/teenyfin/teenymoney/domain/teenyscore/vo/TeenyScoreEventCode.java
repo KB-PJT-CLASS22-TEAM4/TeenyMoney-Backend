@@ -25,6 +25,7 @@ public enum TeenyScoreEventCode {
     LOAN_INSTALLMENT_OVERDUE,
     LOAN_MATURED_REPAID,
     LOAN_DEFAULTED,
+    LOAN_POST_MATURITY_OVERDUE,
 
     // 퀘스트
     QUEST_COMPLETED,
