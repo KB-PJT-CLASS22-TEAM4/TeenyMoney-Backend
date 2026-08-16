@@ -26,7 +26,7 @@ public class TransferService {
 
     // 자녀가 용돈을 받았을 때 보내는 알림 문구. "알림 딥링크 인벤토리" 문서의
     // (TRANSFER, 자녀) 행 그대로 - referenceId는 항상 null로 보낸다(아래 참고).
-    private static final String ALLOWANCE_RECEIVED_TITLE = "용돈이 입금 됐어요";
+    private static final String ALLOWANCE_RECEIVED_TITLE = "용돈이 입금됐어요";
 
     private final TransferMapper transferMapper;
     private final TransferExecutor transferExecutor;
