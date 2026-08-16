@@ -13,7 +13,6 @@ public class OrderStore {
 
     // redis에 payment:info:값 구조로 저장하기 때문에 접두사로 지정
     private static final String KEY_PREFIX = "payment:info:";
-    private static final String LOCK_PREFIX = "payment:lock:";
 
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;

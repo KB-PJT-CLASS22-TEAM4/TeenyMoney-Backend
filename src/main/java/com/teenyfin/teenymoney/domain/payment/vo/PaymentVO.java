@@ -1,12 +1,17 @@
 package com.teenyfin.teenymoney.domain.payment.vo;
 
+import com.teenyfin.teenymoney.domain.categoryPolicy.vo.CategoryPolicy;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
 @Builder
 @Getter
+@NoArgsConstructor
+@AllArgsConstructor
 public class PaymentVO {
 
     private Long id;
@@ -15,7 +20,7 @@ public class PaymentVO {
     private String orderId;
     private String idempotencyKey;
     private String merchantName;
-    private String appliedPolicy;
+    private CategoryPolicy appliedPolicy;
     private Long amount;
     private String status;
     private String failureReason;

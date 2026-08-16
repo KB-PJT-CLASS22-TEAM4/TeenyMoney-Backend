@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import javax.validation.Valid;
 
-@Api(tags = "결제 비밀번호")
+@Api(tags = "Payment Password", description = "결제 비밀번호 API")
 @RestController
 @RequestMapping("/members/me/payment-password")
 @RequiredArgsConstructor

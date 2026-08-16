@@ -3,6 +3,7 @@ package com.teenyfin.teenymoney.domain.categoryPolicy.service;
 import com.teenyfin.teenymoney.domain.categoryPolicy.dto.response.CategoryPolicyGroupResponseDTO;
 import com.teenyfin.teenymoney.domain.categoryPolicy.dto.response.CategoryPolicyResponseDTO;
 import com.teenyfin.teenymoney.domain.categoryPolicy.mapper.CategoryPolicyMapper;
+import com.teenyfin.teenymoney.domain.categoryPolicy.vo.CategoryPolicy;
 import com.teenyfin.teenymoney.domain.categoryPolicy.vo.CategoryPolicyVO;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.domain.member.vo.MemberParentVO;
@@ -41,7 +42,7 @@ class CategoryPolicyServiceTest {
         CategoryPolicyVO vo = CategoryPolicyVO.builder()
                 .id(2L)
                 .categoryName("PC방")
-                .policy("BLOCK")
+                .policy(CategoryPolicy.BLOCK)
                 .build();
         given(categoryPolicyMapper.selectByChildId(memberId)).willReturn(List.of(vo));
 
@@ -50,7 +51,7 @@ class CategoryPolicyServiceTest {
 
         // then
         assertThat(result).hasSize(1);
-        assertThat(result.get(0).getPolicy()).isEqualTo("BLOCK");
+        assertThat(result.get(0).getPolicy()).isEqualTo(CategoryPolicy.BLOCK);
         verify(categoryPolicyMapper).selectByChildId(memberId);
     }
 
@@ -64,7 +65,7 @@ class CategoryPolicyServiceTest {
         CategoryPolicyVO vo = CategoryPolicyVO.builder()
                 .id(1L)
                 .categoryName("외식")
-                .policy("ALLOW")
+                .policy(CategoryPolicy.ALLOW)
                 .build();
 
         given(memberMapper.selectActiveParentByChildId(childId)).willReturn(createParentVO(parentId));
@@ -130,9 +131,9 @@ class CategoryPolicyServiceTest {
         String role = "CHILD";
 
         given(categoryPolicyMapper.selectByChildId(memberId)).willReturn(List.of(
-                CategoryPolicyVO.builder().id(1L).categoryName("편의점").policy("ALLOW").build(),
-                CategoryPolicyVO.builder().id(3L).categoryName("PC방").policy("WATCH").build(),
-                CategoryPolicyVO.builder().id(5L).categoryName("유흥주점").policy("BLOCK").build()
+                CategoryPolicyVO.builder().id(1L).categoryName("편의점").policy(CategoryPolicy.ALLOW).build(),
+                CategoryPolicyVO.builder().id(3L).categoryName("PC방").policy(CategoryPolicy.WATCH).build(),
+                CategoryPolicyVO.builder().id(5L).categoryName("유흥주점").policy(CategoryPolicy.BLOCK).build()
         ));
 
         // when
@@ -141,6 +142,6 @@ class CategoryPolicyServiceTest {
 
         // then
         assertThat(result).extracting(CategoryPolicyGroupResponseDTO::getPolicy)
-                .containsExactly("ALLOW", "WATCH", "BLOCK");
+                .containsExactly(CategoryPolicy.ALLOW, CategoryPolicy.WATCH, CategoryPolicy.BLOCK);
     }
 }

@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
 
-@Api(tags = "결제")
+@Api(tags = "Payment", description = "결제 API")
 @RestController
 @RequestMapping("/payments")
 @RequiredArgsConstructor

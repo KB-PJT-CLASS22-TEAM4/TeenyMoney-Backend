@@ -73,4 +73,17 @@
         WHERE id = #{categoryId}
     </select>
 
+    <select id="existsApprovedTodayPermission" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1
+            FROM T_TDP_REQ_L r
+            JOIN T_TDP_REQCTGR_R rc
+            ON r.id = rc.today_permission_id
+            WHERE r.child_id = #{childId}
+            AND rc.merchant_category_id = #{categoryId}
+            AND r.status = 'APPROVED'
+            AND DATE(r.created_at) = CURDATE()
+        )
+    </select>
+
 </mapper>

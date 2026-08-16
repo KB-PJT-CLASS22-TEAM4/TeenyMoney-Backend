@@ -27,6 +27,9 @@ public interface CategoryPolicyMapper {
 
     // 카테고리 아이디로 카테고리 이름 조회
     String selectCategoryNameById(@Param("categoryId") Long categoryId);
+
+    // 자녀·카테고리 기준으로 오늘 승인된 오늘만 허용 요청이 있는지 확인
+    boolean existsApprovedTodayPermission(@Param("childId") Long childId, @Param("categoryId") Long categoryId);
 }
 
 
