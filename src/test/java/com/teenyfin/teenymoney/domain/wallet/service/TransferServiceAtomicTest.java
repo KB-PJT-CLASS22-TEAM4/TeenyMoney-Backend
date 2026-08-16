@@ -1,6 +1,8 @@
 package com.teenyfin.teenymoney.domain.wallet.service;
 
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
 import com.teenyfin.teenymoney.domain.wallet.mapper.TransferMapper;
+import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
 import com.teenyfin.teenymoney.domain.wallet.vo.TransferType;
 import com.teenyfin.teenymoney.domain.wallet.vo.TransferVO;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,6 +20,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @DisplayName("호출자 트랜잭션 종속 송금")
@@ -27,14 +30,22 @@ class TransferServiceAtomicTest {
     private TransferExecutor transferExecutor;
     private TransferService transferService;
 
+    // 이 클래스가 테스트하는 transferInExistingTransaction()은 TransferService.executeTransfer()가
+    // 아니라 다른 메서드다 - 알림은 executeTransfer()에서만 나가므로, 여기선 알림이 한 번도
+    // 불리면 안 된다(아래 verifyNoInteractions 참고). 그래도 생성자엔 넘겨야 컴파일된다.
+    private NotificationService notificationService;
+
     @BeforeEach
     void setUp() {
         transferMapper = mock(TransferMapper.class);
         transferExecutor = mock(TransferExecutor.class);
+        notificationService = mock(NotificationService.class);
         transferService = new TransferService(
                 transferMapper,
                 transferExecutor,
-                mock(TransferFailureRecorder.class));
+                mock(TransferFailureRecorder.class),
+                mock(WalletMapper.class),
+                notificationService);
     }
 
     @Test
@@ -77,6 +88,9 @@ class TransferServiceAtomicTest {
         assertSame(completed, result);
         verify(transferMapper).insertTransfer(any(TransferVO.class));
         verify(transferExecutor).lockAndMove(77L);
+        // 알림은 executeTransfer()에서만 나간다 - 이 메서드(transferInExistingTransaction)는
+        // 건드리지 않으므로 한 번도 불리면 안 된다.
+        verifyNoInteractions(notificationService);
     }
 
     @Test
@@ -103,5 +117,6 @@ class TransferServiceAtomicTest {
         assertSame(existing, result);
         verify(transferMapper, never()).insertTransfer(any());
         verify(transferExecutor).lockAndMove(88L);
+        verifyNoInteractions(notificationService);
     }
 }

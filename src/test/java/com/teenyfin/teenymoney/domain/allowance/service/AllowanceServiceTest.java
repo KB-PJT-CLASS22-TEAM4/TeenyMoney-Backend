@@ -1,10 +1,13 @@
 package com.teenyfin.teenymoney.domain.allowance.service;
 
 import com.teenyfin.teenymoney.config.LazyBeanInitializer;
+import com.teenyfin.teenymoney.config.RestTemplateConfig;
 import com.teenyfin.teenymoney.config.RootConfig;
 import com.teenyfin.teenymoney.domain.allowance.dto.response.AllowanceSendResponseDTO;
 import com.teenyfin.teenymoney.domain.family.service.FamilyAccessService;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
+import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
 import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
 import com.teenyfin.teenymoney.domain.wallet.exception.WalletErrorCode;
 import com.teenyfin.teenymoney.domain.wallet.mapper.TransferMapper;
@@ -31,13 +34,16 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 // @ExtendWith(SpringExtension.class): JUnit5한테 "이 테스트는 Spring이 관리하는 빈(Bean)들을
 // 써야 하니, 테스트 실행 전에 Spring 컨텍스트(설정)를 띄워달라"고 연결해주는 어댑터입니다.
 @ExtendWith(SpringExtension.class)
 // RootConfig에 등록된 빈들(DataSource, MyBatis 매퍼들)만 띄웁니다. AllowanceService 자체는
 // @Service라서 이 root 전용 컨텍스트엔 없기 때문에, 아래 setUp()에서 직접 new로 조립합니다.
-@ContextConfiguration(classes = RootConfig.class, initializers = LazyBeanInitializer.class)
+@ContextConfiguration(classes = {RootConfig.class, RestTemplateConfig.class}, initializers = LazyBeanInitializer.class)
 // 이 3개의 환경변수(DB_URL/DB_USERNAME/DB_PASSWORD)가 없으면 이 클래스 전체가 "건너뛰기"
 // 처리됩니다. 그래야 로컬 DB 설정 없이 ./gradlew test 돌리는 사람 PC에서도 빌드가 깨지지 않습니다.
 @EnabledIfEnvironmentVariable(named = "DB_URL", matches = ".+")
@@ -67,6 +73,10 @@ public class AllowanceServiceTest {
     // 손으로 new해서 직접 조립합니다 (TransferServiceTest와 같은 방식).
     private AllowanceService allowanceService;
 
+    // 알림이 실제로 나갔는지(누구한테, 무슨 내용으로)만 확인할 용도라 mock으로 둡니다.
+    // 진짜 FCM/DB까지 태울 필요는 없습니다.
+    private NotificationService notificationService;
+
     // 매 테스트마다 새로 만드는 부모/자녀 회원 id, 부모 지갑 id.
     // 자녀 지갑 id는 테스트마다 필요할 때만 만들어서 별도로 관리합니다(아래 참고).
     private Long parentId;
@@ -88,7 +98,8 @@ public class AllowanceServiceTest {
         WalletLedgerService walletLedgerService = new WalletLedgerService(walletMapper);
         TransferExecutor transferExecutor = new TransferExecutor(transferMapper, walletLedgerService);
         TransferFailureRecorder transferFailureRecorder = new TransferFailureRecorder(transferMapper);
-        TransferService transferService = new TransferService(transferMapper, transferExecutor, transferFailureRecorder);
+        notificationService = mock(NotificationService.class);
+        TransferService transferService = new TransferService(transferMapper, transferExecutor, transferFailureRecorder, walletMapper, notificationService);
         allowanceService = new AllowanceService(familyAccessService, walletMapper, transferService);
 
         // 부모 1명 + 자녀 1명을 만들고, 가족 연동(T_MBR_CONN_R)까지 ACTIVE로 걸어둡니다.
@@ -159,6 +170,11 @@ public class AllowanceServiceTest {
 
         assertEquals(40000L, parentBalance);
         assertEquals(10000L, childBalance);
+
+        // then: 자녀한테 "용돈이 입금 됐어요" 알림이 갔는지도 확인
+        verify(notificationService).createNotification(
+                eq(childId), eq("용돈이 입금 됐어요"), eq("10,000원"),
+                eq(NotificationReferenceType.TRANSFER), eq((Long) null), eq(true));
     }
 
     @Test
