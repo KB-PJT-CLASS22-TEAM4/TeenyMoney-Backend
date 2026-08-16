@@ -24,4 +24,12 @@
         WHERE id = #{memberId}
     </update>
 
+    <update id="updateNotificationSetting">
+        UPDATE T_MBR_INFO_M
+        SET noti_payment = #{setting.notificationPayment},
+            noti_quest = #{setting.notificationQuest},
+            noti_finance = #{setting.notificationFinance}
+        WHERE id = #{memberId}
+    </update>
+
 </mapper>

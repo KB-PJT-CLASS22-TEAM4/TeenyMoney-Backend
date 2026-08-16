@@ -2,6 +2,7 @@ package com.teenyfin.teenymoney.domain.notification.service;
 
 import com.teenyfin.teenymoney.domain.notification.dto.NotificationMessage;
 import com.teenyfin.teenymoney.domain.notification.dto.request.NotificationFcmRequestDTO;
+import com.teenyfin.teenymoney.domain.notification.dto.request.NotificationSettingRequestDTO;
 import com.teenyfin.teenymoney.domain.notification.dto.response.NotificationListResponseDTO;
 import com.teenyfin.teenymoney.domain.notification.dto.response.NotificationResponseDTO;
 import com.teenyfin.teenymoney.domain.notification.exception.NotificationErrorCode;
@@ -182,8 +183,14 @@ public class NotificationService {
     }
 
     // FCM 토큰 수정
-    public void modifyFcmToken(Long memberId, @Valid NotificationFcmRequestDTO notificationFcmRequestDTO) {
+    public void modifyFcmToken(Long memberId, NotificationFcmRequestDTO notificationFcmRequestDTO) {
 
         memberNotificationMapper.updateFcmToken(memberId, notificationFcmRequestDTO.getFcmToken());
+    }
+
+    // 알림 수신 여부 설정 수정
+    public void modifyNotificationSetting(Long memberId, NotificationSettingRequestDTO notificationSettingRequestDTO) {
+
+        memberNotificationMapper.updateNotificationSetting(memberId, notificationSettingRequestDTO);
     }
 }

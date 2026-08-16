@@ -1,6 +1,7 @@
 package com.teenyfin.teenymoney.domain.notification.controller;
 
 import com.teenyfin.teenymoney.domain.notification.dto.request.NotificationFcmRequestDTO;
+import com.teenyfin.teenymoney.domain.notification.dto.request.NotificationSettingRequestDTO;
 import com.teenyfin.teenymoney.domain.notification.dto.response.NotificationListResponseDTO;
 import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
 import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
@@ -71,6 +72,15 @@ public class NotificationController {
             @AuthenticationPrincipal MemberPrincipal memberPrincipal,
             @RequestBody @Valid NotificationFcmRequestDTO notificationFcmRequestDTO) {
         notificationService.modifyFcmToken(memberPrincipal.memberId(), notificationFcmRequestDTO);
+        return ApiResponse.ok();
+    }
+
+    @ApiOperation(value = "알림 수신 여부 변경", notes = "알림 수신 관련 설정을 변경합니다.")
+    @PatchMapping("/setting")
+    public ApiResponse<Void> modifyNotificationSetting(
+            @AuthenticationPrincipal MemberPrincipal memberPrincipal,
+            @RequestBody @Valid NotificationSettingRequestDTO notificationSettingRequestDTO) {
+        notificationService.modifyNotificationSetting(memberPrincipal.memberId(), notificationSettingRequestDTO);
         return ApiResponse.ok();
     }
 }
