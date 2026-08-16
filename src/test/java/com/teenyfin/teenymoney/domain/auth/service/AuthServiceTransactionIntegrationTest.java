@@ -2,6 +2,7 @@ package com.teenyfin.teenymoney.domain.auth.service;
 
 import com.teenyfin.teenymoney.config.RootConfig;
 import com.teenyfin.teenymoney.domain.auth.dto.request.SignupRequestDTO;
+import com.teenyfin.teenymoney.domain.family.service.FamilyAccessService;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.domain.teenyscore.service.TeenyScoreGradeService;
 import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
@@ -261,7 +262,8 @@ public class AuthServiceTransactionIntegrationTest {
         WalletService walletService(WalletMapper walletMapper, Clock clock) {
             // 이 테스트는 지갑이 실제로 DB에 생기는지 확인해야 하니, 다른 협력자들처럼
             // mock으로 두지 않고 RootConfig가 제공하는 진짜 WalletMapper로 진짜 WalletService를 만든다.
-            return new WalletService(walletMapper, clock);
+            // FamilyAccessService는 자녀 조회 기능과 무관해서 mock으로 생성자만 맞춘다.
+            return new WalletService(walletMapper, clock, mock(FamilyAccessService.class));
         }
     }
 

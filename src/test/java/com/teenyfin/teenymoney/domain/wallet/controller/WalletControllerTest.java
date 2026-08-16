@@ -7,9 +7,13 @@ import com.teenyfin.teenymoney.domain.wallet.dto.request.TransactionSortOrder;
 import com.teenyfin.teenymoney.domain.wallet.dto.request.TransactionTypeFilter;
 import com.teenyfin.teenymoney.domain.wallet.dto.response.WalletDetailResponseDTO;
 import com.teenyfin.teenymoney.domain.wallet.dto.response.WalletTransactionResponseDTO;
+import com.teenyfin.teenymoney.domain.wallet.exception.WalletErrorCode;
 import com.teenyfin.teenymoney.domain.wallet.service.WalletService;
 import com.teenyfin.teenymoney.domain.wallet.vo.WalletTransactionVO;
 import com.teenyfin.teenymoney.domain.wallet.vo.WalletVO;
+import com.teenyfin.teenymoney.global.exception.BusinessException;
+import com.teenyfin.teenymoney.global.exception.CommonErrorCode;
+import com.teenyfin.teenymoney.global.exception.GlobalExceptionAdvice;
 import com.teenyfin.teenymoney.global.security.MemberPrincipal;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -46,7 +50,12 @@ class WalletControllerTest {
         ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
         mockMvc = MockMvcBuilders.standaloneSetup(new WalletController(walletService)).setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
-                .setMessageConverters(new MappingJackson2HttpMessageConverter(objectMapper)).build();
+                .setMessageConverters(new MappingJackson2HttpMessageConverter(objectMapper))
+                // Service가 던지는 BusinessException을 실제 운영과 동일하게 {success:false, code, message}
+                // JSON + 정확한 HTTP 상태코드로 변환해준다. 없으면 standalone MockMvc가 예외를 그냥 밖으로
+                // 던져버려서 403/404 테스트가 애초에 성립하지 않는다.
+                .setControllerAdvice(new GlobalExceptionAdvice())
+                .build();
         // @AuthenticationPrincipal 파라미터를 실제 서버 없이도 채워주기 위한 설정
 
         // "로그인한 사람은 memberId=17, role=PARENT다"라고 미리 SecurityContext에 심어둠
@@ -124,6 +133,65 @@ class WalletControllerTest {
         // Service에 전달됐는지 확인. (지난번 고친 @RequestParam 버그가 재발하면 여기서 걸린다)
         verify(walletService).getMyTransactions(17L, TransactionTypeFilter.CREDIT, TransactionPeriod.WEEK, TransactionSortOrder.ASC);
     }
+
+    @Test
+    void getChildWalletDetailPassesPrincipalAndChildIdToService() throws Exception {
+        // eq(...)로 "정확히 이 principal, 이 childId로 불렸는가"까지 못박는다.
+        when(walletService.getChildWalletDetail(eq(new MemberPrincipal(17L, "PARENT")), eq(30L)))
+                .thenReturn(walletDetailResponse());
+
+        var response = mockMvc.perform(get("/wallet/children/30")).andReturn().getResponse();
+        String body = response.getContentAsString(StandardCharsets.UTF_8);
+
+        assertEquals(200, response.getStatus(), body);
+        assertTrue(body.contains("\"balance\":150000"), body);
+        verify(walletService).getChildWalletDetail(any(MemberPrincipal.class), eq(30L));
+    }
+
+    @Test
+    void getChildWalletDetailPropagatesForbiddenAsHttp403() throws Exception {
+        // Service가 던질 법한 예외를 그대로 mock에 지정 - "Controller/ExceptionAdvice가
+        // 그 예외를 올바른 HTTP 응답으로 바꾸는지"만 본다. Service 내부 판단 로직(누가 진짜
+        // 이 자녀의 부모인지 등)은 이미 WalletServiceTest가 검증했으므로 여기선 중복 검증하지 않는다.
+        when(walletService.getChildWalletDetail(any(), eq(30L)))
+                .thenThrow(new BusinessException(CommonErrorCode.AUTH_FORBIDDEN));
+
+        var response = mockMvc.perform(get("/wallet/children/30")).andReturn().getResponse();
+        String body = response.getContentAsString(StandardCharsets.UTF_8);
+
+        assertEquals(403, response.getStatus(), body);
+        assertTrue(body.contains("\"code\":\"AUTH_FORBIDDEN\""), body);
+    }
+
+    @Test
+    void getChildWalletDetailPropagatesWalletNotFoundAsHttp404() throws Exception {
+        when(walletService.getChildWalletDetail(any(), eq(30L)))
+                .thenThrow(new BusinessException(WalletErrorCode.WALLET_NOT_FOUND));
+
+        var response = mockMvc.perform(get("/wallet/children/30")).andReturn().getResponse();
+        String body = response.getContentAsString(StandardCharsets.UTF_8);
+
+        assertEquals(404, response.getStatus(), body);
+        assertTrue(body.contains("\"code\":\"WALLET_NOT_FOUND\""), body);
+    }
+
+    @Test
+    void getChildTransactionsUsesDefaultFiltersWhenNoQueryParamsGiven() throws Exception {
+        when(walletService.getChildTransactions(any(MemberPrincipal.class), eq(30L),
+                eq(TransactionTypeFilter.ALL), eq(TransactionPeriod.MONTH), eq(TransactionSortOrder.DESC)))
+                .thenReturn(List.of(sampleTransactionResponse()));
+
+        var response = mockMvc.perform(get("/wallet/children/30/transactions")).andReturn().getResponse();
+        assertEquals(200, response.getStatus());
+
+        verify(walletService).getChildTransactions(any(MemberPrincipal.class), eq(30L),
+                eq(TransactionTypeFilter.ALL), eq(TransactionPeriod.MONTH), eq(TransactionSortOrder.DESC));
+    }
+
+    // 참고: 이 파일은 standaloneSetup이라 @PreAuthorize가 평가되지 않는다(Security 필터체인
+    // 미적용). 그래서 CHILD principal로 호출해봐도 role 차단은 검증되지 않고 "컨트롤러가
+    // principal을 그대로 서비스에 넘기는지"만 확인하는 셈이라 오해를 부를 수 있어 일부러
+    // 추가하지 않는다. 실제 role 차단 검증은 JwtSecurityIntegrationTest가 담당한다.
 
     // --- 테스트용 가짜 응답 데이터 조립 ---
 

@@ -2,6 +2,7 @@ package com.teenyfin.teenymoney.domain.wallet.service;
 
 
 import com.teenyfin.teenymoney.config.RootConfig;
+import com.teenyfin.teenymoney.domain.family.service.FamilyAccessService;
 import com.teenyfin.teenymoney.domain.wallet.exception.WalletErrorCode;
 import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
 import com.teenyfin.teenymoney.domain.wallet.vo.WalletType;
@@ -22,6 +23,7 @@ import java.time.Clock;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
 
 @ExtendWith(SpringExtension.class)
 @ContextConfiguration(classes = RootConfig.class)
@@ -50,7 +52,9 @@ public class WalletServiceCreateWalletTest {
 
     @BeforeEach
     void setUp() {
-        walletService = new WalletService(walletMapper, Clock.systemDefaultZone());
+        // 이 테스트는 createWallet()만 검증하고 자녀 조회 기능은 안 다루므로,
+        // FamilyAccessService는 실제 구현 대신 mock으로 채워서 생성자만 맞춘다.
+        walletService = new WalletService(walletMapper, Clock.systemDefaultZone(), mock(FamilyAccessService.class));
     }
 
     // 테스트 전용 회원을 하나 새로 만들고 그 id를 리턴한다.
