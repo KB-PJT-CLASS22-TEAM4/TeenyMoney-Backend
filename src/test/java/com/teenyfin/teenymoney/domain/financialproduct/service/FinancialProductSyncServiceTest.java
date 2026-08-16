@@ -17,7 +17,9 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -60,35 +62,58 @@ class FinancialProductSyncServiceTest {
     }
 
     @Test
-    void savingUsesOneCoherentOptionProfile() {
+    void savingSplitsOptionsBySavingAndInterestCalculationType() {
         FinlifeApiResponseDTO.Result result = new FinlifeApiResponseDTO.Result();
         result.setBaseList(List.of(base()));
         result.setOptionList(List.of(
                 option("12", "3.50", "F", "S"),
+                option("3", "3.30", "S", "S"),
                 option("6", "4.00", "S", "M"),
                 option("12", "4.20", "S", "M")));
         when(client.fetchSavingProducts()).thenReturn(result);
         when(mapper.upsertSavingProduct(any())).thenReturn(1);
 
-        service.syncSavingProducts();
+        int affected = service.syncSavingProducts();
 
         ArgumentCaptor<SavingProductVO> captor =
                 ArgumentCaptor.forClass(SavingProductVO.class);
-        verify(mapper).upsertSavingProduct(captor.capture());
-        SavingProductVO product = captor.getValue();
-        assertEquals("FREE", product.getSavingsType());
-        assertEquals("COMPOUND", product.getInterestCalculationType());
-        assertEquals("원하는 금액을 자유롭게 납입하는 복리 자유적금",
-                product.getDescription());
-        assertEquals(new BigDecimal("4.00"), product.getRate6m());
-        assertEquals(new BigDecimal("4.20"), product.getRate12m());
+        verify(mapper, times(3)).upsertSavingProduct(captor.capture());
+        assertEquals(3, affected);
+
+        SavingProductVO fixedCompound = captor.getAllValues().stream()
+                .filter(product -> "FIXED".equals(product.getSavingsType())
+                        && "COMPOUND".equals(product.getInterestCalculationType()))
+                .findFirst().orElseThrow();
+        assertEquals(new BigDecimal("4.00"), fixedCompound.getRate6m());
+        assertEquals(new BigDecimal("4.20"), fixedCompound.getRate12m());
+        assertEquals("매월 정해진 금액을 납입하는 복리 정액적금",
+                fixedCompound.getDescription());
+
+        SavingProductVO fixedSimple = captor.getAllValues().stream()
+                .filter(product -> "FIXED".equals(product.getSavingsType())
+                        && "SIMPLE".equals(product.getInterestCalculationType()))
+                .findFirst().orElseThrow();
+        assertEquals(new BigDecimal("3.30"), fixedSimple.getRate3m());
+        assertNull(fixedSimple.getRate6m());
+
+        SavingProductVO free = captor.getAllValues().stream()
+                .filter(product -> "FREE".equals(product.getSavingsType()))
+                .findFirst().orElseThrow();
+        assertEquals("SIMPLE", free.getInterestCalculationType());
+        assertNull(free.getRate6m());
+        assertEquals(new BigDecimal("3.50"), free.getRate12m());
+        assertEquals("원하는 금액을 자유롭게 납입하는 단리 자유적금",
+                free.getDescription());
+        verify(mapper).deactivateSavingProductOptionsNotIn(
+                org.mockito.ArgumentMatchers.eq("0010927"),
+                org.mockito.ArgumentMatchers.eq("WR0001B"), anyList());
     }
 
     @Test
     void fixedSimpleSavingGetsMatchingDescription() {
         FinlifeApiResponseDTO.Result result = new FinlifeApiResponseDTO.Result();
         result.setBaseList(List.of(base()));
-        result.setOptionList(List.of(option("12", "3.50", "F", "S")));
+        result.setOptionList(List.of(option("12", "3.50", "S", "S")));
         when(client.fetchSavingProducts()).thenReturn(result);
         when(mapper.upsertSavingProduct(any())).thenReturn(1);
 

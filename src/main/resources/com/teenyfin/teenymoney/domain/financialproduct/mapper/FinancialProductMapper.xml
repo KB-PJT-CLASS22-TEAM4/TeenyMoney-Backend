@@ -792,6 +792,7 @@
              CASE WHEN #{status} = 'PAID' THEN CURRENT_TIMESTAMP ELSE NULL END)
     </insert>
 
+    <!-- 다시 공시된 상품은 기존 행을 재사용하면서 활성 상태로 복구한다. -->
     <insert id="upsertDepositProduct">
         INSERT INTO T_DPT_PROD_M (
             product_source, fin_co_no, fin_prdt_cd, kor_co_nm, name,
@@ -816,9 +817,11 @@
             rate_6m = VALUES(rate_6m),
             rate_12m = VALUES(rate_12m),
             description = VALUES(description),
+            is_active = VALUES(is_active),
             updated_at = CURRENT_TIMESTAMP
     </insert>
 
+    <!-- 다시 공시된 적금 옵션 조합은 기존 행을 재사용하면서 활성 상태로 복구한다. -->
     <insert id="upsertSavingProduct">
         INSERT INTO T_SVG_PROD_M (
             product_source, fin_co_no, fin_prdt_cd, kor_co_nm, name,
@@ -844,8 +847,24 @@
             rate_6m = VALUES(rate_6m),
             rate_12m = VALUES(rate_12m),
             description = VALUES(description),
+            is_active = VALUES(is_active),
             updated_at = CURRENT_TIMESTAMP
     </insert>
+
+    <!-- 가입 이력과 FK를 보존하기 위해 현재 공시에 없는 과거 옵션 조합을 비활성화한다. -->
+    <update id="deactivateSavingProductOptionsNotIn">
+        UPDATE T_SVG_PROD_M
+        SET is_active = FALSE,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE product_source = 'FINLIFE'
+          AND fin_co_no = #{financialCompanyCode}
+          AND fin_prdt_cd = #{financialProductCode}
+          AND (savings_type, interest_calculation_type) NOT IN
+          <foreach collection="products" item="product"
+                   open="(" separator="," close=")">
+              (#{product.savingsType}, #{product.interestCalculationType})
+          </foreach>
+    </update>
 
     <!-- 자유적금 가입 행을 먼저 잠가 같은 계좌의 동시 납입과 월 한도 경쟁을 막는다. -->
     <select id="selectFreeSavingForPaymentForUpdate"

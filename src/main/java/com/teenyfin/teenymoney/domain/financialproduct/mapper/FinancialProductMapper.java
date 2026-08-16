@@ -119,6 +119,11 @@ public interface FinancialProductMapper {
                                    @Param("status") String status);
     int upsertDepositProduct(DepositProductVO product);
     int upsertSavingProduct(SavingProductVO product);
+    // 이번 동기화에서 확인되지 않은 과거 적립 유형·이자 계산 조합을 목록에서 제외한다.
+    int deactivateSavingProductOptionsNotIn(
+            @Param("financialCompanyCode") String financialCompanyCode,
+            @Param("financialProductCode") String financialProductCode,
+            @Param("products") List<SavingProductVO> products);
     // 자유적금 가입 행을 잠가 동시 납입 시 월 한도를 직렬화한다.
     FreeSavingPaymentVO selectFreeSavingForPaymentForUpdate(
             @Param("childId") Long childId,

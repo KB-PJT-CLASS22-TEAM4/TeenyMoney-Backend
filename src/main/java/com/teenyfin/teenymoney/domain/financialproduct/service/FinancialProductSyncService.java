@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -75,10 +76,28 @@ public class FinancialProductSyncService {
             if (!validBase(base)) {
                 continue;
             }
-            SavingProductVO product = savingProduct(
-                    base, options.getOrDefault(key(base), List.of()));
-            if (hasAnyRate(product)) {
-                affected += financialProductMapper.upsertSavingProduct(product);
+            // 적립 유형과 이자 계산 방식이 다른 옵션은 각각 독립된 상품으로 저장한다.
+            Map<SavingOptionProfile, List<FinlifeProductOptionDTO>> optionsByProfile =
+                    safe(options.getOrDefault(key(base), List.of())).stream()
+                            .filter(this::validOption)
+                            .collect(Collectors.groupingBy(this::savingOptionProfile));
+            // 이후 과거 조합을 비활성화할 때 이번 응답에 존재하는 조합을 제외하기 위해 모은다.
+            List<SavingProductVO> currentProducts = new ArrayList<>();
+            for (Map.Entry<SavingOptionProfile, List<FinlifeProductOptionDTO>> entry
+                    : optionsByProfile.entrySet()) {
+                SavingProductVO product = savingProduct(
+                        base, entry.getKey(), entry.getValue());
+                if (hasAnyRate(product)) {
+                    affected += financialProductMapper.upsertSavingProduct(product);
+                    currentProducts.add(product);
+                }
+            }
+            if (!currentProducts.isEmpty()) {
+                // 현재 공시에 없는 과거 조합은 가입 이력을 보존한 채 목록에서 제외한다.
+                financialProductMapper.deactivateSavingProductOptionsNotIn(
+                        base.getFinancialCompanyCode(),
+                        base.getFinancialProductCode(),
+                        currentProducts);
             }
         }
         return affected;
@@ -112,6 +131,7 @@ public class FinancialProductSyncService {
 
     private SavingProductVO savingProduct(
             FinlifeProductBaseDTO base,
+            SavingOptionProfile profile,
             List<FinlifeProductOptionDTO> options) {
         SavingProductVO product = new SavingProductVO();
         product.setFinancialCompanyCode(base.getFinancialCompanyCode());
@@ -119,15 +139,12 @@ public class FinancialProductSyncService {
         product.setFinancialCompanyName(base.getFinancialCompanyName());
         product.setName(base.getProductName());
 
-        FinlifeProductOptionDTO representative = representativeOption(options);
-        String reserveType = normalizeReserveType(representative);
-        String interestRateType = normalizeInterestRateType(representative);
-        product.setSavingsType(savingsType(reserveType));
+        product.setSavingsType(savingsType(profile.reserveType()));
         product.setInterestCalculationType(
-                interestCalculationType(interestRateType));
+                interestCalculationType(profile.interestRateType()));
         applyRates(options,
-                option -> reserveType.equals(normalizeReserveType(option))
-                        && interestRateType.equals(
+                option -> profile.reserveType().equals(normalizeReserveType(option))
+                        && profile.interestRateType().equals(
                         normalizeInterestRateType(option)),
                 product::setRate1m, product::setRate3m,
                 product::setRate6m, product::setRate12m);
@@ -193,7 +210,16 @@ public class FinancialProductSyncService {
     }
 
     private String savingsType(String reserveType) {
-        return "F".equals(reserveType) ? "FIXED" : "FREE";
+        // 금융감독원 적립 유형 코드: S=정액적립식, F=자유적립식
+        return "S".equals(reserveType) ? "FIXED" : "FREE";
+    }
+
+    private SavingOptionProfile savingOptionProfile(
+            FinlifeProductOptionDTO option) {
+        // 같은 외부 상품을 FIXED/FREE × SIMPLE/COMPOUND 조합으로 나누는 그룹 키다.
+        return new SavingOptionProfile(
+                normalizeReserveType(option),
+                normalizeInterestRateType(option));
     }
 
     private String interestCalculationType(String interestRateType) {
@@ -268,5 +294,11 @@ public class FinancialProductSyncService {
 
     private <T> List<T> safe(List<T> values) {
         return values == null ? List.of() : values;
+    }
+
+    /** 금융감독원 적립 유형과 이자 계산 방식의 조합을 나타낸다. */
+    private record SavingOptionProfile(
+            String reserveType,
+            String interestRateType) {
     }
 }
