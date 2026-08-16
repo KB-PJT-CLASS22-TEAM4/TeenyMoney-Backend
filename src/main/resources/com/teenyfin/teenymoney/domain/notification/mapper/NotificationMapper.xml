@@ -58,6 +58,7 @@
         SELECT COUNT(*)
         FROM T_NTF_NOTI_L
         WHERE member_id = #{memberId} AND is_read = false
+            AND created_at >= NOW() - INTERVAL 30 DAY
     </select>
 
 </mapper>
