@@ -141,6 +141,71 @@ class LoanRepaymentProcessorTest {
         verify(mapper).updateLoanAfterRepayment(7L, 100_000L, 0L, 1, "ACTIVE");
     }
 
+    @Test
+    @DisplayName("만기일까지 미완납이면 DEFAULTED로 변경하고 기본 감점을 한 번 반영한다")
+    void unpaidAtMaturityBecomesDefaulted() {
+        LoanRepaymentVO loan = activeLoan(10_000L, 1);
+        loan.setPrincipalAmount(10_000L);
+        loan.setMaturityDate(LocalDate.of(2026, 1, 15));
+        stubLoan(loan, 0L);
+        when(mapper.countLoanRepaymentHistoryOnDate(
+                7L, 1, LocalDate.of(2026, 1, 15))).thenReturn(1);
+
+        processor.process(7L, LocalDate.of(2026, 1, 15));
+
+        verify(mapper).updateLoanAfterRepayment(7L, 10_000L, 58L, 0, "DEFAULTED");
+        verify(scoreChangeService).change(argThat(request ->
+                "LOAN_DEFAULTED:7".equals(request.getEventKey())));
+    }
+
+    @Test
+    @DisplayName("만기 후 자녀 지갑에 잔액이 생기면 연체이자부터 상환하고 REPAID로 변경한다")
+    void postMaturityPaymentCanFinishDefaultedLoan() {
+        LoanRepaymentVO loan = activeLoan(10_000L, 1);
+        loan.setPrincipalAmount(10_000L);
+        loan.setOverdueInterest(100L);
+        loan.setStatus("DEFAULTED");
+        loan.setMaturityDate(LocalDate.of(2026, 1, 15));
+        stubLoan(loan, 10_102L);
+        when(mapper.countLoanRepaymentHistory(7L, 1)).thenReturn(1);
+        when(mapper.countLoanRepaymentHistoryOnDate(
+                7L, 1, LocalDate.of(2026, 1, 16))).thenReturn(0);
+        when(mapper.selectLastLoanRepaymentAttemptDate(7L, 1))
+                .thenReturn(LocalDate.of(2026, 1, 15));
+
+        processor.process(7L, LocalDate.of(2026, 1, 16));
+
+        verify(transferService).transferInExistingTransaction(
+                10L, 11L, 10_102L, TransferType.LOAN,
+                "LOAN:OVERDUE:7:2026-01-16");
+        verify(mapper).insertLoanRepaymentHistory(
+                7L, 30L, 1, 10_000L, 10_000L,
+                102L, 102L, "PAID", LocalDate.of(2026, 1, 16));
+        verify(mapper).updateLoanAfterRepayment(7L, 0L, 0L, 0, "REPAID");
+        verify(scoreChangeService).change(argThat(request ->
+                "LOAN_POST_MATURITY_OVERDUE:7:2026-01".equals(request.getEventKey())));
+    }
+
+    @Test
+    @DisplayName("만기 후 같은 날짜에 배치를 재실행해도 상환 시도를 중복 생성하지 않는다")
+    void postMaturityAttemptRunsOncePerDay() {
+        LoanRepaymentVO loan = activeLoan(10_000L, 1);
+        loan.setStatus("DEFAULTED");
+        loan.setMaturityDate(LocalDate.of(2026, 1, 15));
+        when(mapper.selectLoanRepaymentForUpdate(7L)).thenReturn(loan);
+        when(mapper.countLoanRepaymentHistory(7L, 1)).thenReturn(1);
+        when(mapper.countLoanRepaymentHistoryOnDate(
+                7L, 1, LocalDate.of(2026, 1, 16))).thenReturn(1);
+
+        processor.process(7L, LocalDate.of(2026, 1, 16));
+
+        verifyNoInteractions(walletMapper, transferService);
+        verify(mapper, never()).insertLoanRepaymentHistory(
+                any(), any(), any(), any(), any(), any(), any(), any(), any());
+        verify(mapper, never()).updateLoanAfterRepayment(
+                any(), any(), any(), any(), any());
+    }
+
     private void stubLoan(LoanRepaymentVO loan, long childBalance) {
         when(mapper.selectLoanRepaymentForUpdate(7L)).thenReturn(loan);
         when(walletMapper.selectMemberWalletByMemberId(2L)).thenReturn(wallet(10L, childBalance));

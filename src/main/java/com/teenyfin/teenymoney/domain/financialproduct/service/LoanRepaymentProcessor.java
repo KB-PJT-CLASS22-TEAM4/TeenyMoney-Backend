@@ -50,7 +50,8 @@ public class LoanRepaymentProcessor {
         // 계약 잠금으로 중복 스케줄러와 향후 직접상환 API가 같은 잔액을 동시에 정산하지 못하게 한다.
         LoanRepaymentVO loan = mapper.selectLoanRepaymentForUpdate(enrollmentId);
         if (loan == null || !("ACTIVE".equals(loan.getStatus())
-                || "OVERDUE".equals(loan.getStatus()))) return;
+                || "OVERDUE".equals(loan.getStatus())
+                || "DEFAULTED".equals(loan.getStatus()))) return;
 
         LocalDate firstDueDate = firstDueDate(loan);
         // 배치가 며칠 중단되었더라도 과거 미처리 회차부터 순서대로 따라잡아 처리한다.
@@ -62,6 +63,87 @@ public class LoanRepaymentProcessor {
             processInstallment(loan, installmentNo, dueDate);
             if ("REPAID".equals(loan.getStatus())) break;
         }
+
+        if (!"REPAID".equals(loan.getStatus())
+                && !processingDate.isBefore(loan.getMaturityDate())) {
+            processPostMaturity(loan, processingDate);
+        }
+    }
+
+    /**
+     * 만기일까지 남은 원금이나 이자가 있으면 DEFAULTED로 확정한 뒤에도
+     * 하루 한 번 자녀 지갑의 가용 잔액만큼 자동상환을 계속 시도한다.
+     */
+    private void processPostMaturity(LoanRepaymentVO loan, LocalDate processingDate) {
+        if (!"DEFAULTED".equals(loan.getStatus())) {
+            requireLoanUpdated(mapper.updateLoanAfterRepayment(
+                    loan.getEnrollmentId(), loan.getOutstandingPrincipal(),
+                    loan.getOverdueInterest(), loan.getPaidCount(), "DEFAULTED"));
+            scoreChangeService.change(scorePolicyService.loanDefault(
+                    loan.getChildId(), loan.getEnrollmentId()));
+            loan.setStatus("DEFAULTED");
+        }
+
+        // 만기 다음 날부터 미상환 상태가 이어지는 달마다 고정 감점을 한 번만 적용한다.
+        if (processingDate.isAfter(loan.getMaturityDate())) {
+            scoreChangeService.change(scorePolicyService.loanPostMaturityOverdue(
+                    loan.getChildId(), loan.getEnrollmentId(), YearMonth.from(processingDate)));
+        }
+
+        int finalInstallment = loan.getTermMonths();
+        if (mapper.countLoanRepaymentHistoryOnDate(
+                loan.getEnrollmentId(), finalInstallment, processingDate) > 0) {
+            return;
+        }
+
+        LocalDate lastAttemptDate = mapper.selectLastLoanRepaymentAttemptDate(
+                loan.getEnrollmentId(), finalInstallment);
+        LocalDate interestFrom = lastAttemptDate == null
+                ? loan.getMaturityDate() : lastAttemptDate;
+        long elapsedDays = Math.max(0L, ChronoUnit.DAYS.between(
+                interestFrom, processingDate));
+        long additionalLateInterest = lateInterest(
+                Math.addExact(loan.getOutstandingPrincipal(), loan.getOverdueInterest()),
+                loan.getAppliedLateFeeRate(), elapsedDays);
+        long interestDue = Math.addExact(
+                loan.getOverdueInterest(), additionalLateInterest);
+        long principalDue = loan.getOutstandingPrincipal();
+        long totalDue = Math.addExact(principalDue, interestDue);
+
+        WalletVO childWallet = requireMemberWallet(loan.getChildId());
+        WalletVO lockedChildWallet = requireLockedWallet(childWallet.getId());
+        WalletVO parentWallet = requireMemberWallet(loan.getParentId());
+        long paidAmount = Math.min(lockedChildWallet.getBalance(), totalDue);
+        long paidInterest = Math.min(paidAmount, interestDue);
+        long paidPrincipal = Math.min(principalDue, paidAmount - paidInterest);
+
+        Long transferId = null;
+        if (paidAmount > 0) {
+            TransferVO transfer = transferService.transferInExistingTransaction(
+                    lockedChildWallet.getId(), parentWallet.getId(), paidAmount,
+                    TransferType.LOAN, "LOAN:OVERDUE:" + loan.getEnrollmentId()
+                            + ":" + processingDate);
+            transferId = transfer.getId();
+        }
+
+        long newOutstanding = principalDue - paidPrincipal;
+        long newOverdueInterest = interestDue - paidInterest;
+        boolean repaid = newOutstanding == 0 && newOverdueInterest == 0;
+        String historyStatus = paidAmount == totalDue
+                ? "PAID" : paidAmount == 0 ? "OVERDUE" : "PARTIAL";
+        String enrollmentStatus = repaid ? "REPAID" : "DEFAULTED";
+
+        mapper.insertLoanRepaymentHistory(
+                loan.getEnrollmentId(), transferId, finalInstallment,
+                principalDue, paidPrincipal, interestDue, paidInterest,
+                historyStatus, processingDate);
+        requireLoanUpdated(mapper.updateLoanAfterRepayment(
+                loan.getEnrollmentId(), newOutstanding, newOverdueInterest,
+                loan.getPaidCount(), enrollmentStatus));
+
+        loan.setOutstandingPrincipal(newOutstanding);
+        loan.setOverdueInterest(newOverdueInterest);
+        loan.setStatus(enrollmentStatus);
     }
 
     private void processInstallment(
@@ -124,7 +206,7 @@ public class LoanRepaymentProcessor {
                 loan.getEnrollmentId(), newOutstanding, newOverdueInterest,
                 "PAID".equals(historyStatus) ? loan.getPaidCount() + 1 : loan.getPaidCount(),
                 enrollmentStatus);
-        if (updated != 1) throw new IllegalStateException("대출 상환 상태 변경에 실패했습니다.");
+        requireLoanUpdated(updated);
 
         // 부분납부와 미납은 회차 월 단위 키로 감점되고, 최종 완납은 계약 단위 키로 한 번만 가점된다.
         if (overdue) {
@@ -168,5 +250,11 @@ public class LoanRepaymentProcessor {
         WalletVO wallet = walletMapper.selectWalletForUpdate(walletId);
         if (wallet == null) throw new BusinessException(WalletErrorCode.WALLET_NOT_FOUND);
         return wallet;
+    }
+
+    private void requireLoanUpdated(int updated) {
+        if (updated != 1) {
+            throw new IllegalStateException("대출 상환 상태 변경에 실패했습니다.");
+        }
     }
 }

@@ -175,6 +175,13 @@ public interface FinancialProductMapper {
     LoanRepaymentVO selectLoanRepaymentForUpdate(@Param("enrollmentId") Long enrollmentId);
     int countLoanRepaymentHistory(@Param("enrollmentId") Long enrollmentId,
                                   @Param("installmentNo") Integer installmentNo);
+    int countLoanRepaymentHistoryOnDate(
+            @Param("enrollmentId") Long enrollmentId,
+            @Param("installmentNo") Integer installmentNo,
+            @Param("attemptDate") LocalDate attemptDate);
+    LocalDate selectLastLoanRepaymentAttemptDate(
+            @Param("enrollmentId") Long enrollmentId,
+            @Param("installmentNo") Integer installmentNo);
     int insertLoanRepaymentHistory(
             @Param("enrollmentId") Long enrollmentId,
             @Param("transferId") Long transferId,

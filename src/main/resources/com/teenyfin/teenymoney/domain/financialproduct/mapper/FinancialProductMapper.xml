@@ -1076,7 +1076,7 @@
     <select id="selectLoanRepaymentTargetIds" resultType="long">
         SELECT id
         FROM T_LON_ENROLL_M
-        WHERE status IN ('ACTIVE', 'OVERDUE')
+        WHERE status IN ('ACTIVE', 'OVERDUE', 'DEFAULTED')
           AND auto_transfer = TRUE
           AND start_date IS NOT NULL
           AND start_date &lt;= #{processingDate}
@@ -1096,13 +1096,29 @@
         FROM T_LON_ENROLL_M enrollment
         INNER JOIN T_LON_PROD_M product ON product.id = enrollment.loan_id
         WHERE enrollment.id = #{enrollmentId}
-          AND enrollment.status IN ('ACTIVE', 'OVERDUE')
+          AND enrollment.status IN ('ACTIVE', 'OVERDUE', 'DEFAULTED')
           AND enrollment.auto_transfer = TRUE
         FOR UPDATE
     </select>
 
     <select id="countLoanRepaymentHistory" resultType="int">
         SELECT COUNT(*)
+        FROM T_LON_REPAYHIST_H
+        WHERE loan_enrollment_id = #{enrollmentId}
+          AND installment_no = #{installmentNo}
+    </select>
+
+    <select id="countLoanRepaymentHistoryOnDate" resultType="int">
+        SELECT COUNT(*)
+        FROM T_LON_REPAYHIST_H
+        WHERE loan_enrollment_id = #{enrollmentId}
+          AND installment_no = #{installmentNo}
+          AND created_at &gt;= #{attemptDate}
+          AND created_at &lt; DATE_ADD(#{attemptDate}, INTERVAL 1 DAY)
+    </select>
+
+    <select id="selectLastLoanRepaymentAttemptDate" resultType="java.time.LocalDate">
+        SELECT DATE(MAX(created_at))
         FROM T_LON_REPAYHIST_H
         WHERE loan_enrollment_id = #{enrollmentId}
           AND installment_no = #{installmentNo}
@@ -1131,7 +1147,7 @@
             paid_count = #{paidCount}, status = #{status},
             updated_at = CURRENT_TIMESTAMP
         WHERE id = #{enrollmentId}
-          AND status IN ('ACTIVE', 'OVERDUE')
+          AND status IN ('ACTIVE', 'OVERDUE', 'DEFAULTED')
     </update>
 
 </mapper>
