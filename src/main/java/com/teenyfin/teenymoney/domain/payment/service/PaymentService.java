@@ -207,11 +207,8 @@ public class PaymentService {
                     orderVO.getMerchantName());
 
         } catch (DuplicateKeyException e) {
-
             // 다른 사용자로부터 이미 해당 주문이 처리된 경우 예외 반환
-            if (paymentVO == null) {
-                throw new BusinessException(PaymentErrorCode.PAYMENT_ALREADY_COMPLETED);
-            }
+            throw new BusinessException(PaymentErrorCode.PAYMENT_ALREADY_COMPLETED);
         }
 
         paymentVO = paymentMapper.selectById(paymentVO.getId());
@@ -257,6 +254,11 @@ public class PaymentService {
         // 해당 자녀에게 해당 업종 카테고리에 대해 정책이 설정되어있는지 검증
         if (categoryPolicyVO == null) {
             throw new BusinessException(CategoryPolicyErrorCode.CATEGORY_POLICY_NOT_FOUND);
+        }
+
+        // 오늘만 허용이 적용되어 있는지 확인
+        if (categoryPolicyMapper.existsApprovedTodayPermission(memberId, categoryId)) {
+            return CategoryPolicy.ALLOW;
         }
 
         return categoryPolicyVO.getPolicy();
