@@ -1,5 +1,6 @@
 package com.teenyfin.teenymoney.domain.notification.controller;
 
+import com.teenyfin.teenymoney.domain.notification.dto.request.NotificationFcmRequestDTO;
 import com.teenyfin.teenymoney.domain.notification.dto.response.NotificationListResponseDTO;
 import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
 import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
@@ -10,6 +11,8 @@ import io.swagger.annotations.ApiOperation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+
+import javax.validation.Valid;
 
 @Api(tags = "Notification", description = "알림 API")
 @RestController
@@ -60,5 +63,14 @@ public class NotificationController {
     public ApiResponse<Integer> getUnreadNotificationCount(
             @AuthenticationPrincipal MemberPrincipal memberPrincipal) {
         return ApiResponse.ok(notificationService.getUnreadNotificationCount(memberPrincipal.memberId()));
+    }
+
+    @ApiOperation(value = "FCM 토큰 갱신", notes = "로그인 시 사용자의 FCM 토큰을 갱신합니다.")
+    @PatchMapping("/fcm-token")
+    public ApiResponse<Void> modifyFcmToken(
+            @AuthenticationPrincipal MemberPrincipal memberPrincipal,
+            @RequestBody @Valid NotificationFcmRequestDTO notificationFcmRequestDTO) {
+        notificationService.modifyFcmToken(memberPrincipal.memberId(), notificationFcmRequestDTO);
+        return ApiResponse.ok();
     }
 }

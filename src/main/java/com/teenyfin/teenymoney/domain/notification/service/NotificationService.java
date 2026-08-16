@@ -1,6 +1,7 @@
 package com.teenyfin.teenymoney.domain.notification.service;
 
 import com.teenyfin.teenymoney.domain.notification.dto.NotificationMessage;
+import com.teenyfin.teenymoney.domain.notification.dto.request.NotificationFcmRequestDTO;
 import com.teenyfin.teenymoney.domain.notification.dto.response.NotificationListResponseDTO;
 import com.teenyfin.teenymoney.domain.notification.dto.response.NotificationResponseDTO;
 import com.teenyfin.teenymoney.domain.notification.exception.NotificationErrorCode;
@@ -15,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import javax.validation.Valid;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.Base64;
@@ -177,5 +179,11 @@ public class NotificationService {
     public Integer getUnreadNotificationCount(Long memberId) {
 
         return notificationMapper.countIsReadFalse(memberId);
+    }
+
+    // FCM 토큰 수정
+    public void modifyFcmToken(Long memberId, @Valid NotificationFcmRequestDTO notificationFcmRequestDTO) {
+
+        memberNotificationMapper.updateFcmToken(memberId, notificationFcmRequestDTO.getFcmToken());
     }
 }
