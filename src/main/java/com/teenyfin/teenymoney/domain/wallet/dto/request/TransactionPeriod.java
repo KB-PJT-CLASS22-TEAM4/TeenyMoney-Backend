@@ -35,6 +35,12 @@ public enum TransactionPeriod {
         public LocalDate startDateFrom(LocalDate today) {
             return today.minusMonths(6);
         }
+    },
+    ALL_TIME {
+        @Override
+        public LocalDate startDateFrom(LocalDate today) {
+            return null;
+        }
     };
 
 

@@ -14,6 +14,9 @@ import com.teenyfin.teenymoney.global.exception.BusinessException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.teenyfin.teenymoney.domain.family.service.FamilyAccessService;
+import com.teenyfin.teenymoney.global.security.MemberPrincipal;
+
 
 import java.time.Clock;
 import java.time.LocalDate;
@@ -27,11 +30,13 @@ public class WalletService {
 
     private final WalletMapper walletMapper;
     private final Clock clock;
+    private final FamilyAccessService familyAccessService;
 
-    public WalletService(WalletMapper walletMapper, Clock clock) {
+    public WalletService(WalletMapper walletMapper, Clock clock, FamilyAccessService familyAccessService) {
 
         this.walletMapper = walletMapper;
         this.clock = clock;
+        this.familyAccessService = familyAccessService;
     }
 
     // 잔액 + 최근 거래내역 3건을 한 번에 반환. 화면(내 지갑 보기)이 이 둘을 항상 같이 쓰기 때문에
@@ -121,6 +126,24 @@ public class WalletService {
         return wallet.getId();
 
     }
+
+    @Transactional(readOnly = true)
+    public WalletDetailResponseDTO getChildWalletDetail(MemberPrincipal principal, Long childId) {
+        familyAccessService.requireChildAccess(principal, childId);
+        return getMyWalletDetail(childId);
+    }
+
+
+    @Transactional(readOnly = true)
+    public List<WalletTransactionResponseDTO> getChildTransactions(
+            MemberPrincipal principal, Long childId,
+            TransactionTypeFilter type, TransactionPeriod period, TransactionSortOrder sort) {
+        familyAccessService.requireChildAccess(principal, childId);
+        return getMyTransactions(childId, type, period, sort);
+    }
+
+
+
 
 
 }

@@ -17,6 +17,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import io.swagger.annotations.ApiResponses;
+import io.swagger.annotations.Authorization;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.PathVariable;
 
 import java.util.List;
 
@@ -67,4 +71,57 @@ public class WalletController {
         List<WalletTransactionResponseDTO> response = walletService.getMyTransactions(principal.memberId(), type, period, sort);
         return ApiResponse.ok(response);
     }
+
+
+    @ApiOperation(
+            value = "자녀 지갑 잔액과 최근 거래내역 조회",
+            notes = "부모가 연동된 자녀의 MEMBER 타입 지갑 잔액과 최근 거래내역 3건을 반환합니다.\n\n"
+                    + "부모만 호출할 수 있습니다. ",
+            authorizations = { @Authorization(value = "JWT") })
+    @ApiResponses({
+            @io.swagger.annotations.ApiResponse(code = 200, message = "조회 성공"),
+            @io.swagger.annotations.ApiResponse(code = 401, message = "로그인 필요"),
+            @io.swagger.annotations.ApiResponse(code = 403, message = "부모가 아니거나, 연동되지 않은 자녀에 대한 접근"),
+            @io.swagger.annotations.ApiResponse(code = 404, message = "자녀의 지갑을 찾을 수 없음") })
+    @PreAuthorize("hasRole('PARENT')")
+    @GetMapping("/children/{childId}")
+    public ApiResponse<WalletDetailResponseDTO> getChildWalletDetail(
+            @AuthenticationPrincipal MemberPrincipal principal,
+            @ApiParam(value = "조회 대상 자녀의 회원 아이디", required = true) @PathVariable Long childId) {
+
+        WalletDetailResponseDTO response = walletService.getChildWalletDetail(principal, childId);
+        return ApiResponse.ok(response);
+    }
+
+    @ApiOperation(
+            value = "자녀 거래내역 목록 조회",
+            notes = "종류(type)/기간(period)/정렬(sort) 세 조건을 조합해서 필터링합니다. "
+                    + "파라미터를 안 보내면 기본값(전체/1개월/최신순)이 적용됩니다.\n\n"
+                    + "부모만 호출할 수 있습니다. 자녀 본인은 GET /wallet/me/transactions를 대신 쓰십시오.",
+            authorizations = { @Authorization(value = "JWT") })
+    @ApiResponses({
+            @io.swagger.annotations.ApiResponse(code = 200, message = "조회 성공"),
+            @io.swagger.annotations.ApiResponse(code = 401, message = "로그인 필요"),
+            @io.swagger.annotations.ApiResponse(code = 403, message = "부모가 아니거나, 연동되지 않은 자녀에 대한 접근"),
+            @io.swagger.annotations.ApiResponse(code = 404, message = "자녀의 지갑을 찾을 수 없음") })
+    @PreAuthorize("hasRole('PARENT')")
+    @GetMapping("/children/{childId}/transactions")
+    public ApiResponse<List<WalletTransactionResponseDTO>> getChildTransactions(
+            @AuthenticationPrincipal MemberPrincipal principal,
+            @ApiParam(value = "조회 대상 자녀의 회원 아이디", required = true) @PathVariable Long childId,
+
+            @ApiParam(value = "거래 종류 필터 : ALL(전체)/CREDIT(입금) / DEBIT(출금)")
+            @RequestParam(defaultValue = "ALL") TransactionTypeFilter type,
+
+            @ApiParam(value = "조회 기간: WEEK(1주일)/MONTH(1개월)/THREE_MONTHS(3개월)/SIX_MONTHS(6개월)/ALL_TIME(전체)")
+            @RequestParam(defaultValue = "MONTH") TransactionPeriod period,
+
+            @ApiParam(value = "정렬 방향: DESC(최신순)/ASC(과거순)")
+            @RequestParam(defaultValue = "DESC") TransactionSortOrder sort) {
+
+        List<WalletTransactionResponseDTO> response =
+                walletService.getChildTransactions(principal, childId, type, period, sort);
+        return ApiResponse.ok(response);
+    }
+
 }
