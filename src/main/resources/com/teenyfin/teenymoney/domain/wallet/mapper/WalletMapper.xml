@@ -49,17 +49,17 @@
     <select id="selectTransactions" resultMap="walletTransactionResultMap">
         SELECT id, direction, amount, balance_after, description, created_at
         FROM T_WLT_HIST_H
-        WHERE wallet_id = #{walletId} AND created_at &gt;= #{startDate}
+        WHERE wallet_id = #{walletId}
+        <!-- startDate가 null이면(=ALL_TIME 선택) 이 조건 자체가 SQL에서 통째로 빠져서
+             기간 제한 없이 전체 거래내역을 조회한다. direction의 <if>와 동일한 방식. -->
+        <if test="startDate != null">
+            AND created_at &gt;= #{startDate}
+        </if>
         <!-- direction이 null이면(=전체 선택) 이 조건 자체가 SQL에서 통째로 빠진다 -->
         <if test="direction != null">
             AND direction = #{direction}
         </if>
         ORDER BY created_at
-        <!-- sortOrder는 자바 enum 이름 문자열("ASC"/"DESC")이 그대로 넘어온다.
-               ${}가 아니라 <choose>로 화이트리스트 분기하는 이유: ORDER BY 방향은
-               #{}(값 바인딩)로 못 넣고 SQL 문자열 자체를 바꿔야 하는데, 그렇다고
-               ${}로 사용자 입력을 그대로 SQL에 꽂으면 SQL 인젝션 위험이 생긴다.
-               그래서 "ASC가 맞으면 ASC, 그 외엔 무조건 DESC"로 직접 분기해서 안전하게 처리한다. -->
         <choose>
             <when test="sortOrder == 'ASC'">ASC</when>
             <otherwise>DESC</otherwise>
