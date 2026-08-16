@@ -10,7 +10,6 @@ import org.springframework.stereotype.Service;
 
 @Slf4j
 @Service
-@Builder
 @RequiredArgsConstructor
 public class FcmService {
 

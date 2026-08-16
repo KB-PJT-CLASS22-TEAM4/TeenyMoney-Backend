@@ -52,7 +52,7 @@ public class NotificationService {
         notificationMapper.insert(notificationVO);
 
         // 푸시 알림이 필요하지 않은 경우 내역만 남기고 종료
-        if (!isPushed) {
+        if (isPushed == null || !isPushed) {
             return;
         }
 
@@ -154,6 +154,10 @@ public class NotificationService {
 
         NotificationVO notificationVO = notificationMapper.selectById(notificationId);
 
+        if (notificationVO == null) {
+            throw new BusinessException(NotificationErrorCode.INVALID_NOTIFICATION_ID);
+        }
+
         // 자신의 알림이 맞는지 확인
         if (!Objects.equals(notificationVO.getMemberId(), memberId)) {
             throw new BusinessException(NotificationErrorCode.FORBIDDEN_TO_NOTIFICATION);
@@ -167,6 +171,10 @@ public class NotificationService {
     public void readAllNotifications(Long memberId, Long notificationId) {
 
         NotificationVO notificationVO = notificationMapper.selectById(notificationId);
+
+        if (notificationVO == null) {
+            throw new BusinessException(NotificationErrorCode.INVALID_NOTIFICATION_ID);
+        }
 
         // 자신의 알림이 맞는지 확인
         if (!Objects.equals(notificationVO.getMemberId(), memberId)) {
@@ -184,12 +192,14 @@ public class NotificationService {
     }
 
     // FCM 토큰 수정
+    @Transactional
     public void modifyFcmToken(Long memberId, NotificationFcmRequestDTO notificationFcmRequestDTO) {
 
         memberNotificationMapper.updateFcmToken(memberId, notificationFcmRequestDTO.getFcmToken());
     }
 
     // 알림 수신 여부 조회
+    @Transactional(readOnly = true)
     public NotificationSettingResponseDTO getNotificationSetting(Long memberId) {
 
         MemberNotificationVO memberNotificationVO = memberNotificationMapper.selectNotificationInfo(memberId);
@@ -202,6 +212,7 @@ public class NotificationService {
     }
 
     // 알림 수신 여부 변경
+    @Transactional
     public void modifyNotificationSetting(Long memberId, NotificationSettingRequestDTO notificationSettingRequestDTO) {
 
         memberNotificationMapper.updateNotificationSetting(memberId, notificationSettingRequestDTO);

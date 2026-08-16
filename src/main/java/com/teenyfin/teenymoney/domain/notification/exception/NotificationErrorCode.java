@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 @RequiredArgsConstructor
 public enum NotificationErrorCode implements ErrorCode {
 
+    INVALID_NOTIFICATION_ID(HttpStatus.FORBIDDEN, "유효하지 않은 알림 아이디입니다."),
     FORBIDDEN_TO_NOTIFICATION(HttpStatus.FORBIDDEN, "해당 알림에 대한 권한이 없습니다.");
 
     private final HttpStatus status;
