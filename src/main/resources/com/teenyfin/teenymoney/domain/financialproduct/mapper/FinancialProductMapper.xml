@@ -314,7 +314,7 @@
         FROM T_DPT_ENROLL_M enrollment
         INNER JOIN T_DPT_PROD_M product
                 ON enrollment.deposit_id = product.id
-        INNER JOIN T_WLT_BASE_M wallet
+        LEFT JOIN T_WLT_BASE_M wallet
                 ON enrollment.wallet_id = wallet.id
         WHERE enrollment.child_id = #{childId}
           AND enrollment.status &lt;&gt; 'REJECTED'
@@ -351,7 +351,7 @@
         FROM T_SVG_ENROLL_M enrollment
         INNER JOIN T_SVG_PROD_M product
                 ON enrollment.saving_id = product.id
-        INNER JOIN T_WLT_BASE_M wallet
+        LEFT JOIN T_WLT_BASE_M wallet
                 ON enrollment.wallet_id = wallet.id
         WHERE enrollment.child_id = #{childId}
           AND enrollment.status &lt;&gt; 'REJECTED'
@@ -409,7 +409,7 @@
         FROM T_DPT_ENROLL_M enrollment
         INNER JOIN T_DPT_PROD_M product
                 ON enrollment.deposit_id = product.id
-        INNER JOIN T_WLT_BASE_M wallet
+        LEFT JOIN T_WLT_BASE_M wallet
                 ON enrollment.wallet_id = wallet.id
         WHERE enrollment.child_id = #{childId}
           AND enrollment.status &lt;&gt; 'REJECTED'
@@ -446,7 +446,7 @@
         FROM T_SVG_ENROLL_M enrollment
         INNER JOIN T_SVG_PROD_M product
                 ON enrollment.saving_id = product.id
-        INNER JOIN T_WLT_BASE_M wallet
+        LEFT JOIN T_WLT_BASE_M wallet
                 ON enrollment.wallet_id = wallet.id
         WHERE enrollment.child_id = #{childId}
           AND enrollment.status &lt;&gt; 'REJECTED'
@@ -519,10 +519,10 @@
     <insert id="insertDepositEnrollment" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO T_DPT_ENROLL_M
             (deposit_id, child_id, parent_id, wallet_id, applied_rate,
-             applied_early_termination_rate, term_months, status)
+             applied_early_termination_rate, term_months, deposit_amount, status)
         VALUES
             (#{productId}, #{childId}, #{parentId}, #{walletId}, #{appliedRate},
-             #{appliedEarlyTerminationRate}, #{termMonths}, 'PENDING')
+             #{appliedEarlyTerminationRate}, #{termMonths}, #{amount}, 'PENDING')
     </insert>
 
     <insert id="insertSavingEnrollment" useGeneratedKeys="true" keyProperty="id">
@@ -559,7 +559,7 @@
                    child.name AS child_name,
                    enrollment.wallet_id,
                    transfer.id AS transfer_id,
-                   transfer.amount AS requested_amount,
+                   enrollment.deposit_amount AS requested_amount,
                    enrollment.term_months,
                    NULL AS payment_day,
                    NULL AS auto_transfer,
@@ -622,7 +622,7 @@
                'DEPOSIT' AS product_type, product.name AS product_name,
                enrollment.parent_id, enrollment.child_id, child.name AS child_name,
                enrollment.wallet_id, transfer.id AS transfer_id,
-               transfer.amount AS requested_amount, enrollment.term_months,
+               enrollment.deposit_amount AS requested_amount, enrollment.term_months,
                product.interest_calculation_type,
                enrollment.applied_rate,
                enrollment.applied_early_termination_rate AS early_termination_rate,
@@ -683,7 +683,8 @@
 
     <update id="approveDepositEnrollment">
         UPDATE T_DPT_ENROLL_M
-        SET applied_rate = #{appliedRate},
+        SET wallet_id = #{walletId},
+            applied_rate = #{appliedRate},
             applied_early_termination_rate = #{earlyTerminationRate},
             start_date = #{startDate}, maturity_date = #{maturityDate},
             status = 'ACTIVE', updated_at = CURRENT_TIMESTAMP
@@ -692,7 +693,8 @@
 
     <update id="approveSavingEnrollment">
         UPDATE T_SVG_ENROLL_M
-        SET applied_rate = #{appliedRate},
+        SET wallet_id = #{walletId},
+            applied_rate = #{appliedRate},
             applied_early_termination_rate = #{earlyTerminationRate},
             start_date = #{startDate}, maturity_date = #{maturityDate},
             status = 'ACTIVE', updated_at = CURRENT_TIMESTAMP
@@ -733,7 +735,9 @@
     <select id="selectDueSavingPaymentEnrollmentIds" resultType="long">
         SELECT enrollment.id
         FROM T_SVG_ENROLL_M enrollment
+        INNER JOIN T_SVG_PROD_M product ON product.id = enrollment.saving_id
         WHERE enrollment.status = 'ACTIVE'
+          AND product.savings_type = 'FIXED'
           AND enrollment.auto_transfer = TRUE
           AND enrollment.start_date &lt;= #{paymentDate}
           AND TIMESTAMPDIFF(MONTH, enrollment.start_date, #{paymentDate})
@@ -755,8 +759,10 @@
                TIMESTAMPDIFF(MONTH, enrollment.start_date, #{paymentDate}) + 1
                    AS installment_no
         FROM T_SVG_ENROLL_M enrollment
+        INNER JOIN T_SVG_PROD_M product ON product.id = enrollment.saving_id
         WHERE enrollment.id = #{enrollmentId}
           AND enrollment.status = 'ACTIVE'
+          AND product.savings_type = 'FIXED'
           AND enrollment.auto_transfer = TRUE
           AND enrollment.start_date &lt;= #{paymentDate}
           AND TIMESTAMPDIFF(MONTH, enrollment.start_date, #{paymentDate})
@@ -888,5 +894,244 @@
             (#{enrollmentId}, #{transferId}, #{installmentNo},
              #{amount}, #{amount}, 'PAID', CURRENT_TIMESTAMP)
     </insert>
+
+    <select id="selectDueDepositMaturityIds" resultType="long">
+        SELECT id
+        FROM T_DPT_ENROLL_M
+        WHERE status = 'ACTIVE'
+          AND maturity_date &lt;= #{processingDate}
+        ORDER BY id
+    </select>
+
+    <select id="selectDueSavingMaturityIds" resultType="long">
+        SELECT id
+        FROM T_SVG_ENROLL_M
+        WHERE status = 'ACTIVE'
+          AND maturity_date &lt;= #{processingDate}
+        ORDER BY id
+    </select>
+
+    <select id="selectDepositMaturityForUpdate"
+            resultType="com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductMaturityVO">
+        SELECT enrollment.id AS enrollment_id, enrollment.child_id,
+               enrollment.parent_id, enrollment.wallet_id AS product_wallet_id,
+               enrollment.applied_rate, enrollment.term_months,
+               enrollment.start_date, enrollment.maturity_date, enrollment.status,
+               product.interest_calculation_type
+        FROM T_DPT_ENROLL_M enrollment
+        INNER JOIN T_DPT_PROD_M product ON product.id = enrollment.deposit_id
+        WHERE enrollment.id = #{enrollmentId}
+          AND enrollment.status = 'ACTIVE'
+          AND enrollment.maturity_date &lt;= #{processingDate}
+        FOR UPDATE
+    </select>
+
+    <select id="selectSavingMaturityForUpdate"
+            resultType="com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductMaturityVO">
+        SELECT enrollment.id AS enrollment_id, enrollment.child_id,
+               enrollment.parent_id, enrollment.wallet_id AS product_wallet_id,
+               enrollment.applied_rate, enrollment.term_months,
+               enrollment.monthly_amount, enrollment.start_date,
+               enrollment.maturity_date, enrollment.status,
+               product.savings_type, product.interest_calculation_type
+        FROM T_SVG_ENROLL_M enrollment
+        INNER JOIN T_SVG_PROD_M product ON product.id = enrollment.saving_id
+        WHERE enrollment.id = #{enrollmentId}
+          AND enrollment.status = 'ACTIVE'
+          AND enrollment.maturity_date &lt;= #{processingDate}
+        FOR UPDATE
+    </select>
+
+    <select id="selectSavingContributions"
+            resultType="com.teenyfin.teenymoney.domain.financialproduct.vo.SavingContributionVO">
+        SELECT paid_amount, paid_at
+        FROM T_SVG_PAYHIST_H
+        WHERE saving_enrollment_id = #{enrollmentId}
+          AND status IN ('PAID', 'PARTIAL')
+          AND paid_amount &gt; 0
+          AND paid_at IS NOT NULL
+        ORDER BY paid_at, id
+    </select>
+
+    <select id="selectFirstMissedSavingInstallment" resultType="int">
+        SELECT MIN(installment_no)
+        FROM T_SVG_PAYHIST_H
+        WHERE saving_enrollment_id = #{enrollmentId}
+          AND status = 'MISSED'
+    </select>
+
+    <update id="markDepositMatured">
+        UPDATE T_DPT_ENROLL_M
+        SET status = 'MATURED', closed_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{enrollmentId} AND status = 'ACTIVE'
+    </update>
+
+    <update id="markSavingMatured">
+        UPDATE T_SVG_ENROLL_M
+        SET status = 'MATURED', closed_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{enrollmentId} AND status = 'ACTIVE'
+    </update>
+
+    <select id="selectFreeSavingMonthlyTargetIds" resultType="long">
+        SELECT enrollment.id
+        FROM T_SVG_ENROLL_M enrollment
+        INNER JOIN T_SVG_PROD_M product ON product.id = enrollment.saving_id
+        WHERE enrollment.status IN ('ACTIVE', 'MATURED')
+          AND product.savings_type = 'FREE'
+          AND enrollment.start_date &lt; #{monthEndExclusive}
+          AND enrollment.maturity_date &gt;= #{monthStart}
+        ORDER BY enrollment.id
+    </select>
+
+    <select id="selectFreeSavingMonthlyForUpdate"
+            resultType="com.teenyfin.teenymoney.domain.financialproduct.vo.FreeSavingMonthlyVO">
+        SELECT enrollment.id AS enrollment_id, enrollment.child_id,
+               enrollment.monthly_amount, enrollment.start_date,
+               enrollment.maturity_date
+        FROM T_SVG_ENROLL_M enrollment
+        INNER JOIN T_SVG_PROD_M product ON product.id = enrollment.saving_id
+        WHERE enrollment.id = #{enrollmentId}
+          AND enrollment.status IN ('ACTIVE', 'MATURED')
+          AND product.savings_type = 'FREE'
+          AND enrollment.start_date &lt; #{monthEndExclusive}
+          AND enrollment.maturity_date &gt;= #{monthStart}
+        FOR UPDATE
+    </select>
+
+    <select id="selectSavingPaidAmountBetween" resultType="long">
+        SELECT COALESCE(SUM(paid_amount), 0)
+        FROM T_SVG_PAYHIST_H
+        WHERE saving_enrollment_id = #{enrollmentId}
+          AND status IN ('PAID', 'PARTIAL')
+          AND paid_at &gt;= #{from}
+          AND paid_at &lt; #{to}
+    </select>
+
+    <!-- 견적은 잠금 없이 조회하고, 실행은 같은 계약을 FOR UPDATE로 잠가 만기 배치와 경합하지 않게 한다. -->
+    <sql id="depositTerminationColumns">
+        SELECT enrollment.id AS enrollment_id, enrollment.child_id,
+               enrollment.parent_id, enrollment.wallet_id AS product_wallet_id,
+               wallet.balance AS product_wallet_balance,
+               enrollment.applied_early_termination_rate,
+               enrollment.term_months, enrollment.start_date,
+               enrollment.maturity_date, enrollment.status,
+               product.interest_calculation_type
+        FROM T_DPT_ENROLL_M enrollment
+        INNER JOIN T_DPT_PROD_M product ON product.id = enrollment.deposit_id
+        INNER JOIN T_WLT_BASE_M wallet ON wallet.id = enrollment.wallet_id
+        WHERE enrollment.id = #{enrollmentId}
+          AND enrollment.child_id = #{childId}
+    </sql>
+
+    <sql id="savingTerminationColumns">
+        SELECT enrollment.id AS enrollment_id, enrollment.child_id,
+               enrollment.parent_id, enrollment.wallet_id AS product_wallet_id,
+               wallet.balance AS product_wallet_balance,
+               enrollment.applied_early_termination_rate,
+               enrollment.term_months, enrollment.start_date,
+               enrollment.maturity_date, enrollment.status,
+               product.savings_type, product.interest_calculation_type
+        FROM T_SVG_ENROLL_M enrollment
+        INNER JOIN T_SVG_PROD_M product ON product.id = enrollment.saving_id
+        INNER JOIN T_WLT_BASE_M wallet ON wallet.id = enrollment.wallet_id
+        WHERE enrollment.id = #{enrollmentId}
+          AND enrollment.child_id = #{childId}
+    </sql>
+
+    <select id="selectDepositTermination"
+            resultType="com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductTerminationVO">
+        <include refid="depositTerminationColumns"/>
+    </select>
+    <select id="selectSavingTermination"
+            resultType="com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductTerminationVO">
+        <include refid="savingTerminationColumns"/>
+    </select>
+    <select id="selectDepositTerminationForUpdate"
+            resultType="com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductTerminationVO">
+        <include refid="depositTerminationColumns"/>
+        FOR UPDATE
+    </select>
+    <select id="selectSavingTerminationForUpdate"
+            resultType="com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductTerminationVO">
+        <include refid="savingTerminationColumns"/>
+        FOR UPDATE
+    </select>
+
+    <update id="markDepositTerminated">
+        UPDATE T_DPT_ENROLL_M
+        SET status = 'TERMINATED', closed_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{enrollmentId} AND status = 'ACTIVE'
+    </update>
+    <update id="markSavingTerminated">
+        UPDATE T_SVG_ENROLL_M
+        SET status = 'TERMINATED', closed_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{enrollmentId} AND status = 'ACTIVE'
+    </update>
+
+    <!-- 후보 ID는 넓게 조회하고 실제 납기와 미처리 회차는 잠근 계약을 기준으로 판정한다. -->
+    <select id="selectLoanRepaymentTargetIds" resultType="long">
+        SELECT id
+        FROM T_LON_ENROLL_M
+        WHERE status IN ('ACTIVE', 'OVERDUE')
+          AND auto_transfer = TRUE
+          AND start_date IS NOT NULL
+          AND start_date &lt;= #{processingDate}
+        ORDER BY id
+    </select>
+
+    <select id="selectLoanRepaymentForUpdate"
+            resultType="com.teenyfin.teenymoney.domain.financialproduct.vo.LoanRepaymentVO">
+        SELECT enrollment.id AS enrollment_id, enrollment.parent_id,
+               enrollment.child_id, enrollment.principal_amount,
+               enrollment.outstanding_principal, enrollment.overdue_interest,
+               enrollment.applied_rate, enrollment.applied_late_fee_rate,
+               enrollment.payment_day, enrollment.paid_count,
+               enrollment.term_months, enrollment.start_date,
+               enrollment.maturity_date, enrollment.status,
+               product.repayment_type
+        FROM T_LON_ENROLL_M enrollment
+        INNER JOIN T_LON_PROD_M product ON product.id = enrollment.loan_id
+        WHERE enrollment.id = #{enrollmentId}
+          AND enrollment.status IN ('ACTIVE', 'OVERDUE')
+          AND enrollment.auto_transfer = TRUE
+        FOR UPDATE
+    </select>
+
+    <select id="countLoanRepaymentHistory" resultType="int">
+        SELECT COUNT(*)
+        FROM T_LON_REPAYHIST_H
+        WHERE loan_enrollment_id = #{enrollmentId}
+          AND installment_no = #{installmentNo}
+    </select>
+
+    <insert id="insertLoanRepaymentHistory">
+        INSERT INTO T_LON_REPAYHIST_H
+            (loan_enrollment_id, transfer_id, installment_no,
+             principal_amount, paid_principal_amount,
+             interest_amount, paid_interest_amount, status,
+             overdue_start_at, paid_at)
+        VALUES
+            (#{enrollmentId}, #{transferId}, #{installmentNo},
+             #{principalAmount}, #{paidPrincipalAmount},
+             #{interestAmount}, #{paidInterestAmount}, #{status},
+             CASE WHEN #{status} IN ('OVERDUE', 'PARTIAL')
+                  THEN #{dueDate} ELSE NULL END,
+             CASE WHEN #{status} IN ('PAID', 'PARTIAL')
+                  THEN CURRENT_TIMESTAMP ELSE NULL END)
+    </insert>
+
+    <update id="updateLoanAfterRepayment">
+        UPDATE T_LON_ENROLL_M
+        SET outstanding_principal = #{outstandingPrincipal},
+            overdue_interest = #{overdueInterest},
+            paid_count = #{paidCount}, status = #{status},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{enrollmentId}
+          AND status IN ('ACTIVE', 'OVERDUE')
+    </update>
 
 </mapper>
