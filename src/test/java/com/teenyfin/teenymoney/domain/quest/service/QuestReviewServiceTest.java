@@ -1,5 +1,7 @@
 package com.teenyfin.teenymoney.domain.quest.service;
 
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
+import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
 import com.teenyfin.teenymoney.domain.quest.dto.request.QuestRejectRequestDTO;
 import com.teenyfin.teenymoney.domain.quest.exception.QuestErrorCode;
 import com.teenyfin.teenymoney.domain.quest.mapper.QuestMapper;
@@ -55,6 +57,7 @@ class QuestReviewServiceTest {
     private TransferService transferService;
     private TeenyScorePolicyService teenyScorePolicyService;
     private TeenyScoreChangeService teenyScoreChangeService;
+    private NotificationService notificationService;
     private QuestReviewService service;
 
     @BeforeEach
@@ -68,12 +71,14 @@ class QuestReviewServiceTest {
                 Instant.parse("2026-08-11T17:30:00Z"),
                 ZoneId.of("Asia/Seoul"));
 
+        notificationService = mock(NotificationService.class);
         service = new QuestReviewService(
                 questMapper,
                 walletMapper,
                 transferService,
                 teenyScorePolicyService,
                 teenyScoreChangeService,
+                notificationService,
                 clock);
 
         when(questMapper.selectByIdForUpdateByParent(QUEST_ID, PARENT_ID))
@@ -448,6 +453,69 @@ class QuestReviewServiceTest {
                 exception.getErrorCode());
     }
 
+    // ---------- 알림 ----------
+
+    @Test
+    @DisplayName("승인 알림에는 지급된 보상 금액이 담긴다")
+    void approveNotifiesChildWithRewardAmount() {
+        service.approve(parent(), QUEST_ID, VERIFICATION_ID);
+
+        verify(notificationService).createNotification(
+                eq(CHILD_ID), eq("퀘스트 완료! 보상이 지급됐어요"), eq("방 청소 · 3,000원"),
+                eq(NotificationReferenceType.QUEST), eq(QUEST_ID), eq(true));
+    }
+
+    @Test
+    @DisplayName("현금 보상이 없는 퀘스트는 지급 문구 없이 완료를 알린다")
+    void approveWithoutCashRewardNotifiesCompletionOnly() {
+        when(questMapper.selectByIdForUpdateByParent(QUEST_ID, PARENT_ID))
+                .thenReturn(pendingQuest(0L, true));
+
+        service.approve(parent(), QUEST_ID, VERIFICATION_ID);
+
+        verify(notificationService).createNotification(
+                eq(CHILD_ID), eq("퀘스트를 완료했어요"), eq("방 청소"),
+                eq(NotificationReferenceType.QUEST), eq(QUEST_ID), eq(true));
+    }
+
+    @Test
+    @DisplayName("기회가 남은 반려는 남은 횟수를 알린다")
+    void rejectWithRemainingAttemptsNotifiesRemainingCount() {
+        service.reject(parent(), QUEST_ID, VERIFICATION_ID, rejectRequest("다시 해줘", null, null));
+
+        verify(notificationService).createNotification(
+                eq(CHILD_ID), eq("인증이 반려됐어요"), eq("방 청소 · 남은 기회 2회"),
+                eq(NotificationReferenceType.QUEST), eq(QUEST_ID), eq(true));
+    }
+
+    @Test
+    @DisplayName("마지막 기회의 반려는 실패를 알린다")
+    void rejectOnLastAttemptNotifiesFailure() {
+        when(questMapper.selectByIdForUpdateByParent(QUEST_ID, PARENT_ID))
+                .thenReturn(pendingQuestWithDeadline(
+                        3_000L, true, 1, LocalDateTime.of(2026, 8, 13, 20, 0)));
+
+        service.reject(parent(), QUEST_ID, VERIFICATION_ID, rejectRequest("아쉬워", null, null));
+
+        verify(notificationService).createNotification(
+                eq(CHILD_ID), eq("퀘스트가 실패했어요"), eq("방 청소"),
+                eq(NotificationReferenceType.QUEST), eq(QUEST_ID), eq(true));
+    }
+
+    @Test
+    @DisplayName("승인이 실패하면 알림을 보내지 않는다")
+    void doesNotNotifyWhenApproveFails() {
+        when(transferService.transferInExistingTransaction(
+                any(), any(), any(), any(), any()))
+                .thenThrow(new BusinessException(WalletErrorCode.INSUFFICIENT_BALANCE));
+
+        assertThrows(BusinessException.class,
+                () -> service.approve(parent(), QUEST_ID, VERIFICATION_ID));
+
+        verify(notificationService, never())
+                .createNotification(any(), any(), any(), any(), any(), any());
+    }
+
     private QuestVO pendingQuest(Long rewardAmount, boolean scoreEnabled) {
         return pendingQuestWithDeadline(
                 rewardAmount,
@@ -465,6 +533,7 @@ class QuestReviewServiceTest {
                 .id(QUEST_ID)
                 .parentId(PARENT_ID)
                 .childId(CHILD_ID)
+                .title("방 청소")
                 .deadline(deadline)
                 .rewardAmount(rewardAmount)
                 .teenyScoreEnabled(scoreEnabled)

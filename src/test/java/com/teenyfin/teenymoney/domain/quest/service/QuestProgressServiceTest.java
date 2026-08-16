@@ -1,5 +1,9 @@
 package com.teenyfin.teenymoney.domain.quest.service;
 
+import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
+import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
+import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
 import com.teenyfin.teenymoney.domain.quest.dto.request.QuestDeclineRequestDTO;
 import com.teenyfin.teenymoney.domain.quest.exception.QuestErrorCode;
 import com.teenyfin.teenymoney.domain.quest.mapper.QuestMapper;
@@ -49,6 +53,7 @@ class QuestProgressServiceTest {
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 8, 10, 10, 0);
     private static final long QUEST_ID = 55L;
     private static final long CHILD_ID = 2L;
+    private static final long PARENT_ID = 1L;
     private static final byte[] PNG = {
             (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x01, 0x02};
 
@@ -56,6 +61,8 @@ class QuestProgressServiceTest {
     private QuestProgressService service;
 
     private final S3Storage s3Storage = mock(S3Storage.class);
+    private final MemberMapper memberMapper = mock(MemberMapper.class);
+    private final NotificationService notificationService = mock(NotificationService.class);
 
     @BeforeEach
     void setUp() {
@@ -63,8 +70,14 @@ class QuestProgressServiceTest {
                 questMapper,
                 new QuestStatePolicy(),
                 s3Storage,
+                memberMapper,
+                notificationService,
                 mock(PlatformTransactionManager.class),
                 CLOCK);
+        MemberVO child = new MemberVO();
+        child.setId(CHILD_ID);
+        child.setName("김첫째");
+        given(memberMapper.selectById(CHILD_ID)).willReturn(child);
     }
 
     @Test
@@ -485,6 +498,77 @@ class QuestProgressServiceTest {
         verify(s3Storage, never()).upload(anyString(), any());
     }
 
+    // ---------- 알림 ----------
+    // 이름을 제목이 아니라 내용 앞에 두는 것은 PermissionService 와 같은 형식이다.
+    // 제목에 이름을 넣으면 받침에 따라 조사를 골라야 한다.
+
+    @Test
+    @DisplayName("수락하면 부모에게 자녀 이름과 퀘스트명이 담긴 알림이 간다")
+    void acceptNotifiesParentWithChildName() {
+        lock(quest(QuestStatus.AVAILABLE, NOW.plusDays(1)));
+        given(questMapper.updateStatusByChild(any(), any(), any(), any(), any())).willReturn(1);
+
+        service.accept(child(), QUEST_ID);
+
+        verify(notificationService).createNotification(
+                eq(PARENT_ID), eq("자녀가 퀘스트를 수락했어요"), eq("김첫째 · 방 청소"),
+                eq(NotificationReferenceType.QUEST), eq(QUEST_ID), eq(true));
+    }
+
+    @Test
+    @DisplayName("거절 알림에는 자녀가 쓴 상세 사유를 그대로 담는다")
+    void declineNotificationCarriesWrittenDetail() {
+        lock(quest(QuestStatus.AVAILABLE, NOW.plusDays(1)));
+        given(questMapper.updateDeclineByChild(any(), any(), any(), any(), any())).willReturn(1);
+
+        service.decline(child(), QUEST_ID, decline(DeclineReasonCode.OTHER, "  동생이랑 하기 싫어요  "));
+
+        verify(notificationService).createNotification(
+                eq(PARENT_ID), eq("자녀가 퀘스트를 거절했어요"), eq("김첫째 · 동생이랑 하기 싫어요"),
+                eq(NotificationReferenceType.QUEST), eq(QUEST_ID), eq(true));
+    }
+
+    @Test
+    @DisplayName("상세 사유가 없으면 거절 알림에 사유 코드의 한글 설명을 쓴다")
+    void declineNotificationFallsBackToReasonLabel() {
+        lock(quest(QuestStatus.AVAILABLE, NOW.plusDays(1)));
+        given(questMapper.updateDeclineByChild(any(), any(), any(), any(), any())).willReturn(1);
+
+        service.decline(child(), QUEST_ID, decline(DeclineReasonCode.TOO_DIFFICULT, null));
+
+        verify(notificationService).createNotification(
+                eq(PARENT_ID), eq("자녀가 퀘스트를 거절했어요"),
+                eq("김첫째 · " + DeclineReasonCode.TOO_DIFFICULT.getLabel()),
+                eq(NotificationReferenceType.QUEST), eq(QUEST_ID), eq(true));
+    }
+
+    @Test
+    @DisplayName("인증을 제출하면 부모에게 확인 요청 알림이 간다")
+    void submitVerificationNotifiesParent() {
+        lock(quest(QuestStatus.IN_PROGRESS, NOW.plusDays(1), VerificationRequirement.TEXT_REQUIRED, 3));
+        given(questMapper.insertVerification(any())).willReturn(1);
+        given(questMapper.updateStatusByChild(any(), any(), any(), any(), any())).willReturn(1);
+
+        service.submitVerification(child(), QUEST_ID, "다 했어요", null);
+
+        verify(notificationService).createNotification(
+                eq(PARENT_ID), eq("인증을 확인해 주세요"), eq("김첫째 · 방 청소"),
+                eq(NotificationReferenceType.QUEST), eq(QUEST_ID), eq(true));
+    }
+
+    @Test
+    @DisplayName("상태 충돌로 실패하면 알림을 보내지 않는다")
+    void doesNotNotifyWhenTransitionFails() {
+        lock(quest(QuestStatus.AVAILABLE, NOW.plusDays(1)));
+        given(questMapper.updateStatusByChild(any(), any(), any(), any(), any())).willReturn(0);
+
+        assertError(() -> service.accept(child(), QUEST_ID),
+                QuestErrorCode.QUEST_STATUS_CONFLICT);
+
+        verify(notificationService, never())
+                .createNotification(any(), any(), any(), any(), any(), any());
+    }
+
     private MemberPrincipal child() {
         return new MemberPrincipal(CHILD_ID, "CHILD");
     }
@@ -515,8 +599,9 @@ class QuestProgressServiceTest {
     private QuestVO quest(QuestStatus status, LocalDateTime deadline) {
         return QuestVO.builder()
                 .id(QUEST_ID)
-                .parentId(1L)
+                .parentId(PARENT_ID)
                 .childId(CHILD_ID)
+                .title("방 청소")
                 .status(status)
                 .deadline(deadline)
                 .remainingCount(3)

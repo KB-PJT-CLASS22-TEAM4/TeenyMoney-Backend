@@ -3,6 +3,8 @@ package com.teenyfin.teenymoney.domain.quest.service;
 import com.teenyfin.teenymoney.domain.family.service.FamilyAccessService;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
+import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
 import com.teenyfin.teenymoney.domain.quest.dto.request.QuestCreateRequestDTO;
 import com.teenyfin.teenymoney.domain.quest.dto.request.QuestUpdateRequestDTO;
 import com.teenyfin.teenymoney.domain.quest.exception.QuestErrorCode;
@@ -29,6 +31,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
@@ -47,6 +50,7 @@ class QuestCreationServiceTest {
     private final QuestMapper questMapper = mock(QuestMapper.class);
     private final MemberMapper memberMapper = mock(MemberMapper.class);
     private final FamilyAccessService familyAccessService = mock(FamilyAccessService.class);
+    private final NotificationService notificationService = mock(NotificationService.class);
     private QuestCreationService service;
 
     @BeforeEach
@@ -56,6 +60,7 @@ class QuestCreationServiceTest {
                 memberMapper,
                 familyAccessService,
                 new QuestStatePolicy(),
+                notificationService,
                 CLOCK);
         given(memberMapper.selectByIdForUpdate(1L)).willReturn(new MemberVO());
         given(questMapper.selectByCreationRequestKey(1L, REQUEST_KEY)).willReturn(List.of());
@@ -169,6 +174,8 @@ class QuestCreationServiceTest {
                 QuestErrorCode.QUEST_PARENT_ONLY);
 
         verify(questMapper, never()).insert(any());
+        verify(notificationService, never())
+                .createNotification(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -195,6 +202,51 @@ class QuestCreationServiceTest {
 
         assertThat(result).containsExactly(203L, 202L);
         verify(questMapper, never()).insert(any());
+    }
+
+    @Test
+    @DisplayName("퀘스트를 생성하면 자녀마다 알림이 하나씩 발송된다")
+    void sendsOneNotificationPerChildOnCreate() {
+        stubGeneratedIds();
+
+        service.create(
+                parent(),
+                request(List.of(3L, 2L), "방 청소", "책상까지 정리", 1_000L, true, NOW.plusDays(1)),
+                REQUEST_KEY);
+
+        verify(notificationService).createNotification(
+                eq(3L), eq("새 퀘스트가 도착했어요"), eq("방 청소 · 보상 1,000원"),
+                eq(NotificationReferenceType.QUEST), eq(101L), eq(true));
+        verify(notificationService).createNotification(
+                eq(2L), eq("새 퀘스트가 도착했어요"), eq("방 청소 · 보상 1,000원"),
+                eq(NotificationReferenceType.QUEST), eq(102L), eq(true));
+    }
+
+    @Test
+    @DisplayName("현금 보상이 없으면 알림 내용에 보상 문구를 붙이지 않는다")
+    void omitsRewardTextWhenQuestHasNoCashReward() {
+        stubGeneratedIds();
+
+        service.create(
+                parent(),
+                request(List.of(2L), "방 청소", "책상까지 정리", 0L, true, NOW.plusDays(1)),
+                REQUEST_KEY);
+
+        verify(notificationService).createNotification(
+                eq(2L), eq("새 퀘스트가 도착했어요"), eq("방 청소"),
+                eq(NotificationReferenceType.QUEST), eq(101L), eq(true));
+    }
+
+    @Test
+    @DisplayName("같은 키의 재요청은 알림을 다시 보내지 않는다")
+    void retryWithSameKeyDoesNotResendNotification() {
+        given(questMapper.selectByCreationRequestKey(1L, REQUEST_KEY))
+                .willReturn(List.of(existing(202L, 2L)));
+
+        service.create(parent(), request(List.of(2L)), REQUEST_KEY);
+
+        verify(notificationService, never())
+                .createNotification(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -303,6 +355,16 @@ class QuestCreationServiceTest {
 
     private MemberPrincipal parent() {
         return new MemberPrincipal(1L, "PARENT");
+    }
+
+    // insert()가 호출될 때마다 101, 102 순으로 id를 채워준다 (useGeneratedKeys 흉내)
+    private void stubGeneratedIds() {
+        AtomicLong ids = new AtomicLong(100L);
+        doAnswer(invocation -> {
+            QuestVO quest = invocation.getArgument(0);
+            quest.setId(ids.incrementAndGet());
+            return 1;
+        }).when(questMapper).insert(any(QuestVO.class));
     }
 
     private QuestCreateRequestDTO request(List<Long> childIds) {
