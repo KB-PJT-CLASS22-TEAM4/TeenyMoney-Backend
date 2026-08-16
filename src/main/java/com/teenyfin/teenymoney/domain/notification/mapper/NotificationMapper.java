@@ -20,11 +20,14 @@ public interface NotificationMapper {
             @Param("cursorId") Long cursorId,
             @Param("limit") int limit);
 
+    // 알림 단건 조회
+    NotificationVO selectById(@Param("notificationId") Long notificationId);
+
     // 단일 알림 읽음 처리
     void updateIsReadTrue(@Param("notificationId") Long notificationId);
 
     // 전체 알림 읽음 처리
-    void updateAllIsReadTrue(@Param("memberId") Long memberId);
+    void updateAllIsReadTrueCreatedBeforeLatestTime(@Param("memberId") Long memberId, @Param("latestTime") LocalDateTime latestTime);
 
     // 읽지 않은 알림 개수 조회
     int countIsReadFalse(@Param("memberId") Long memberId);

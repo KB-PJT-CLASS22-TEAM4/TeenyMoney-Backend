@@ -34,16 +34,24 @@
         LIMIT #{limit}
     </select>
 
+    <select id="selectById" resultMap="notificationResultMap">
+        SELECT id, member_id, title, content, reference_type, reference_id, is_read, created_at
+        FROM T_NTF_NOTI_L
+        WHERE id = #{notificationId}
+    </select>
+
     <update id="updateIsReadTrue">
         UPDATE T_NTF_NOTI_L
         SET is_read = TRUE
         WHERE id = #{notificationId}
     </update>
 
-    <update id="updateAllIsReadTrue">
+    <update id="updateAllIsReadTrueCreatedBeforeLatestTime">
         UPDATE T_NTF_NOTI_L
         SET is_read = true
-        WHERE member_id = #{memberId} AND is_read = false
+        WHERE member_id = #{memberId}
+          AND is_read = false
+          AND created_at &lt;= #{latestTime}
     </update>
 
     <select id="countIsReadFalse" resultType="int">

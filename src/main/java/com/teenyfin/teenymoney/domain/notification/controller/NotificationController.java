@@ -46,11 +46,12 @@ public class NotificationController {
         return ApiResponse.ok();
     }
 
-    @ApiOperation(value = "전체 알림 읽음 처리", notes = "모든 알림을 읽음 처리합니다.")
-    @PatchMapping
+    @ApiOperation(value = "전체 알림 읽음 처리", notes = "모든 알림을 읽음 처리합니다. 현재 페이지에서 가장 최근 알림의 아이디를 파라미터로 전달합니다.")
+    @PatchMapping("/{notificationId}/all")
     public ApiResponse<Void> readAllNotifications(
-            @AuthenticationPrincipal MemberPrincipal memberPrincipal) {
-        notificationService.readAllNotifications(memberPrincipal.memberId());
+            @AuthenticationPrincipal MemberPrincipal memberPrincipal,
+            @PathVariable Long notificationId) {
+        notificationService.readAllNotifications(memberPrincipal.memberId(), notificationId);
         return ApiResponse.ok();
     }
 

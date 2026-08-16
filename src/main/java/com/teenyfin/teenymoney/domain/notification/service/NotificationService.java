@@ -3,6 +3,7 @@ package com.teenyfin.teenymoney.domain.notification.service;
 import com.teenyfin.teenymoney.domain.notification.dto.NotificationMessage;
 import com.teenyfin.teenymoney.domain.notification.dto.response.NotificationListResponseDTO;
 import com.teenyfin.teenymoney.domain.notification.dto.response.NotificationResponseDTO;
+import com.teenyfin.teenymoney.domain.notification.exception.NotificationErrorCode;
 import com.teenyfin.teenymoney.domain.notification.mapper.MemberNotificationMapper;
 import com.teenyfin.teenymoney.domain.notification.mapper.NotificationMapper;
 import com.teenyfin.teenymoney.domain.notification.vo.MemberNotificationVO;
@@ -18,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -146,14 +148,28 @@ public class NotificationService {
     @Transactional
     public void readNotification(Long memberId, Long notificationId) {
 
+        NotificationVO notificationVO = notificationMapper.selectById(notificationId);
+
+        // 자신의 알림이 맞는지 확인
+        if (!Objects.equals(notificationVO.getMemberId(), memberId)) {
+            throw new BusinessException(NotificationErrorCode.FORBIDDEN_TO_NOTIFICATION);
+        }
+
         notificationMapper.updateIsReadTrue(notificationId);
     }
 
     // 전체 알림 읽음 처리
     @Transactional
-    public void readAllNotifications(Long memberId) {
+    public void readAllNotifications(Long memberId, Long notificationId) {
 
-        notificationMapper.updateAllIsReadTrue(memberId);
+        NotificationVO notificationVO = notificationMapper.selectById(notificationId);
+
+        // 자신의 알림이 맞는지 확인
+        if (!Objects.equals(notificationVO.getMemberId(), memberId)) {
+            throw new BusinessException(NotificationErrorCode.FORBIDDEN_TO_NOTIFICATION);
+        }
+
+        notificationMapper.updateAllIsReadTrueCreatedBeforeLatestTime(memberId, notificationVO.getCreatedAt());
     }
 
     // 아직 읽지 않은 알림 개수 조회
