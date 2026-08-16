@@ -11,12 +11,15 @@ import com.teenyfin.teenymoney.domain.wallet.vo.TransferType;
 import com.teenyfin.teenymoney.domain.wallet.vo.TransferVO;
 import com.teenyfin.teenymoney.domain.wallet.vo.WalletVO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 
 //정기 용돈 스케줄 하나를 실제로 처리하는 부분만 전담한다
 @Service
+@Slf4j
+// 잡은 예외를 그냥 삼키지만 말고 어딘가엔 남겨야 하는데 로그가 그 역할
 public class AllowanceScheduleProcessor {
 
     private final AllowanceScheduleMapper allowanceScheduleMapper;
@@ -65,9 +68,19 @@ public class AllowanceScheduleProcessor {
             notificationService.createNotification(
                     schedule.getParentId(), "정기 용돈 지급에 실패했어요", e.getErrorCode().getMessage(),NotificationReferenceType.TRANSFER,
                     transferId, true);
+        } catch (RuntimeException e) {
+            // 새로 추가: BusinessException이 아닌 "예상 못한" 예외 전부 여기서 잡는다
+            // (DB 순간 장애 등). 구체적인 실패 사유를 모르니 e.getErrorCode() 같은 건 못 쓰고,
+            // 로그로 원인을 남기고 부모에게는 일반화된 메시지로 알린다.
+            // 여기서 잡아야 아래 next_payment_date 갱신 줄까지 반드시 도달한다는 게 핵심.
+            Long transferId = pending != null ? pending.getId() : null;
+            log.error("정기 용돈 스케줄 처리 중 예상하지 못한 오류 - scheduleId={}", scheduleId, e);
+            notificationService.createNotification(
+                    schedule.getParentId(), "정기 용돈 지급에 실패했어요", "일시적인 오류로 지급에 실패했어요.",
+                    NotificationReferenceType.TRANSFER, transferId, true);
         }
 
-        // 성공/실패 관계없이 다음 정상 주기로 넘어간다 (밀린 회차를 나중에 몰아서 처리하지 않음).
+        // 이제 위 세 경로(성공/BusinessException/RuntimeException) 전부 반드시 여기까지 옴
         LocalDate nextPaymentDate = AllowanceScheduleDateCalculator.calculateNext(
                 paymentDate, schedule.getCycleType(), schedule.getPaymentDay());
         allowanceScheduleMapper.updateNextPaymentDate(scheduleId, nextPaymentDate);
