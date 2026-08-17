@@ -337,4 +337,23 @@
         WHERE id = #{questId}
           AND status = #{fromStatus}
     </update>
+
+    <!--
+        연동 해제 시 그 부모-자녀의 진행 중인 퀘스트를 한 번에 마감한다.
+
+        EXPIRED 로 끝내는 이유: 자녀가 기한을 못 지킨 게 아니라 부모가 관계를 끊었다.
+        FAILED 는 티니점수 -2 가 따라붙는 결과라 여기 쓰면 자녀에게 벌점이 간다.
+
+        이미 끝난 퀘스트(COMPLETED/FAILED/DECLINED/EXPIRED)는 이력이므로 건드리지 않는다.
+    -->
+    <update id="expireOpenQuestsByParentAndChild">
+        UPDATE T_QST_BASE_M
+        SET status = 'EXPIRED',
+            remaining_count = 0,
+            updated_at = #{endedAt},
+            ended_at = #{endedAt}
+        WHERE parent_id = #{parentId}
+          AND child_id = #{childId}
+          AND status IN ('AVAILABLE', 'IN_PROGRESS', 'PENDING')
+    </update>
 </mapper>

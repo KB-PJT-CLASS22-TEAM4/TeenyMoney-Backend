@@ -2,6 +2,7 @@ package com.teenyfin.teenymoney.domain.family.service;
 
 import com.teenyfin.teenymoney.config.RootConfig;
 import com.teenyfin.teenymoney.domain.categoryPolicy.mapper.CategoryPolicyMapper;
+import com.teenyfin.teenymoney.domain.family.mapper.FamilyConnectionMapper;
 import com.teenyfin.teenymoney.domain.family.store.FamilyLinkCodeStore;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
@@ -200,6 +201,7 @@ class FamilyLinkCodeServiceTransactionIntegrationTest {
                 FamilyLinkCodeStore store,
                 CategoryPolicyMapper categoryPolicyMapper,
                 MemberMapper memberMapper,
+                FamilyConnectionMapper familyConnectionMapper,
                 NotificationService notificationService,
                 Clock clock
         ) {
@@ -207,6 +209,7 @@ class FamilyLinkCodeServiceTransactionIntegrationTest {
                     store,
                     categoryPolicyMapper,
                     memberMapper,
+                    familyConnectionMapper,
                     notificationService,
                     clock
             );

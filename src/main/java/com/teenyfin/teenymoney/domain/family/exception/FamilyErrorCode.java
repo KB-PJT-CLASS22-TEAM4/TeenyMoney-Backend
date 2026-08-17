@@ -32,6 +32,18 @@ public enum FamilyErrorCode implements ErrorCode {
     FAMILY_LINK_PARENT_UNAVAILABLE(
             HttpStatus.CONFLICT,
             "연동할 수 없는 계정입니다. 부모님께 새 연동 코드를 요청해 주세요."
+    ),
+
+    // 대출은 부모가 채권자다. 연결을 끊으면 회수 주체가 사라진다.
+    // 예적금은 자녀 돈이라 막지 않는다.
+    FAMILY_UNLINK_LOAN_OUTSTANDING(
+            HttpStatus.CONFLICT,
+            "상환하지 않은 대출이 있어 연동을 해제할 수 없습니다."
+    ),
+
+    FAMILY_NOT_LINKED(
+            HttpStatus.CONFLICT,
+            "연동된 가족이 아닙니다."
     );
 
     private final HttpStatus status;

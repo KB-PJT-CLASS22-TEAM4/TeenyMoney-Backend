@@ -63,7 +63,8 @@ class QuestMapperContextTest {
                 "updateAfterRejectionByParent",
                 "insertVerification",
                 "selectDeadlineTargetsForUpdate",
-                "updateStatusForDeadline")) {
+                "updateStatusForDeadline",
+                "expireOpenQuestsByParentAndChild")) {
             assertTrue(sqlSessionFactory.getConfiguration()
                     .hasStatement(NAMESPACE + "." + statement), statement);
         }
@@ -254,6 +255,25 @@ class QuestMapperContextTest {
         assertTrue(sql.contains("remaining_count = COALESCE(?, remaining_count)"), sql);
         assertFalse(sql.contains("child_id"), sql);
         assertFalse(sql.contains("parent_id"), sql);
+    }
+
+    @Test
+    @DisplayName("연동 해제 일괄 마감은 진행 중인 퀘스트만 EXPIRED로 바꾼다")
+    void unlinkExpireUpdateTouchesOnlyOpenQuests() {
+        String sql = sql("expireOpenQuestsByParentAndChild", Map.of(
+                "parentId", 1L,
+                "childId", 2L,
+                "endedAt", LocalDateTime.of(2026, 8, 17, 10, 0)));
+
+        assertTrue(sql.contains("status = 'EXPIRED'"), sql);
+        assertTrue(sql.contains("ended_at = ?"), sql);
+        assertTrue(sql.contains("parent_id = ?"), sql);
+        assertTrue(sql.contains("child_id = ?"), sql);
+        // 이미 끝난 퀘스트(COMPLETED/FAILED/DECLINED/EXPIRED)의 이력을 덮으면 안 된다.
+        assertTrue(sql.contains("'AVAILABLE'"), sql);
+        assertTrue(sql.contains("'IN_PROGRESS'"), sql);
+        assertTrue(sql.contains("'PENDING'"), sql);
+        assertFalse(sql.contains("'COMPLETED'"), sql);
     }
 
     private String sql(String statement, Map<String, Object> params) {

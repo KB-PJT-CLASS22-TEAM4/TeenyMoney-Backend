@@ -122,4 +122,15 @@ public interface QuestMapper {
             @Param("toStatus") QuestStatus toStatus,
             @Param("remainingCount") Integer remainingCount,
             @Param("endedAt") LocalDateTime endedAt);
+
+    /**
+     * 가족 연동이 해제될 때 그 부모-자녀의 진행 중인 퀘스트를 한 번에 마감한다.
+     *
+     * 마감 배치와 달리 티니점수를 건드리지 않는다. 자녀가 못 한 게 아니라 부모가 관계를 끊은 것이라
+     * FAILED(-2점)가 아니라 EXPIRED 로 끝낸다.
+     */
+    int expireOpenQuestsByParentAndChild(
+            @Param("parentId") Long parentId,
+            @Param("childId") Long childId,
+            @Param("endedAt") LocalDateTime endedAt);
 }

@@ -3,6 +3,7 @@ package com.teenyfin.teenymoney.domain.family.controller;
 import com.teenyfin.teenymoney.domain.family.dto.request.FamilyLinkRequestDTO;
 import com.teenyfin.teenymoney.domain.family.dto.response.FamilyLinkCodeResponseDTO;
 import com.teenyfin.teenymoney.domain.family.service.FamilyLinkCodeService;
+import com.teenyfin.teenymoney.domain.family.service.FamilyUnlinkService;
 import com.teenyfin.teenymoney.global.response.ApiResponse;
 import com.teenyfin.teenymoney.global.security.MemberPrincipal;
 import io.swagger.annotations.Api;
@@ -20,9 +21,12 @@ import javax.validation.Valid;
 public class FamilyController {
 
     private final FamilyLinkCodeService familyLinkCodeService;
+    private final FamilyUnlinkService familyUnlinkService;
 
-    public FamilyController(FamilyLinkCodeService familyLinkCodeService) {
+    public FamilyController(FamilyLinkCodeService familyLinkCodeService,
+                            FamilyUnlinkService familyUnlinkService) {
         this.familyLinkCodeService = familyLinkCodeService;
+        this.familyUnlinkService = familyUnlinkService;
     }
 
     @PostMapping("/make-codes")
@@ -102,5 +106,29 @@ public class FamilyController {
         return ApiResponse.ok();
     }
 
-
+    @DeleteMapping("/connections/{childId}")
+    @PreAuthorize("hasRole('PARENT')")
+    @ApiOperation(
+            value = "가족 연동 해제",
+            notes = "부모가 자녀와의 연동을 해제합니다. 자녀는 해제할 수 없습니다.\n\n"
+                    + "해제하면 그 자녀의 정기 용돈 스케줄이 중지되고, 진행 중이던 퀘스트가 "
+                    + "마감됩니다. 이미 완료된 이력과 지갑 잔액, 티니점수는 그대로 남습니다. "
+                    + "부모가 설정해 둔 업종 정책도 남으므로, 나중에 다시 연동하면 그대로 복원됩니다.\n\n"
+                    + "상환하지 않은 대출이 있으면 해제할 수 없습니다. 부모가 채권자이기 때문입니다.",
+            authorizations = {
+                    @io.swagger.annotations.Authorization(value = "JWT")
+            }
+    )
+    @ApiResponses({
+            @io.swagger.annotations.ApiResponse(code = 200, message = "연동 해제 성공"),
+            @io.swagger.annotations.ApiResponse(code = 401, message = "로그인 필요"),
+            @io.swagger.annotations.ApiResponse(code = 403, message = "부모 회원이 아니거나 내 자녀가 아님"),
+            @io.swagger.annotations.ApiResponse(code = 409, message = "연동된 가족이 아니거나 미상환 대출이 있음")
+    })
+    public ApiResponse<Void> unlinkFamily(
+            @AuthenticationPrincipal MemberPrincipal principal,
+            @PathVariable Long childId) {
+        familyUnlinkService.unlink(principal, childId);
+        return ApiResponse.ok();
+    }
 }

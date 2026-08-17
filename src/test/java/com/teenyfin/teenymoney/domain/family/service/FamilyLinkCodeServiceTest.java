@@ -1,6 +1,8 @@
 package com.teenyfin.teenymoney.domain.family.service;
 
 import com.teenyfin.teenymoney.domain.categoryPolicy.mapper.CategoryPolicyMapper;
+import com.teenyfin.teenymoney.domain.categoryPolicy.vo.CategoryPolicyVO;
+import com.teenyfin.teenymoney.domain.family.mapper.FamilyConnectionMapper;
 import com.teenyfin.teenymoney.domain.family.store.FamilyLinkCodeStore;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
@@ -17,6 +19,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.Arrays;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -47,6 +50,7 @@ class FamilyLinkCodeServiceTest {
 
     private CategoryPolicyMapper categoryPolicyMapper;
     private MemberMapper memberMapper;
+    private FamilyConnectionMapper familyConnectionMapper;
     private NotificationService notificationService;
     private FamilyLinkCodeStore store;
     private FamilyLinkCodeService service;
@@ -56,11 +60,13 @@ class FamilyLinkCodeServiceTest {
         categoryPolicyMapper = mock(CategoryPolicyMapper.class);
         store = mock(FamilyLinkCodeStore.class);
         memberMapper = mock(MemberMapper.class);
+        familyConnectionMapper = mock(FamilyConnectionMapper.class);
         notificationService = mock(NotificationService.class);
         service = new FamilyLinkCodeService(
                 store,
                 categoryPolicyMapper,
                 memberMapper,
+                familyConnectionMapper,
                 notificationService,
                 Clock.fixed(NOW, ZoneId.of("Asia/Seoul")));
 
@@ -241,6 +247,36 @@ class FamilyLinkCodeServiceTest {
         verify(memberMapper).insertConnection(PARENT_ID, CHILD_ID);
         verify(categoryPolicyMapper)
                 .insertDefaultPolicies(PARENT_ID, CHILD_ID);
+    }
+
+    @Test
+    @DisplayName("해제된 뒤 같은 부모와 다시 연결하면 기존 관계를 되살린다")
+    void reconnectsToSameParentByReactivatingConnection() {
+        when(store.incrementConsumeAttempts(eq(CHILD_ID), any())).thenReturn(1L);
+        when(store.consumeCode("048291")).thenReturn(PARENT_ID);
+        // 해제된 행이 남아 있다. UNIQUE(parent_id, child_id) 때문에 INSERT 는 중복키로 죽는다.
+        when(familyConnectionMapper.reactivate(eq(PARENT_ID), eq(CHILD_ID), any())).thenReturn(1);
+
+        service.linkChild(CHILD_ID, "048291");
+
+        verify(familyConnectionMapper).reactivate(eq(PARENT_ID), eq(CHILD_ID), any());
+        verify(memberMapper, never()).insertConnection(any(), any());
+    }
+
+    @Test
+    @DisplayName("정책이 이미 있으면 기본 정책을 다시 만들지 않는다")
+    void keepsExistingPoliciesOnReconnect() {
+        when(store.incrementConsumeAttempts(eq(CHILD_ID), any())).thenReturn(1L);
+        when(store.consumeCode("048291")).thenReturn(PARENT_ID);
+        when(familyConnectionMapper.reactivate(eq(PARENT_ID), eq(CHILD_ID), any())).thenReturn(1);
+        // 해제 때 정책을 지우지 않았으므로 부모가 설정해 둔 값이 그대로 남아 있다.
+        when(categoryPolicyMapper.selectByChildId(CHILD_ID))
+                .thenReturn(List.of(new CategoryPolicyVO()));
+
+        service.linkChild(CHILD_ID, "048291");
+
+        // 다시 깔면 UQ_MCC_POLICY_M_CHILD_CATEGORY 위반이고, 부모 설정도 날아간다.
+        verify(categoryPolicyMapper, never()).insertDefaultPolicies(any(), any());
     }
 
     @Test

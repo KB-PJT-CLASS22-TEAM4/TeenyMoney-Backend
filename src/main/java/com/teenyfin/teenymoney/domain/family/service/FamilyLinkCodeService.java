@@ -3,6 +3,7 @@ package com.teenyfin.teenymoney.domain.family.service;
 import com.teenyfin.teenymoney.domain.categoryPolicy.mapper.CategoryPolicyMapper;
 import com.teenyfin.teenymoney.domain.family.dto.response.FamilyLinkCodeResponseDTO;
 import com.teenyfin.teenymoney.domain.family.exception.FamilyErrorCode;
+import com.teenyfin.teenymoney.domain.family.mapper.FamilyConnectionMapper;
 import com.teenyfin.teenymoney.domain.family.store.FamilyLinkCodeStore;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 
 /**
@@ -34,6 +36,8 @@ public class FamilyLinkCodeService {
     private final MemberMapper memberMapper;
     // 연결이 성립했음을 부모에게 알린다. 부모는 코드를 발급만 하고 결과를 알 길이 없다.
     private final NotificationService notificationService;
+    // 해제됐던 관계를 되살린다. 같은 쌍은 UNIQUE 라 재연결이 INSERT 가 될 수 없다.
+    private final FamilyConnectionMapper familyConnectionMapper;
     private static final int MAX_CONSUME_ATTEMPTS = 5;
     private static final Duration CONSUME_ATTEMPT_WINDOW = Duration.ofMinutes(10);
 
@@ -59,11 +63,18 @@ public class FamilyLinkCodeService {
     private final Clock clock;
     private final SecureRandom secureRandom = new SecureRandom();
 
-    public FamilyLinkCodeService(FamilyLinkCodeStore store, CategoryPolicyMapper categoryPolicyMapper, MemberMapper memberMapper, NotificationService notificationService, Clock clock) {
+    public FamilyLinkCodeService(
+            FamilyLinkCodeStore store,
+            CategoryPolicyMapper categoryPolicyMapper,
+            MemberMapper memberMapper,
+            FamilyConnectionMapper familyConnectionMapper,
+            NotificationService notificationService,
+            Clock clock) {
         this.categoryPolicyMapper = categoryPolicyMapper;
         this.store = store;
         this.clock = clock;
         this.memberMapper = memberMapper;
+        this.familyConnectionMapper = familyConnectionMapper;
         this.notificationService = notificationService;
     }
 
@@ -197,25 +208,33 @@ public class FamilyLinkCodeService {
 
         Long parentId = consumeCode(code);
 
-        try {
-            int inserted = memberMapper.insertConnection(parentId, childId);
+        // 한 번 해제된 관계는 되살린다. UNIQUE(parent_id, child_id) 때문에 같은 쌍은 행이 하나뿐이라
+        // 재연결을 INSERT 로 하면 중복키로 죽고, 그게 "이미 연동됨"이라는 틀린 이유로 거절된다.
+        if (familyConnectionMapper.reactivate(parentId, childId, LocalDateTime.now(clock)) != 1) {
+            try {
+                int inserted = memberMapper.insertConnection(parentId, childId);
 
-            // ponytail: 소비된 코드는 저장 실패해도 되살리지 않는다.
-            // 부모가 재발급하면 되고, 복구 쓰기 자체도 실패할 수 있어 값어치가 안 맞는다.
-            // 재발급 안내가 불가능한 경로(DB 장애 → 500)가 늘면 그때 복구 도입.
-            if (inserted != 1) {
+                // ponytail: 소비된 코드는 저장 실패해도 되살리지 않는다.
+                // 부모가 재발급하면 되고, 복구 쓰기 자체도 실패할 수 있어 값어치가 안 맞는다.
+                // 재발급 안내가 불가능한 경로(DB 장애 → 500)가 늘면 그때 복구 도입.
+                if (inserted != 1) {
+                    throw new BusinessException(
+                            FamilyErrorCode.FAMILY_LINK_PARENT_UNAVAILABLE
+                    );
+                }
+
+            } catch (DuplicateKeyException exception) {
                 throw new BusinessException(
-                        FamilyErrorCode.FAMILY_LINK_PARENT_UNAVAILABLE
+                        FamilyErrorCode.FAMILY_ALREADY_LINKED
                 );
             }
-
-        } catch (DuplicateKeyException exception) {
-            throw new BusinessException(
-                    FamilyErrorCode.FAMILY_ALREADY_LINKED
-            );
         }
 
-        categoryPolicyMapper.insertDefaultPolicies(parentId, childId);
+        // 해제할 때 정책을 지우지 않으므로 재연결이면 이미 남아 있다. 다시 깔면
+        // UQ_MCC_POLICY_M_CHILD_CATEGORY 위반이고, 부모가 설정해 둔 값도 기본값으로 덮인다.
+        if (categoryPolicyMapper.selectByChildId(childId).isEmpty()) {
+            categoryPolicyMapper.insertDefaultPolicies(parentId, childId);
+        }
 
         // 이름을 제목이 아니라 내용 앞에 두는 것은 PermissionService 와 같은 형식이다.
         // 제목에 이름을 넣으면 받침에 따라 "과/와"를 골라야 한다.
