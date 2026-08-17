@@ -15,6 +15,7 @@
 -- 퀘스트만 집도록 기한도 2000년대로 잡는다. 운영·개발 DB 의 실제 퀘스트는 훨씬 미래라
 -- closeExpired() 가 건드리지 않는다.
 
+DELETE FROM `T_NTF_NOTI_L` WHERE `member_id` IN (900011, 900012);
 DELETE FROM `T_TNY_SCOREHIST_H` WHERE `child_id` = 900012;
 DELETE FROM `T_WLT_HIST_H` WHERE `wallet_id` IN (-900011, -900012);
 DELETE FROM `T_WLT_TRF_L`

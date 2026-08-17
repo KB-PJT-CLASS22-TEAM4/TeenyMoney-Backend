@@ -1,4 +1,6 @@
--- 테스트가 만든 점수 이력, 퀘스트, 회원을 FK 역순으로 정리한다.
+-- 테스트가 만든 알림, 점수 이력, 퀘스트, 회원을 FK 역순으로 정리한다.
+-- 알림은 회원을 ON DELETE RESTRICT 로 참조하므로 회원보다 먼저 지워야 한다.
+DELETE FROM `T_NTF_NOTI_L` WHERE `member_id` IN (-900001, -900002);
 DELETE FROM `T_TNY_SCOREHIST_H`
 WHERE `child_id` = -900002
   AND `event_key` IN ('QUEST_FAILED:900024', 'QUEST_FAILED:900025');

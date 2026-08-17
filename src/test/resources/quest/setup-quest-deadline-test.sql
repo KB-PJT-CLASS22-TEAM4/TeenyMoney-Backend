@@ -6,6 +6,7 @@
 -- 퀘스트 id 는 900000 번대를 쓴다. seed 나 수동 테스트 데이터와 겹치지 않게 하기 위해서다.
 -- deadline 은 실제 로컬 데이터보다 과거인 '2000-01-02 10:00:00'(테스트의 NOW) 기준으로 배치한다.
 
+DELETE FROM `T_NTF_NOTI_L` WHERE `member_id` IN (-900001, -900002);
 DELETE FROM `T_TNY_SCOREHIST_H`
 WHERE `child_id` = -900002
   AND `event_key` IN ('QUEST_FAILED:900024', 'QUEST_FAILED:900025');
