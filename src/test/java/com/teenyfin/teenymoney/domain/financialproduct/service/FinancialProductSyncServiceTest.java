@@ -16,9 +16,10 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -59,6 +60,20 @@ class FinancialProductSyncServiceTest {
         assertEquals("이자를 원금에 합산하지 않고 계산하는 단리 예금",
                 captor.getValue().getDescription());
         assertEquals("0010927", captor.getValue().getFinancialCompanyCode());
+        verify(mapper).deactivateAllFinlifeDepositProducts();
+    }
+
+    @Test
+    void emptyDepositResponseDoesNotDeactivateExistingProducts() {
+        FinlifeApiResponseDTO.Result result = new FinlifeApiResponseDTO.Result();
+        result.setBaseList(List.of());
+        result.setOptionList(List.of());
+        when(client.fetchDepositProducts()).thenReturn(result);
+
+        assertThrows(IllegalStateException.class, service::syncDepositProducts);
+
+        verify(mapper, never()).deactivateAllFinlifeDepositProducts();
+        verify(mapper, never()).upsertDepositProduct(any());
     }
 
     @Test
@@ -104,9 +119,20 @@ class FinancialProductSyncServiceTest {
         assertEquals(new BigDecimal("3.50"), free.getRate12m());
         assertEquals("원하는 금액을 자유롭게 납입하는 단리 자유적금",
                 free.getDescription());
-        verify(mapper).deactivateSavingProductOptionsNotIn(
-                org.mockito.ArgumentMatchers.eq("0010927"),
-                org.mockito.ArgumentMatchers.eq("WR0001B"), anyList());
+        verify(mapper).deactivateAllFinlifeSavingProducts();
+    }
+
+    @Test
+    void emptySavingResponseDoesNotDeactivateExistingProducts() {
+        FinlifeApiResponseDTO.Result result = new FinlifeApiResponseDTO.Result();
+        result.setBaseList(List.of());
+        result.setOptionList(List.of());
+        when(client.fetchSavingProducts()).thenReturn(result);
+
+        assertThrows(IllegalStateException.class, service::syncSavingProducts);
+
+        verify(mapper, never()).deactivateAllFinlifeSavingProducts();
+        verify(mapper, never()).upsertSavingProduct(any());
     }
 
     @Test

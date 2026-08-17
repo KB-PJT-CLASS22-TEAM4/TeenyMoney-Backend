@@ -11,7 +11,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -49,13 +48,23 @@ public class FinancialProductSyncService {
     public int syncDepositProducts() {
         FinlifeApiResponseDTO.Result result =
                 finlifeClient.fetchDepositProducts();
-        Map<String, List<FinlifeProductOptionDTO>> options =
-                groupOptions(result.getOptionList());
+        if (result == null) {
+            throw new IllegalStateException("금융감독원 예금 상품 응답이 없습니다.");
+        }
+        List<FinlifeProductBaseDTO> bases = safe(result.getBaseList()).stream()
+                .filter(this::validBase)
+                .toList();
+        List<FinlifeProductOptionDTO> optionList = safe(result.getOptionList());
+        // 장애나 비정상 빈 응답으로 전체 예금이 판매 중지되는 것을 막는다.
+        if (bases.isEmpty() || optionList.isEmpty()) {
+            throw new IllegalStateException("금융감독원 예금 상품 응답이 비어 있습니다.");
+        }
+
+        Map<String, List<FinlifeProductOptionDTO>> options = groupOptions(optionList);
+        // 아래 upsert가 이번 공시에 존재하는 상품만 다시 활성화한다.
+        financialProductMapper.deactivateAllFinlifeDepositProducts();
         int affected = 0;
-        for (FinlifeProductBaseDTO base : safe(result.getBaseList())) {
-            if (!validBase(base)) {
-                continue;
-            }
+        for (FinlifeProductBaseDTO base : bases) {
             DepositProductVO product = depositProduct(
                     base, options.getOrDefault(key(base), List.of()));
             if (hasAnyRate(product)) {
@@ -69,35 +78,35 @@ public class FinancialProductSyncService {
     public int syncSavingProducts() {
         FinlifeApiResponseDTO.Result result =
                 finlifeClient.fetchSavingProducts();
-        Map<String, List<FinlifeProductOptionDTO>> options =
-                groupOptions(result.getOptionList());
+        if (result == null) {
+            throw new IllegalStateException("금융감독원 적금 상품 응답이 없습니다.");
+        }
+        List<FinlifeProductBaseDTO> bases = safe(result.getBaseList()).stream()
+                .filter(this::validBase)
+                .toList();
+        List<FinlifeProductOptionDTO> optionList = safe(result.getOptionList());
+        // 장애나 비정상 빈 응답으로 전체 적금이 판매 중지되는 것을 막는다.
+        if (bases.isEmpty() || optionList.isEmpty()) {
+            throw new IllegalStateException("금융감독원 적금 상품 응답이 비어 있습니다.");
+        }
+
+        Map<String, List<FinlifeProductOptionDTO>> options = groupOptions(optionList);
+        // 아래 upsert가 이번 공시에 존재하는 옵션 조합만 다시 활성화한다.
+        financialProductMapper.deactivateAllFinlifeSavingProducts();
         int affected = 0;
-        for (FinlifeProductBaseDTO base : safe(result.getBaseList())) {
-            if (!validBase(base)) {
-                continue;
-            }
+        for (FinlifeProductBaseDTO base : bases) {
             // 적립 유형과 이자 계산 방식이 다른 옵션은 각각 독립된 상품으로 저장한다.
             Map<SavingOptionProfile, List<FinlifeProductOptionDTO>> optionsByProfile =
                     safe(options.getOrDefault(key(base), List.of())).stream()
                             .filter(this::validOption)
                             .collect(Collectors.groupingBy(this::savingOptionProfile));
-            // 이후 과거 조합을 비활성화할 때 이번 응답에 존재하는 조합을 제외하기 위해 모은다.
-            List<SavingProductVO> currentProducts = new ArrayList<>();
             for (Map.Entry<SavingOptionProfile, List<FinlifeProductOptionDTO>> entry
                     : optionsByProfile.entrySet()) {
                 SavingProductVO product = savingProduct(
                         base, entry.getKey(), entry.getValue());
                 if (hasAnyRate(product)) {
                     affected += financialProductMapper.upsertSavingProduct(product);
-                    currentProducts.add(product);
                 }
-            }
-            if (!currentProducts.isEmpty()) {
-                // 현재 공시에 없는 과거 조합은 가입 이력을 보존한 채 목록에서 제외한다.
-                financialProductMapper.deactivateSavingProductOptionsNotIn(
-                        base.getFinancialCompanyCode(),
-                        base.getFinancialProductCode(),
-                        currentProducts);
             }
         }
         return affected;

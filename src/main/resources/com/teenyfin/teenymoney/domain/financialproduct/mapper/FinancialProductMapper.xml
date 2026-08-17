@@ -821,6 +821,15 @@
             updated_at = CURRENT_TIMESTAMP
     </insert>
 
+    <!-- 삭제하지 않아 기존 가입의 FK를 보존하고, 현재 공시 예금만 upsert로 다시 활성화한다. -->
+    <update id="deactivateAllFinlifeDepositProducts">
+        UPDATE T_DPT_PROD_M
+        SET is_active = FALSE,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE product_source = 'FINLIFE'
+          AND is_active = TRUE
+    </update>
+
     <!-- 다시 공시된 적금 옵션 조합은 기존 행을 재사용하면서 활성 상태로 복구한다. -->
     <insert id="upsertSavingProduct">
         INSERT INTO T_SVG_PROD_M (
@@ -851,19 +860,13 @@
             updated_at = CURRENT_TIMESTAMP
     </insert>
 
-    <!-- 가입 이력과 FK를 보존하기 위해 현재 공시에 없는 과거 옵션 조합을 비활성화한다. -->
-    <update id="deactivateSavingProductOptionsNotIn">
+    <!-- 삭제하지 않아 기존 가입의 FK를 보존하고, 현재 공시 상품만 upsert로 다시 활성화한다. -->
+    <update id="deactivateAllFinlifeSavingProducts">
         UPDATE T_SVG_PROD_M
         SET is_active = FALSE,
             updated_at = CURRENT_TIMESTAMP
         WHERE product_source = 'FINLIFE'
-          AND fin_co_no = #{financialCompanyCode}
-          AND fin_prdt_cd = #{financialProductCode}
-          AND (savings_type, interest_calculation_type) NOT IN
-          <foreach collection="products" item="product"
-                   open="(" separator="," close=")">
-              (#{product.savingsType}, #{product.interestCalculationType})
-          </foreach>
+          AND is_active = TRUE
     </update>
 
     <!-- 자유적금 가입 행을 먼저 잠가 같은 계좌의 동시 납입과 월 한도 경쟁을 막는다. -->
