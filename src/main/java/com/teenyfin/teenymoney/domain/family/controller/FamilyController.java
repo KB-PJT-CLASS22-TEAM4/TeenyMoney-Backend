@@ -106,7 +106,7 @@ public class FamilyController {
         return ApiResponse.ok();
     }
 
-    @DeleteMapping("/connections/{childId}")
+    @DeleteMapping("/unlink/{childId}")
     @PreAuthorize("hasRole('PARENT')")
     @ApiOperation(
             value = "가족 연동 해제",
