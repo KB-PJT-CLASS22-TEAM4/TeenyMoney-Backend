@@ -3,6 +3,9 @@ package com.teenyfin.teenymoney.domain.family.service;
 import com.teenyfin.teenymoney.domain.categoryPolicy.mapper.CategoryPolicyMapper;
 import com.teenyfin.teenymoney.domain.family.store.FamilyLinkCodeStore;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
+import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
+import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -44,6 +47,7 @@ class FamilyLinkCodeServiceTest {
 
     private CategoryPolicyMapper categoryPolicyMapper;
     private MemberMapper memberMapper;
+    private NotificationService notificationService;
     private FamilyLinkCodeStore store;
     private FamilyLinkCodeService service;
 
@@ -52,14 +56,18 @@ class FamilyLinkCodeServiceTest {
         categoryPolicyMapper = mock(CategoryPolicyMapper.class);
         store = mock(FamilyLinkCodeStore.class);
         memberMapper = mock(MemberMapper.class);
+        notificationService = mock(NotificationService.class);
         service = new FamilyLinkCodeService(
                 store,
                 categoryPolicyMapper,
                 memberMapper,
+                notificationService,
                 Clock.fixed(NOW, ZoneId.of("Asia/Seoul")));
 
         // 기본값: 남은 TTL은 꽉 찬 10분
         when(store.remainingTtl(anyString())).thenReturn(CODE_TTL);
+        // 연결 성공 알림이 자녀 이름을 읽는다. 자녀는 인증된 사용자라 항상 존재한다.
+        givenChildName("김첫째");
     }
 
     private void cooldownPasses() {
@@ -233,6 +241,54 @@ class FamilyLinkCodeServiceTest {
         verify(memberMapper).insertConnection(PARENT_ID, CHILD_ID);
         verify(categoryPolicyMapper)
                 .insertDefaultPolicies(PARENT_ID, CHILD_ID);
+    }
+
+    @Test
+    @DisplayName("연결이 성립하면 부모에게 자녀 이름과 함께 알린다")
+    void notifiesParentWhenLinkSucceeds() {
+        when(store.incrementConsumeAttempts(eq(CHILD_ID), any())).thenReturn(1L);
+        when(store.consumeCode("048291")).thenReturn(PARENT_ID);
+        when(memberMapper.insertConnection(PARENT_ID, CHILD_ID)).thenReturn(1);
+
+        service.linkChild(CHILD_ID, "048291");
+
+        // referenceId 가 자녀 id 라 알림에서 그 자녀 상세로 바로 갈 수 있다.
+        verify(notificationService).createNotification(
+                eq(PARENT_ID),
+                eq("자녀와 연결됐어요"),
+                eq("김첫째 · 이제 용돈과 퀘스트를 보낼 수 있어요"),
+                eq(NotificationReferenceType.CONNECTION),
+                eq(CHILD_ID),
+                eq(true));
+    }
+
+    @Test
+    @DisplayName("연결이 성립하지 않으면 알림을 보내지 않는다")
+    void doesNotNotifyWhenLinkFails() {
+        // 이미 연동된 자녀
+        when(memberMapper.existsActiveConnectionByChildId(CHILD_ID)).thenReturn(true);
+        assertThrows(BusinessException.class, () -> service.linkChild(CHILD_ID, "048291"));
+
+        // 코드가 무효
+        when(memberMapper.existsActiveConnectionByChildId(CHILD_ID)).thenReturn(false);
+        when(store.incrementConsumeAttempts(eq(CHILD_ID), any())).thenReturn(1L);
+        when(store.consumeCode("048291")).thenReturn(null);
+        assertThrows(BusinessException.class, () -> service.linkChild(CHILD_ID, "048291"));
+
+        // 관계 저장이 0건
+        when(store.consumeCode("048291")).thenReturn(PARENT_ID);
+        when(memberMapper.insertConnection(PARENT_ID, CHILD_ID)).thenReturn(0);
+        assertThrows(BusinessException.class, () -> service.linkChild(CHILD_ID, "048291"));
+
+        verify(notificationService, never())
+                .createNotification(any(), any(), any(), any(), any(), any());
+    }
+
+    private void givenChildName(String name) {
+        MemberVO child = new MemberVO();
+        child.setId(CHILD_ID);
+        child.setName(name);
+        when(memberMapper.selectById(CHILD_ID)).thenReturn(child);
     }
 
     @Test

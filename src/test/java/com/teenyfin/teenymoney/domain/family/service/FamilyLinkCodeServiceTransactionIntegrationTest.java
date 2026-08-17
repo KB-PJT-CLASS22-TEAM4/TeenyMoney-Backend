@@ -5,6 +5,7 @@ import com.teenyfin.teenymoney.domain.categoryPolicy.mapper.CategoryPolicyMapper
 import com.teenyfin.teenymoney.domain.family.store.FamilyLinkCodeStore;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -199,12 +200,14 @@ class FamilyLinkCodeServiceTransactionIntegrationTest {
                 FamilyLinkCodeStore store,
                 CategoryPolicyMapper categoryPolicyMapper,
                 MemberMapper memberMapper,
+                NotificationService notificationService,
                 Clock clock
         ) {
             return new FamilyLinkCodeService(
                     store,
                     categoryPolicyMapper,
                     memberMapper,
+                    notificationService,
                     clock
             );
         }
