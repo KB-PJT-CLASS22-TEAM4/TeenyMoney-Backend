@@ -1,0 +1,323 @@
+name: Deploy development
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-development-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: deploy-development
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment:
+      name: development
+      url: https://www.teenymoney.kro.kr
+
+    env:
+      EC2_HOST: ${{ vars.EC2_HOST }}
+      EC2_PORT: ${{ vars.EC2_PORT }}
+      EC2_USER: ${{ vars.EC2_USER }}
+
+    steps:
+      - name: 저장소 코드 가져오기
+        uses: actions/checkout@v6
+
+      - name: Java 17 설정
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Gradle 설정
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+
+      - name: 테스트 및 WAR 빌드
+        run: |
+          chmod +x gradlew
+          ./gradlew clean test war --no-daemon
+
+      - name: WAR 검증
+        id: artifact
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          war_path='build/libs/ROOT.war'
+          test -s "$war_path"
+          jar tf "$war_path" >/dev/null
+
+          war_sha256="$(sha256sum "$war_path" | awk '{print $1}')"
+          echo "sha256=$war_sha256" >> "$GITHUB_OUTPUT"
+
+      - name: SSH 설정
+        shell: bash
+        env:
+          DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          EC2_KNOWN_HOSTS: ${{ secrets.EC2_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+
+          test -n "$DEPLOY_SSH_PRIVATE_KEY"
+          test -n "$EC2_KNOWN_HOSTS"
+          test -n "$EC2_HOST"
+          test -n "$EC2_PORT"
+          test -n "$EC2_USER"
+
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" > "$HOME/.ssh/deploy_key"
+          printf '%s\n' "$EC2_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/deploy_key" "$HOME/.ssh/known_hosts"
+
+      - name: EC2 배포
+        shell: bash
+        env:
+          WAR_SHA256: ${{ steps.artifact.outputs.sha256 }}
+        run: |
+          set -Eeuo pipefail
+
+          ssh_options=(
+            -i "$HOME/.ssh/deploy_key"
+            -p "$EC2_PORT"
+            -o BatchMode=yes
+            -o IdentitiesOnly=yes
+            -o StrictHostKeyChecking=yes
+            -o "UserKnownHostsFile=$HOME/.ssh/known_hosts"
+          )
+
+          remote_dir="/home/$EC2_USER/.teenymoney-deploy/incoming/$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          remote_war="$remote_dir/ROOT-$GITHUB_SHA.war"
+
+          ssh "${ssh_options[@]}" "$EC2_USER@$EC2_HOST" \
+            "install -d -m 700 '$remote_dir'"
+
+          scp \
+            -i "$HOME/.ssh/deploy_key" \
+            -P "$EC2_PORT" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o "UserKnownHostsFile=$HOME/.ssh/known_hosts" \
+            build/libs/ROOT.war \
+            "$EC2_USER@$EC2_HOST:$remote_war"
+
+          ssh "${ssh_options[@]}" "$EC2_USER@$EC2_HOST" \
+            "sudo bash -s -- '$remote_war' '$GITHUB_SHA' '$WAR_SHA256'" <<'REMOTE_SCRIPT'
+          set -Eeuo pipefail
+
+          incoming_war="$1"
+          deploy_sha="$2"
+          expected_sha256="$3"
+
+          readonly tomcat_service='tomcat'
+          readonly tomcat_root='/opt/tomcat/webapps/ROOT'
+          readonly tomcat_war='/opt/tomcat/webapps/ROOT.war'
+          readonly backup_dir='/var/backups/teenymoney'
+          readonly local_health='http://127.0.0.1:8080/api/v1/health'
+          readonly local_db_health='http://127.0.0.1:8080/api/v1/health/db'
+          readonly public_health='https://www.teenymoney.kro.kr/api/v1/health'
+
+          log() {
+            printf '[%s] %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" "$*"
+          }
+
+          check_url() {
+            curl \
+              --fail \
+              --silent \
+              --show-error \
+              --connect-timeout 3 \
+              --max-time 5 \
+              "$1" >/dev/null
+          }
+
+          wait_for_local_health() {
+            local attempt
+
+            for attempt in $(seq 1 30); do
+              if systemctl is-active --quiet "$tomcat_service" &&
+                 check_url "$local_health" &&
+                 check_url "$local_db_health"; then
+                return 0
+              fi
+
+              sleep 3
+            done
+
+            return 1
+          }
+
+          install_war() {
+            local source_war="$1"
+
+            rm -rf -- "$tomcat_root" || return 1
+            rm -f -- "$tomcat_war" || return 1
+            install -o tomcat -g tomcat -m 0640 -- "$source_war" "$tomcat_war" || return 1
+          }
+
+          prune_backups() {
+            local preserve_backup="${1:-}"
+            local keep_slots=5
+            local kept=0
+            local backup_list
+            local backup_war
+            local -a all_backups
+
+            if [[ -n "$preserve_backup" && -f "$preserve_backup" ]]; then
+              keep_slots=4
+            fi
+
+            backup_list="$(
+              find "$backup_dir" -maxdepth 1 -type f -name 'ROOT-*.war' -printf '%T@ %p\n' |
+                sort -rn |
+                awk '{ sub(/^[^ ]+ /, ""); print }'
+            )" || return 1
+
+            if [[ -n "$backup_list" ]]; then
+              mapfile -t all_backups <<< "$backup_list"
+            else
+              all_backups=()
+            fi
+
+            for backup_war in "${all_backups[@]}"; do
+              if [[ "$backup_war" == "$preserve_backup" ]]; then
+                continue
+              fi
+
+              if (( kept < keep_slots )); then
+                kept=$((kept + 1))
+                continue
+              fi
+
+              rm -f -- "$backup_war" "$backup_war.sha256" || return 1
+            done
+          }
+
+          deploy_new_version() {
+            systemctl stop "$tomcat_service" || return 1
+            install_war "$incoming_war" || return 1
+            systemctl start "$tomcat_service" || return 1
+            wait_for_local_health || return 1
+            check_url "$public_health" || return 1
+          }
+
+          restore_previous_version() {
+            local backup_war="$1"
+
+            systemctl stop "$tomcat_service" || true
+            install_war "$backup_war" || return 1
+            systemctl start "$tomcat_service" || return 1
+            wait_for_local_health || return 1
+            check_url "$public_health" || return 1
+          }
+
+          cleanup_incoming() {
+            rm -f -- "$incoming_war"
+            rmdir -- "$(dirname -- "$incoming_war")" 2>/dev/null || true
+          }
+
+          trap cleanup_incoming EXIT
+
+          [[ "$deploy_sha" =~ ^[0-9a-f]{40}$ ]] || {
+            log '잘못된 Git SHA입니다.'
+            exit 64
+          }
+          [[ "$expected_sha256" =~ ^[0-9a-f]{64}$ ]] || {
+            log '잘못된 SHA-256 값입니다.'
+            exit 64
+          }
+          [[ -f "$incoming_war" && ! -L "$incoming_war" ]] || {
+            log '배포 WAR 파일이 없거나 심볼릭 링크입니다.'
+            exit 66
+          }
+          [[ "$(basename -- "$incoming_war")" == "ROOT-$deploy_sha.war" ]] || {
+            log 'WAR 파일명과 Git SHA가 일치하지 않습니다.'
+            exit 65
+          }
+          [[ "$(sha256sum "$incoming_war" | awk '{print $1}')" == "$expected_sha256" ]] || {
+            log '전송된 WAR의 SHA-256 값이 일치하지 않습니다.'
+            exit 65
+          }
+          install -d -o root -g root -m 0750 "$backup_dir"
+
+          timestamp="$(date '+%Y%m%d-%H%M%S')"
+          backup_war="$backup_dir/ROOT-$timestamp-${deploy_sha:0:12}.war"
+          has_backup=false
+
+          if [[ -f "$tomcat_war" ]]; then
+            cp -a -- "$tomcat_war" "$backup_war"
+            sha256sum "$backup_war" > "$backup_war.sha256"
+            has_backup=true
+            log "기존 WAR 백업 완료: $backup_war"
+          fi
+
+          if deploy_new_version; then
+            log "백엔드 배포 성공: $deploy_sha"
+            prune_backups ''
+            exit 0
+          fi
+
+          log '새 버전 배포 또는 헬스 체크 실패'
+          journalctl -u "$tomcat_service" -n 120 --no-pager || true
+
+          if [[ "$has_backup" != true ]]; then
+            log '복원할 이전 WAR가 없습니다.'
+            prune_backups '' || log '오래된 백업 정리에 실패했습니다.'
+            exit 1
+          fi
+
+          if restore_previous_version "$backup_war"; then
+            log "이전 WAR 자동 복원 성공: $backup_war"
+          else
+            log "이전 WAR 자동 복원 실패: $backup_war"
+            journalctl -u "$tomcat_service" -n 120 --no-pager || true
+          fi
+
+          prune_backups "$backup_war" || log '오래된 백업 정리에 실패했습니다.'
+          exit 1
+          REMOTE_SCRIPT
+
+      - name: SSH 임시 파일 정리
+        if: always()
+        shell: bash
+        run: |
+          set +e
+
+          if [[ -f "$HOME/.ssh/deploy_key" ]]; then
+            remote_dir="/home/$EC2_USER/.teenymoney-deploy/incoming/$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+            ssh \
+              -i "$HOME/.ssh/deploy_key" \
+              -p "$EC2_PORT" \
+              -o BatchMode=yes \
+              -o IdentitiesOnly=yes \
+              -o StrictHostKeyChecking=yes \
+              -o "UserKnownHostsFile=$HOME/.ssh/known_hosts" \
+              "$EC2_USER@$EC2_HOST" \
+              "rm -f -- '$remote_dir/ROOT-$GITHUB_SHA.war'; rmdir -- '$remote_dir' 2>/dev/null || true"
+          fi
+
+          rm -f -- "$HOME/.ssh/deploy_key" "$HOME/.ssh/known_hosts"
+
+      - name: 배포 결과 요약
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## Backend development deployment'
+            echo
+            echo "- Commit: \`$GITHUB_SHA\`"
+            echo "- Environment: \`development\`"
+            echo "- Result: \`${{ job.status }}\`"
+            echo "- URL: https://www.teenymoney.kro.kr"
+          } >> "$GITHUB_STEP_SUMMARY"
