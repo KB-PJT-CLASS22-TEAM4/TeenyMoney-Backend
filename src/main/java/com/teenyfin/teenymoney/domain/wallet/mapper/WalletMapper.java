@@ -57,4 +57,7 @@ public interface WalletMapper {
 
     // payment id로 결제 건에 대한 원장 조회
     WalletTransactionVO selectByPaymentId(@Param("paymentId") Long paymentId);
+
+    // walletId로 지갑 주인 조회
+    WalletVO selectById(@Param("walletId") Long walletId);
 }

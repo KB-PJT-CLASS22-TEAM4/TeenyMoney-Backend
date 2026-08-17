@@ -11,21 +11,35 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.annotation.Propagation;
 import com.teenyfin.teenymoney.global.exception.CommonErrorCode;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
+import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
+import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
+import com.teenyfin.teenymoney.domain.wallet.vo.WalletVO;
+import lombok.extern.slf4j.Slf4j;
 
 
 // 레이어2: T_WLT_TRF_L(송금 시도 기록) 전담. 실제 잔액 이동(잠금+debit/credit)은 TransferExecutor에,
 // 실패 기록은 TransferFailureRecorder에 위임하고, 이 클래스는 그 둘을 오케스트레이션만 한다.
 @Service
+@Slf4j
 public class TransferService {
+
+    // 자녀가 용돈을 받았을 때 보내는 알림 문구. "알림 딥링크 인벤토리" 문서의
+    // (TRANSFER, 자녀) 행 그대로 - referenceId는 항상 null로 보낸다(아래 참고).
+    private static final String ALLOWANCE_RECEIVED_TITLE = "용돈이 입금됐어요";
 
     private final TransferMapper transferMapper;
     private final TransferExecutor transferExecutor;
     private final TransferFailureRecorder transferFailureRecorder;
+    private final WalletMapper walletMapper;
+    private final NotificationService notificationService;
 
-    public TransferService(TransferMapper transferMapper, TransferExecutor transferExecutor, TransferFailureRecorder transferFailureRecorder) {
+    public TransferService(TransferMapper transferMapper, TransferExecutor transferExecutor, TransferFailureRecorder transferFailureRecorder, WalletMapper walletMapper, NotificationService notificationService) {
         this.transferMapper = transferMapper;
         this.transferExecutor = transferExecutor;
         this.transferFailureRecorder = transferFailureRecorder;
+        this.walletMapper = walletMapper;
+        this.notificationService = notificationService;
     }
 
     // 같은 idempotencyKey로 이미 존재하는 행(existing)이, 지금 들어온 요청의 내용과
@@ -146,8 +160,20 @@ public class TransferService {
     // transferExecutor.lockAndMove()의 락과 markFailed()가 다시 얽히는 데드락이 재현되지 않는다.
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public TransferVO executeTransfer(Long transferId) {
+
+        // lockAndMove()는 이미 COMPLETED인 송금이 들어오면 재처리 없이 그 상태를 그대로
+        // 반환한다(같은 idempotencyKey로 재시도가 들어온 경우 등). 알림은 "실제로 지금 이
+        // 호출이 잔액을 옮겼을 때"만 나가야 하므로, lockAndMove() 호출 *전에* 미리 상태를 봐두고
+        // "이번 호출로 방금 완료된 건지" vs "이미 끝난 걸 재확인만 한 건지"를 구분한다.
+        TransferVO before = transferMapper.selectById(transferId);
+        boolean alreadyCompleted = before != null && "COMPLETED".equals(before.getStatus());
+
         try {
-            return transferExecutor.lockAndMove(transferId);
+            TransferVO result = transferExecutor.lockAndMove(transferId);
+            if (!alreadyCompleted) {
+                notifyAllowanceRecipientBestEffort(result);
+            }
+            return result;
         } catch (BusinessException e) {
             // TRANSFER_NOT_FOUND는 애초에 존재하지 않는 행을 가리키는 상황이라,
             // 그 행에 FAILED를 기록하려는 시도 자체가 의미가 없다 - 그냥 건너뛴다.
@@ -185,6 +211,30 @@ public class TransferService {
         }
         if ("PENDING".equals(transfer.getStatus())) {
             transferMapper.updateStatus(transferId, "CANCELLED", null);
+        }
+    }
+
+    // 용돈 송금이 실제로 완료됐을 때만 자녀에게 알림을 보낸다. TransferType.ALLOWANCE로
+    // 한정하는 이유: executeTransfer()는 지금 시점엔 용돈(1회성/정기)만 타고 들어오지만,
+    // 나중에 다른 TransferType이 이 메서드를 타게 되더라도 엉뚱한 문구("용돈이 입금 됐어요")가
+    // 잘못 나가지 않도록 명시적으로 막아둔다.
+    // referenceId를 null로 고정하는 이유: 실패한 송금은 T_WLT_HIST_H(거래내역 원장)에
+    // 애초에 안 남기 때문에 특정 거래를 가리킬 수도 없고 어차피 홈 화면으로 이동시킬 예정
+    private void notifyAllowanceRecipientBestEffort(TransferVO transfer) {
+        if (!TransferType.ALLOWANCE.name().equals(transfer.getType())) {
+            return;
+        }
+        try {
+            WalletVO recipientWallet = walletMapper.selectById(transfer.getToWalletId());
+            if (recipientWallet == null) {
+                return;
+            }
+            String content = String.format("%,d원", transfer.getAmount());
+            notificationService.createNotification(
+                    recipientWallet.getMemberId(), ALLOWANCE_RECEIVED_TITLE, content,
+                    NotificationReferenceType.TRANSFER, null, true);
+        } catch (RuntimeException notificationException) {
+            log.error("용돈 입금 알림 전송 중 오류 - transferId={}", transfer.getId(), notificationException);
         }
     }
 }

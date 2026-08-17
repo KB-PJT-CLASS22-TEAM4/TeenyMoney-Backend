@@ -48,4 +48,7 @@ public interface TransferMapper {
     // 성공시켜버리는 아주 좁은 틈이 이론상 있을 수 있다 - 이 조건이 그 경우를 안전하게 무시한다).
     // PENDING/FAILED 상태에서는 그대로 적용되므로 "실패한 송금을 나중에 재시도"하는 흐름은 안 깨진다.
     void markFailed(@Param("id") Long id, @Param("failureReason") String failureReason);
+
+    // id로 송금 행을 잠금 없이 그냥 조회
+    TransferVO selectById(@Param("id") Long id);
 }

@@ -1,7 +1,11 @@
 package com.teenyfin.teenymoney.domain.wallet.service;
 
 
+import com.teenyfin.teenymoney.config.LazyBeanInitializer;
+import com.teenyfin.teenymoney.config.RestTemplateConfig;
 import com.teenyfin.teenymoney.config.RootConfig;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
+import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
 import com.teenyfin.teenymoney.domain.wallet.exception.WalletErrorCode;
 import com.teenyfin.teenymoney.domain.wallet.mapper.TransferMapper;
 import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
@@ -23,12 +27,17 @@ import javax.sql.DataSource;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 // 클래스에 @Transactional을 일부러 안 붙인다 - createPendingTransfer()가
 // 진짜로 독립적으로 커밋되는지, executeTransfer()가 실패해도 그 행이 안 사라지는지를
 // 검증하려면 각 단계가 실제로 커밋돼야 하기 때문 (AuthServiceTransactionIntegrationTest와 같은 이유).
 @ExtendWith(SpringExtension.class)
-@ContextConfiguration(classes = RootConfig.class)
+@ContextConfiguration(classes = {RootConfig.class, RestTemplateConfig.class}, initializers = LazyBeanInitializer.class)
 @EnabledIfEnvironmentVariable(named = "DB_URL", matches = ".+")
 @EnabledIfEnvironmentVariable(named = "DB_USERNAME", matches = ".+")
 @EnabledIfEnvironmentVariable(named = "DB_PASSWORD", matches = ".+")
@@ -46,6 +55,10 @@ public class TransferServiceTest {
     // 진짜 매퍼를 직접 new로 꽂아서 만든다 (WalletServiceCreateWalletTest와 같은 방식).
     private TransferService transferService;
 
+    // 알림 발송 자체(FCM/DB)는 이 테스트의 관심사가 아니라서 mock으로 둔다.
+    // "알림이 몇 번 불렸는지/누구한테 불렸는지"만 검증하는 용도.
+    private NotificationService notificationService;
+
     //테스트 전용 지갑 두개(매 테스트 마다 새로 만들고 끝나면 삭제)
     private Long fromWalletId;
     private Long toWalletId;
@@ -60,7 +73,8 @@ public class TransferServiceTest {
         WalletLedgerService walletLedgerService = new WalletLedgerService(walletMapper);
         TransferExecutor transferExecutor = new TransferExecutor(transferMapper, walletLedgerService);
         TransferFailureRecorder transferFailureRecorder = new TransferFailureRecorder(transferMapper);
-        transferService = new TransferService(transferMapper, transferExecutor, transferFailureRecorder);
+        notificationService = mock(NotificationService.class);
+        transferService = new TransferService(transferMapper, transferExecutor, transferFailureRecorder, walletMapper, notificationService);
 
         //테스트 전용 지갑 생성
         fromWalletId = insertWallet(2L, 100000L);
@@ -231,6 +245,32 @@ public class TransferServiceTest {
 
         assertEquals(fromAfterFirst.getBalance(), fromAfterSecond.getBalance());
         assertEquals(toAfterFirst.getBalance(), toAfterSecond.getBalance());
+
+        // TransferType.TRANSFER는 용돈이 아니라서, 재시도든 아니든 알림은 아예 안 가야 한다.
+        verifyNoInteractions(notificationService);
+    }
+
+    // 용돈(ALLOWANCE) 송금이 실제로 완료됐을 때, 받는 사람(toWalletId 주인)한테 알림이
+    // 정확히 한 번만 가는지 확인한다. "한 번만"이 중요한 이유: 같은 송금을 재시도해도
+    // (idempotencyKey 재사용) 돈이 중복으로 안 옮겨지듯이, 알림도 중복으로 가면 안 된다.
+    @Test
+    void executeTransferNotifiesRecipientOnceForAllowanceAndNotAgainOnRetry() {
+        // toWalletId는 setUp()에서 memberId=2L로 만들어둔 지갑이라, 알림 수신자는 2L이어야 한다.
+        TransferVO pending = transferService.createPendingTransfer(
+                fromWalletId, toWalletId, 10000L, TransferType.ALLOWANCE, newIdempotencyKey());
+
+        TransferVO first = transferService.executeTransfer(pending.getId());
+        assertEquals("COMPLETED", first.getStatus());
+
+        // 같은 송금 id로 재시도 - lockAndMove()가 이미 COMPLETED라 재처리는 안 하지만,
+        // executeTransfer() 자체는 다시 호출된다(예: 클라이언트가 같은 요청을 재시도하는 상황).
+        TransferVO second = transferService.executeTransfer(first.getId());
+        assertEquals("COMPLETED", second.getStatus());
+
+        // 알림은 딱 한 번만 갔어야 한다 (재시도로 두 번 가면 안 됨)
+        verify(notificationService, times(1)).createNotification(
+                eq(2L), eq("용돈이 입금 됐어요"), eq("10,000원"),
+                eq(NotificationReferenceType.TRANSFER), eq((Long) null), eq(true));
     }
 
 }
