@@ -4,10 +4,61 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.teenyfin.teenymoney.domain.notification.mapper.NotificationMapper">
 
+    <resultMap id="notificationResultMap" type="com.teenyfin.teenymoney.domain.notification.vo.NotificationVO">
+        <id property="id" column="id"/>
+        <result property="memberId" column="member_id"/>
+        <result property="title" column="title"/>
+        <result property="content" column="content"/>
+        <result property="referenceType" column="reference_type"/>
+        <result property="referenceId" column="reference_id"/>
+        <result property="isRead" column="is_read"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
     <insert id="insert" parameterType="com.teenyfin.teenymoney.domain.notification.vo.NotificationVO"
             useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         INSERT INTO T_NTF_NOTI_L (member_id, title, content, reference_type, reference_id)
         VALUES (#{memberId}, #{title}, #{content}, #{referenceType}, #{referenceId})
     </insert>
+
+    <select id="selectRecentNotifications" resultMap="notificationResultMap">
+        SELECT id, member_id, title, content, reference_type, reference_id, is_read, created_at
+        FROM T_NTF_NOTI_L
+        WHERE member_id = #{memberId}
+          AND created_at >= NOW() - INTERVAL 30 DAY
+        <if test="cursorTime != null">
+          AND (created_at &lt; #{cursorTime}
+               OR (created_at = #{cursorTime} AND id &lt; #{cursorId}))
+        </if>
+        ORDER BY created_at DESC, id DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="selectById" resultMap="notificationResultMap">
+        SELECT id, member_id, title, content, reference_type, reference_id, is_read, created_at
+        FROM T_NTF_NOTI_L
+        WHERE id = #{notificationId}
+    </select>
+
+    <update id="updateIsReadTrue">
+        UPDATE T_NTF_NOTI_L
+        SET is_read = TRUE
+        WHERE id = #{notificationId}
+    </update>
+
+    <update id="updateAllIsReadTrueCreatedBeforeLatestTime">
+        UPDATE T_NTF_NOTI_L
+        SET is_read = true
+        WHERE member_id = #{memberId}
+          AND is_read = false
+          AND created_at &lt;= #{latestTime}
+    </update>
+
+    <select id="countIsReadFalse" resultType="int">
+        SELECT COUNT(*)
+        FROM T_NTF_NOTI_L
+        WHERE member_id = #{memberId} AND is_read = false
+            AND created_at >= NOW() - INTERVAL 30 DAY
+    </select>
 
 </mapper>
