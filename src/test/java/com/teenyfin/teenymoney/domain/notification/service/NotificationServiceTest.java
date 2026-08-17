@@ -1,18 +1,27 @@
 package com.teenyfin.teenymoney.domain.notification.service;
 
 import com.google.firebase.messaging.Message;
+import com.teenyfin.teenymoney.domain.notification.dto.response.NotificationListResponseDTO;
 import com.teenyfin.teenymoney.domain.notification.mapper.MemberNotificationMapper;
 import com.teenyfin.teenymoney.domain.notification.mapper.NotificationMapper;
 import com.teenyfin.teenymoney.domain.notification.vo.MemberNotificationVO;
 import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
 import com.teenyfin.teenymoney.domain.notification.vo.NotificationVO;
+import com.teenyfin.teenymoney.global.exception.BusinessException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.IntStream;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 
 // 순수 Mockito 단위 테스트. NotificationMapper/MemberNotificationMapper/FcmService를 전부
@@ -188,5 +197,89 @@ class NotificationServiceTest {
                 .createMessage(eq("dummy-fcm-token"), any(), captor.capture());
         assertEquals("결제가 완료됐어요", captor.getValue().getTitle());
         assertEquals("GS25 강남점 · 3,200원", captor.getValue().getContent());
+    }
+
+    // ---------- getNotifications() ----------
+
+    private NotificationVO notificationRow(long id, LocalDateTime createdAt) {
+        return NotificationVO.builder()
+                .id(id)
+                .memberId(1L)
+                .title("제목" + id)
+                .content("내용" + id)
+                .referenceType(NotificationReferenceType.PAYMENT)
+                .referenceId(id)
+                .isRead(false)
+                .createdAt(createdAt)
+                .build();
+    }
+
+    @Test
+    void getNotificationsFirstPageWithNoCursor() {
+        LocalDateTime now = LocalDateTime.now();
+        // 마퍼가 11건(FETCH_SIZE)을 최신순으로 반환한다고 가정 -> 10건만 남고 다음 페이지가 있다고 판단해야 한다
+        List<NotificationVO> rows = IntStream.rangeClosed(1, 11)
+                .mapToObj(i -> notificationRow(12 - i, now.minusMinutes(i)))
+                .toList();
+
+        when(notificationMapper.selectRecentNotifications(eq(1L), isNull(), isNull(), eq(11)))
+                .thenReturn(rows);
+
+        NotificationListResponseDTO result = notificationService.getNotifications(1L, null);
+
+        assertThat(result.getNotifications()).hasSize(10);
+        assertThat(result.getNextCursor()).isNotNull();
+        // then: 응답엔 마지막(가장 오래된) 항목까지 정확히 10건만 담긴다
+        assertEquals(11L, result.getNotifications().get(0).getId());
+        assertEquals(2L, result.getNotifications().get(9).getId());
+    }
+
+    @Test
+    void getNotificationsLastPageHasNoNextCursor() {
+        LocalDateTime now = LocalDateTime.now();
+        // 마퍼가 PAGE_SIZE(10)건 이하로 반환하면 더 가져올 페이지가 없다
+        List<NotificationVO> rows = IntStream.rangeClosed(1, 5)
+                .mapToObj(i -> notificationRow(i, now.minusMinutes(i)))
+                .toList();
+
+        when(notificationMapper.selectRecentNotifications(eq(1L), isNull(), isNull(), eq(11)))
+                .thenReturn(rows);
+
+        NotificationListResponseDTO result = notificationService.getNotifications(1L, null);
+
+        assertThat(result.getNotifications()).hasSize(5);
+        assertThat(result.getNextCursor()).isNull();
+    }
+
+    @Test
+    void getNotificationsSecondPageDecodesCursorFromFirstPage() {
+        LocalDateTime now = LocalDateTime.now();
+        List<NotificationVO> firstPageRows = IntStream.rangeClosed(1, 11)
+                .mapToObj(i -> notificationRow(12 - i, now.minusMinutes(i)))
+                .toList();
+        when(notificationMapper.selectRecentNotifications(eq(1L), isNull(), isNull(), eq(11)))
+                .thenReturn(firstPageRows);
+
+        String cursor = notificationService.getNotifications(1L, null).getNextCursor();
+
+        // 커서가 가리키는 값(10번째로 반환된, id=2인 행)의 createdAt/id로 다음 페이지를 요청해야 한다
+        NotificationVO lastOfFirstPage = firstPageRows.get(9);
+        when(notificationMapper.selectRecentNotifications(
+                eq(1L), eq(lastOfFirstPage.getCreatedAt()), eq(lastOfFirstPage.getId()), eq(11)))
+                .thenReturn(List.of(notificationRow(1L, now.minusMinutes(11))));
+
+        NotificationListResponseDTO secondPage = notificationService.getNotifications(1L, cursor);
+
+        assertThat(secondPage.getNotifications()).hasSize(1);
+        assertThat(secondPage.getNotifications().get(0).getId()).isEqualTo(1L);
+        assertThat(secondPage.getNextCursor()).isNull();
+    }
+
+    @Test
+    void getNotificationsThrowsOnInvalidCursor() {
+        assertThatThrownBy(() -> notificationService.getNotifications(1L, "not-a-valid-cursor!!"))
+                .isInstanceOf(BusinessException.class);
+
+        verifyNoInteractions(notificationMapper);
     }
 }

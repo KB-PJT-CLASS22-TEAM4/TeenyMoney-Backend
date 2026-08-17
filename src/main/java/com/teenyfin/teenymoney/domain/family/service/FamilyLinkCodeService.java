@@ -5,6 +5,8 @@ import com.teenyfin.teenymoney.domain.family.dto.response.FamilyLinkCodeResponse
 import com.teenyfin.teenymoney.domain.family.exception.FamilyErrorCode;
 import com.teenyfin.teenymoney.domain.family.store.FamilyLinkCodeStore;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
+import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import com.teenyfin.teenymoney.global.exception.CommonErrorCode;
 import org.springframework.dao.DuplicateKeyException;
@@ -30,8 +32,12 @@ public class FamilyLinkCodeService {
 
     private final CategoryPolicyMapper categoryPolicyMapper;
     private final MemberMapper memberMapper;
+    // 연결이 성립했음을 부모에게 알린다. 부모는 코드를 발급만 하고 결과를 알 길이 없다.
+    private final NotificationService notificationService;
     private static final int MAX_CONSUME_ATTEMPTS = 5;
     private static final Duration CONSUME_ATTEMPT_WINDOW = Duration.ofMinutes(10);
+
+    private static final String LINK_SUCCESS_TITLE = "자녀와 연결됐어요";
 
     private static final int CODE_RANGE = 1_000_000;
     private static final int MAX_GENERATION_ATTEMPTS = 10;
@@ -53,11 +59,12 @@ public class FamilyLinkCodeService {
     private final Clock clock;
     private final SecureRandom secureRandom = new SecureRandom();
 
-    public FamilyLinkCodeService(FamilyLinkCodeStore store, CategoryPolicyMapper categoryPolicyMapper, MemberMapper memberMapper, Clock clock) {
+    public FamilyLinkCodeService(FamilyLinkCodeStore store, CategoryPolicyMapper categoryPolicyMapper, MemberMapper memberMapper, NotificationService notificationService, Clock clock) {
         this.categoryPolicyMapper = categoryPolicyMapper;
         this.store = store;
         this.clock = clock;
         this.memberMapper = memberMapper;
+        this.notificationService = notificationService;
     }
 
     /**
@@ -209,6 +216,19 @@ public class FamilyLinkCodeService {
         }
 
         categoryPolicyMapper.insertDefaultPolicies(parentId, childId);
+
+        // 이름을 제목이 아니라 내용 앞에 두는 것은 PermissionService 와 같은 형식이다.
+        // 제목에 이름을 넣으면 받침에 따라 "과/와"를 골라야 한다.
+        //
+        // referenceId 로 자녀 id 를 넣는다. 알림에서 그 자녀 상세 화면으로 바로 갈 수 있다.
+        String childName = memberMapper.selectById(childId).getName();
+        notificationService.createNotification(
+                parentId,
+                LINK_SUCCESS_TITLE,
+                childName + " · 이제 용돈과 퀘스트를 보낼 수 있어요",
+                NotificationReferenceType.CONNECTION,
+                childId,
+                true);
     }
 
 }

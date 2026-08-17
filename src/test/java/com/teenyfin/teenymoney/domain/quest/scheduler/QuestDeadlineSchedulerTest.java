@@ -1,5 +1,7 @@
 package com.teenyfin.teenymoney.domain.quest.scheduler;
 
+import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
 import com.teenyfin.teenymoney.domain.quest.mapper.QuestMapper;
 import com.teenyfin.teenymoney.domain.quest.service.QuestDeadlineService;
 import com.teenyfin.teenymoney.domain.quest.vo.QuestStatus;
@@ -55,6 +57,8 @@ class QuestDeadlineSchedulerTest {
                 questMapper,
                 new TeenyScorePolicyService(),
                 mock(TeenyScoreChangeService.class),
+                mock(MemberMapper.class),
+                mock(NotificationService.class),
                 mock(PlatformTransactionManager.class),
                 CLOCK);
         scheduler = new QuestDeadlineScheduler(service);

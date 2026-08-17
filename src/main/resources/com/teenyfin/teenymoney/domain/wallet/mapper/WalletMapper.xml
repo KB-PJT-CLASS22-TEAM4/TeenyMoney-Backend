@@ -133,4 +133,10 @@
         WHERE payment_id= #{paymentId}
     </select>
 
+    <!-- walletId로 지갑 주인(memberId)을 포함해 통째로 조회 -->
+    <select id="selectById" resultMap="walletResultMap">
+        SELECT id, member_id, balance, type, updated_at
+        FROM T_WLT_BASE_M
+        WHERE id = #{walletId}
+    </select>
 </mapper>

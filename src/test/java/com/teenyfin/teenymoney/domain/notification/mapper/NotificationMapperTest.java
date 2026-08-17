@@ -18,6 +18,7 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import javax.sql.DataSource;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -123,5 +124,44 @@ public class NotificationMapperTest {
 
         assertNull(row.get("reference_type"));
         assertNull(row.get("reference_id"));
+    }
+
+    @Test
+    void selectRecentNotificationsPagesThroughCursorNewestFirst() {
+        // given: 알림 15건을 순서대로 삽입 (insert 순서 = id 오름차순)
+        List<Long> insertedIds = new java.util.ArrayList<>();
+        for (int i = 1; i <= 15; i++) {
+            NotificationVO notificationVO = NotificationVO.builder()
+                    .memberId(memberId)
+                    .title("알림" + i)
+                    .content("내용" + i)
+                    .referenceType(NotificationReferenceType.PAYMENT)
+                    .referenceId((long) i)
+                    .build();
+            notificationMapper.insert(notificationVO);
+            insertedIds.add(notificationVO.getId());
+        }
+
+        // when: 첫 페이지 - 11건(FETCH_SIZE) 요청
+        List<NotificationVO> firstPage = notificationMapper.selectRecentNotifications(memberId, null, null, 11);
+        System.out.println("[FIRST PAGE] ids=" + firstPage.stream().map(NotificationVO::getId).toList());
+
+        // then: 최신순(가장 나중에 넣은 id부터) 11건이 온다
+        assertEquals(11, firstPage.size());
+        for (int i = 0; i < 11; i++) {
+            assertEquals(insertedIds.get(14 - i), firstPage.get(i).getId());
+        }
+
+        // when: 마지막 항목을 커서로 다음 페이지 요청
+        NotificationVO cursorRow = firstPage.get(10);
+        List<NotificationVO> secondPage = notificationMapper.selectRecentNotifications(
+                memberId, cursorRow.getCreatedAt(), cursorRow.getId(), 11);
+        System.out.println("[SECOND PAGE] ids=" + secondPage.stream().map(NotificationVO::getId).toList());
+
+        // then: 나머지 4건이 이어서 온다 (중복도 누락도 없이)
+        assertEquals(4, secondPage.size());
+        for (int i = 0; i < 4; i++) {
+            assertEquals(insertedIds.get(3 - i), secondPage.get(i).getId());
+        }
     }
 }

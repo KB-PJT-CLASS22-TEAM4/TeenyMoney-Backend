@@ -65,10 +65,11 @@
         FOR UPDATE
     </select>
 
-
-
-
-
+    <select id="selectById" resultMap="transferResultMap">
+        SELECT id, from_wallet_id, to_wallet_id, idempotency_key, amount, type, status, failure_reason, created_at, updated_at
+        FROM T_WLT_TRF_L
+        WHERE id = #{id}
+    </select>
 
 
 </mapper>

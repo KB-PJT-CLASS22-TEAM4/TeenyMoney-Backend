@@ -1,5 +1,9 @@
 package com.teenyfin.teenymoney.domain.quest.service;
 
+import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
+import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
+import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
 import com.teenyfin.teenymoney.domain.quest.mapper.QuestMapper;
 import com.teenyfin.teenymoney.domain.quest.vo.QuestStatus;
 import com.teenyfin.teenymoney.domain.quest.vo.QuestVO;
@@ -48,6 +52,8 @@ class QuestDeadlineServiceTest {
     private final QuestMapper questMapper = mock(QuestMapper.class);
     private final TeenyScoreChangeService teenyScoreChangeService =
             mock(TeenyScoreChangeService.class);
+    private final MemberMapper memberMapper = mock(MemberMapper.class);
+    private final NotificationService notificationService = mock(NotificationService.class);
     private QuestDeadlineService service;
 
     @BeforeEach
@@ -56,6 +62,8 @@ class QuestDeadlineServiceTest {
                 questMapper,
                 new TeenyScorePolicyService(),
                 teenyScoreChangeService,
+                memberMapper,
+                notificationService,
                 mock(PlatformTransactionManager.class),
                 CLOCK);
         // 잠근 행은 전부 갱신에 성공한다고 본다. 실패 경로는 별도 테스트에서 다룬다.
@@ -364,6 +372,84 @@ class QuestDeadlineServiceTest {
                 .isFalse();
     }
 
+    // ---------- 알림 ----------
+
+    @Test
+    @DisplayName("수락되지 않은 채 만료되면 부모에게 자녀 이름과 함께 알린다")
+    void notifiesParentWhenQuestExpiresUnaccepted() {
+        givenNoInProgressTargets();
+        givenAvailableTargets(expiringQuest(30L));
+        givenChildName(2L, "김첫째");
+
+        service.closeExpired();
+
+        verify(notificationService).createNotification(
+                eq(1L), eq("자녀가 퀘스트를 시작하지 않았어요"), eq("김첫째 · 방 청소하기"),
+                eq(NotificationReferenceType.QUEST), eq(30L), eq(true));
+    }
+
+    @Test
+    @DisplayName("수행 중 만료되면 자녀에게 알리고 점수 차감을 문구에 담는다")
+    void notifiesChildWithScorePenaltyWhenInProgressQuestFails() {
+        givenNoAvailableTargets();
+        givenInProgressTargets(scoredInProgressQuest(20L));
+
+        service.closeExpired();
+
+        verify(notificationService).createNotification(
+                eq(2L), eq("퀘스트가 실패했어요"), eq("방 청소하기 · 티니점수가 차감됐어요"),
+                eq(NotificationReferenceType.QUEST), eq(20L), eq(true));
+    }
+
+    @Test
+    @DisplayName("점수 퀘스트가 아니면 실패 알림에 차감 문구를 붙이지 않는다")
+    void omitsScorePenaltyTextWhenQuestIsNotScored() {
+        givenNoAvailableTargets();
+        QuestVO quest = scoredInProgressQuest(20L);
+        quest.setTeenyScoreEnabled(false);
+        givenInProgressTargets(quest);
+
+        service.closeExpired();
+
+        verify(notificationService).createNotification(
+                eq(2L), eq("퀘스트가 실패했어요"), eq("방 청소하기"),
+                eq(NotificationReferenceType.QUEST), eq(20L), eq(true));
+    }
+
+    @Test
+    @DisplayName("같은 자녀의 퀘스트가 여러 건이어도 이름은 한 번만 조회한다")
+    void looksUpChildNameOncePerChild() {
+        givenNoInProgressTargets();
+        givenAvailableTargets(expiringQuest(30L), expiringQuest(31L));
+        givenChildName(2L, "김첫째");
+
+        service.closeExpired();
+
+        verify(memberMapper, times(1)).selectById(2L);
+        verify(notificationService, times(2)).createNotification(
+                eq(1L), any(), any(), any(), any(), eq(true));
+    }
+
+    @Test
+    @DisplayName("알림이 실패해도 마감은 그대로 처리된다")
+    void keepsClosingQuestsWhenNotificationFails() {
+        givenNoInProgressTargets();
+        givenAvailableTargets(expiringQuest(30L), expiringQuest(31L));
+        givenChildName(2L, "김첫째");
+        org.mockito.BDDMockito.willThrow(new IllegalStateException("알림 서버 장애"))
+                .given(notificationService)
+                .createNotification(any(), any(), any(), any(), any(), any());
+
+        int processed = service.closeExpired();
+
+        // 알림은 부가 작업이다. 여기서 예외가 배치를 멈추면 기한 지난 퀘스트가 계속 남는다.
+        assertThat(processed).isEqualTo(2);
+        verify(questMapper).updateStatusForDeadline(
+                30L, QuestStatus.AVAILABLE, QuestStatus.EXPIRED, null, NOW);
+        verify(questMapper).updateStatusForDeadline(
+                31L, QuestStatus.AVAILABLE, QuestStatus.EXPIRED, null, NOW);
+    }
+
     // ---------- 도우미 ----------
 
     /** 호출 순서대로 이만큼씩 돌려준다. 마지막 값이 0이면 거기서 대상이 소진된 것이다. */
@@ -380,6 +466,45 @@ class QuestDeadlineServiceTest {
                 eq(QuestStatus.AVAILABLE), eq(NOW), eq(200), any())).willReturn(List.of());
     }
 
+    private void givenNoInProgressTargets() {
+        given(questMapper.selectDeadlineTargetsForUpdate(
+                eq(QuestStatus.IN_PROGRESS), eq(NOW), eq(200), any())).willReturn(List.of());
+    }
+
+    /** 첫 조회에서만 대상을 주고 그다음은 비운다. 한 묶음으로 끝난다. */
+    private void givenAvailableTargets(QuestVO... targets) {
+        given(questMapper.selectDeadlineTargetsForUpdate(
+                eq(QuestStatus.AVAILABLE), eq(NOW), eq(200), any()))
+                .willReturn(List.of(targets))
+                .willReturn(List.of());
+    }
+
+    private void givenInProgressTargets(QuestVO... targets) {
+        given(questMapper.selectDeadlineTargetsForUpdate(
+                eq(QuestStatus.IN_PROGRESS), eq(NOW), eq(200), any()))
+                .willReturn(List.of(targets))
+                .willReturn(List.of());
+    }
+
+    private void givenChildName(long childId, String name) {
+        MemberVO child = new MemberVO();
+        child.setId(childId);
+        child.setName(name);
+        given(memberMapper.selectById(childId)).willReturn(child);
+    }
+
+    /** 수락되지 않은 채 기한이 지난 퀘스트. 부모(1)에게 알림이 가야 한다. */
+    private QuestVO expiringQuest(long id) {
+        return QuestVO.builder()
+                .id(id)
+                .parentId(1L)
+                .childId(2L)
+                .title("방 청소하기")
+                .status(QuestStatus.AVAILABLE)
+                .deadline(NOW.minusDays(1))
+                .build();
+    }
+
     private List<QuestVO> quests(int count) {
         List<QuestVO> list = new ArrayList<>(count);
         IntStream.rangeClosed(1, count).forEach(i ->
@@ -394,7 +519,9 @@ class QuestDeadlineServiceTest {
     private QuestVO scoredInProgressQuest(long id) {
         return QuestVO.builder()
                 .id(id)
+                .parentId(1L)
                 .childId(2L)
+                .title("방 청소하기")
                 .teenyScoreEnabled(true)
                 .status(QuestStatus.IN_PROGRESS)
                 .deadline(NOW.minusDays(1))
