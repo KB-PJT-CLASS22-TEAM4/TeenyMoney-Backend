@@ -1,5 +1,9 @@
 package com.teenyfin.teenymoney.domain.quest.service;
 
+import com.teenyfin.teenymoney.domain.notification.mapper.MemberNotificationMapper;
+import com.teenyfin.teenymoney.domain.notification.mapper.NotificationMapper;
+import com.teenyfin.teenymoney.domain.notification.service.FcmService;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import org.apache.ibatis.session.SqlSessionFactory;
@@ -34,7 +38,10 @@ import javax.sql.DataSource;
 @MapperScan(
         basePackages = {
                 "com.teenyfin.teenymoney.domain.quest.mapper",
-                "com.teenyfin.teenymoney.domain.teenyscore.mapper"
+                "com.teenyfin.teenymoney.domain.teenyscore.mapper",
+                // 마감 알림이 회원 이름을 읽고 알림 이력을 남긴다
+                "com.teenyfin.teenymoney.domain.member.mapper",
+                "com.teenyfin.teenymoney.domain.notification.mapper"
         },
         annotationClass = org.apache.ibatis.annotations.Mapper.class)
 public class QuestDeadlineTestConfig {
@@ -81,6 +88,25 @@ public class QuestDeadlineTestConfig {
         return java.time.Clock.fixed(
                 java.time.Instant.parse("2000-01-02T01:00:00Z"),
                 java.time.ZoneId.of("Asia/Seoul"));
+    }
+
+    /**
+     * 알림은 실제 빈을 쓴다. T_NTF_NOTI_L 에 진짜로 적재되는지가 확인 대상이다.
+     *
+     * FcmService 만 목이다. 진짜를 쓰면 FirebaseApp 초기화(S3에서 키를 받아 온다)까지 딸려 오는데,
+     * 여기서 볼 것은 푸시 전송이 아니라 DB 적재다. 픽스처 회원은 fcm_token 이 NULL 이라
+     * 어차피 발송 경로를 타지도 않는다.
+     */
+    @Bean
+    public FcmService fcmService() {
+        return org.mockito.Mockito.mock(FcmService.class);
+    }
+
+    @Bean
+    public NotificationService notificationService(NotificationMapper notificationMapper,
+                                                   MemberNotificationMapper memberNotificationMapper,
+                                                   FcmService fcmService) {
+        return new NotificationService(notificationMapper, memberNotificationMapper, fcmService);
     }
 
     @Bean

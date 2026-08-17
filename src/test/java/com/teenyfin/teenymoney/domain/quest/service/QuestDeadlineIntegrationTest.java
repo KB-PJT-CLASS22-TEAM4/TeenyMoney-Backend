@@ -207,7 +207,53 @@ class QuestDeadlineIntegrationTest {
                 Integer.class)).isZero();
     }
 
+    @Test
+    @DisplayName("마감 알림이 전이별로 다른 수신자에게 쌓인다")
+    void closeExpiredStoresNotificationsPerTransition() {
+        questDeadlineService.closeExpired();
+
+        // 수락되지 않은 채 만료된 건은 부모에게 간다.
+        List<Map<String, Object>> parentRows = notificationsOf(-900001L, "자녀가 퀘스트를 시작하지 않았어요");
+        assertThat(referenceIdsOf(parentRows)).containsExactly(900001L, 900002L, 900003L);
+        // 다자녀 부모가 구분할 수 있도록 자녀 이름이 내용 앞에 붙는다.
+        assertThat(String.valueOf(parentRows.get(0).get("content"))).contains(" · ");
+
+        // 수행 중 만료된 건은 자녀에게 간다.
+        List<Map<String, Object>> childRows = notificationsOf(-900002L, "퀘스트가 실패했어요");
+        assertThat(referenceIdsOf(childRows)).containsExactly(900020L, 900024L, 900026L);
+
+        // 점수 퀘스트만 차감 문구가 붙는다. 퀘스트명은 픽스처에서 오므로 접미사만 본다.
+        assertThat(contentOf(childRows, 900024L)).endsWith(" · 티니점수가 차감됐어요");
+        assertThat(contentOf(childRows, 900020L)).doesNotContain("티니점수");
+
+        assertThat(parentRows).allSatisfy(row ->
+                assertThat(row.get("reference_type")).isEqualTo("QUEST"));
+        assertThat(childRows).allSatisfy(row ->
+                assertThat(row.get("reference_type")).isEqualTo("QUEST"));
+    }
+
     // ---------- 도우미 ----------
+
+    private List<Map<String, Object>> notificationsOf(long memberId, String title) {
+        return jdbc().queryForList(
+                "SELECT title, content, reference_type, reference_id FROM T_NTF_NOTI_L "
+                        + "WHERE member_id = ? AND title = ? ORDER BY reference_id",
+                memberId, title);
+    }
+
+    private List<Long> referenceIdsOf(List<Map<String, Object>> rows) {
+        return rows.stream()
+                .map(row -> ((Number) row.get("reference_id")).longValue())
+                .toList();
+    }
+
+    private String contentOf(List<Map<String, Object>> rows, long referenceId) {
+        return rows.stream()
+                .filter(row -> ((Number) row.get("reference_id")).longValue() == referenceId)
+                .map(row -> String.valueOf(row.get("content")))
+                .findFirst()
+                .orElseThrow();
+    }
 
     private List<Long> selectForUpdateSkipLocked(Connection connection, int limit)
             throws Exception {
