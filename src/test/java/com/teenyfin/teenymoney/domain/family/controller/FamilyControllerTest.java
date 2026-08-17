@@ -135,7 +135,7 @@ class FamilyControllerTest {
     @Test
     @DisplayName("연동 해제는 경로의 자녀 id를 그대로 서비스에 넘긴다")
     void passesChildIdToUnlinkService() throws Exception {
-        var response = mockMvc.perform(delete("/families/connections/33"))
+        var response = mockMvc.perform(delete("/families/unlink/33"))
                 .andReturn().getResponse();
 
         assertEquals(200, response.getStatus());
