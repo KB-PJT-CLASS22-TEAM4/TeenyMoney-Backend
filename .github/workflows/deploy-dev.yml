@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: backend-development-deploy
@@ -27,6 +28,7 @@ jobs:
       EC2_HOST: ${{ vars.EC2_HOST }}
       EC2_PORT: ${{ vars.EC2_PORT }}
       EC2_USER: ${{ vars.EC2_USER }}
+      EC2_SECURITY_GROUP_ID: ${{ vars.EC2_SECURITY_GROUP_ID }}
 
     steps:
       - name: 저장소 코드 가져오기
@@ -80,6 +82,33 @@ jobs:
           printf '%s\n' "$EC2_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/deploy_key" "$HOME/.ssh/known_hosts"
 
+      - name: AWS 인증
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ap-northeast-2
+
+      - name: 러너 IP 임시 허용
+        id: sg
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          test -n "$EC2_SECURITY_GROUP_ID"
+
+          runner_ip="$(curl -fsS --max-time 5 https://checkip.amazonaws.com)"
+
+          rule_id="$(
+            aws ec2 authorize-security-group-ingress \
+              --group-id "$EC2_SECURITY_GROUP_ID" \
+              --ip-permissions "IpProtocol=tcp,FromPort=$EC2_PORT,ToPort=$EC2_PORT,IpRanges=[{CidrIp=$runner_ip/32,Description=gha-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT}]" \
+              --query 'SecurityGroupRules[0].SecurityGroupRuleId' \
+              --output text
+          )"
+
+          echo "rule_id=$rule_id" >> "$GITHUB_OUTPUT"
+          echo "러너 IP $runner_ip/32 를 $EC2_PORT 번 포트에 허용했습니다. (rule: $rule_id)"
+
       - name: EC2 배포
         shell: bash
         env:
@@ -90,6 +119,7 @@ jobs:
           ssh_options=(
             -i "$HOME/.ssh/deploy_key"
             -p "$EC2_PORT"
+            -o ConnectTimeout=10
             -o BatchMode=yes
             -o IdentitiesOnly=yes
             -o StrictHostKeyChecking=yes
@@ -105,6 +135,7 @@ jobs:
           scp \
             -i "$HOME/.ssh/deploy_key" \
             -P "$EC2_PORT" \
+            -o ConnectTimeout=10 \
             -o BatchMode=yes \
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes \
@@ -299,6 +330,7 @@ jobs:
             ssh \
               -i "$HOME/.ssh/deploy_key" \
               -p "$EC2_PORT" \
+              -o ConnectTimeout=10 \
               -o BatchMode=yes \
               -o IdentitiesOnly=yes \
               -o StrictHostKeyChecking=yes \
@@ -308,6 +340,14 @@ jobs:
           fi
 
           rm -f -- "$HOME/.ssh/deploy_key" "$HOME/.ssh/known_hosts"
+
+      - name: 러너 IP 허용 회수
+        if: always() && steps.sg.outputs.rule_id != ''
+        shell: bash
+        run: |
+          aws ec2 revoke-security-group-ingress \
+            --group-id "$EC2_SECURITY_GROUP_ID" \
+            --security-group-rule-ids '${{ steps.sg.outputs.rule_id }}'
 
       - name: 배포 결과 요약
         if: always()
