@@ -107,6 +107,7 @@
         <result property="paidCount" column="paid_count"/>
         <result property="totalPaymentCount" column="total_payment_count"/>
         <result property="paymentDay" column="payment_day"/>
+        <result property="nextPaymentDate" column="next_payment_date"/>
         <result property="autoTransfer" column="auto_transfer"/>
         <result property="principalAmount" column="principal_amount"/>
         <result property="outstandingPrincipal" column="outstanding_principal"/>
@@ -321,6 +322,7 @@
         ORDER BY enrollment.created_at DESC, enrollment.id DESC
     </select>
 
+    <!-- 마지막 처리 회차 다음의 납입 예정일을 자유·정액 적금 목록에 함께 반환한다. -->
     <select id="selectSavingEnrollmentsByChildId"
             resultMap="enrollmentResultMap">
         SELECT enrollment.id AS enrollment_id,
@@ -337,6 +339,31 @@
                enrollment.term_months,
                enrollment.monthly_amount,
                enrollment.payment_day,
+               CASE
+                   WHEN enrollment.status = 'ACTIVE'
+                        AND COALESCE((
+                            SELECT MAX(history.installment_no)
+                            FROM T_SVG_PAYHIST_H history
+                            WHERE history.saving_enrollment_id = enrollment.id
+                        ), 0) &lt; enrollment.term_months
+                   THEN DATE_ADD(
+                       CASE
+                           WHEN enrollment.payment_day &gt; DAY(enrollment.start_date)
+                               THEN DATE_ADD(
+                                   enrollment.start_date,
+                                   INTERVAL enrollment.payment_day
+                                       - DAY(enrollment.start_date) DAY)
+                           ELSE DATE_ADD(
+                               LAST_DAY(enrollment.start_date),
+                               INTERVAL enrollment.payment_day DAY)
+                       END,
+                       INTERVAL COALESCE((
+                           SELECT MAX(history.installment_no)
+                           FROM T_SVG_PAYHIST_H history
+                           WHERE history.saving_enrollment_id = enrollment.id
+                       ), 0) MONTH
+                   )
+               END AS next_payment_date,
                enrollment.auto_transfer,
                enrollment.start_date,
                enrollment.maturity_date,
@@ -416,6 +443,7 @@
           AND enrollment.id = #{enrollmentId}
     </select>
 
+    <!-- 목록과 상세 조회가 동일한 다음 납입 예정일을 사용한다. -->
     <select id="selectSavingEnrollmentByChildIdAndId"
             resultMap="enrollmentResultMap">
         SELECT enrollment.id AS enrollment_id,
@@ -432,6 +460,31 @@
                enrollment.term_months,
                enrollment.monthly_amount,
                enrollment.payment_day,
+               CASE
+                   WHEN enrollment.status = 'ACTIVE'
+                        AND COALESCE((
+                            SELECT MAX(history.installment_no)
+                            FROM T_SVG_PAYHIST_H history
+                            WHERE history.saving_enrollment_id = enrollment.id
+                        ), 0) &lt; enrollment.term_months
+                   THEN DATE_ADD(
+                       CASE
+                           WHEN enrollment.payment_day &gt; DAY(enrollment.start_date)
+                               THEN DATE_ADD(
+                                   enrollment.start_date,
+                                   INTERVAL enrollment.payment_day
+                                       - DAY(enrollment.start_date) DAY)
+                           ELSE DATE_ADD(
+                               LAST_DAY(enrollment.start_date),
+                               INTERVAL enrollment.payment_day DAY)
+                       END,
+                       INTERVAL COALESCE((
+                           SELECT MAX(history.installment_no)
+                           FROM T_SVG_PAYHIST_H history
+                           WHERE history.saving_enrollment_id = enrollment.id
+                       ), 0) MONTH
+                   )
+               END AS next_payment_date,
                enrollment.auto_transfer,
                enrollment.start_date,
                enrollment.maturity_date,
@@ -732,20 +785,38 @@
                 'PAID', CURRENT_TIMESTAMP)
     </insert>
 
+    <!-- start_date(승인일)와 payment_day로 최초 정기 납입 예정일을 계산한다. -->
+    <sql id="firstSavingPaymentDate">
+        CASE
+            WHEN enrollment.payment_day &gt; DAY(enrollment.start_date)
+                THEN DATE_ADD(
+                    enrollment.start_date,
+                    INTERVAL enrollment.payment_day
+                        - DAY(enrollment.start_date) DAY)
+            ELSE DATE_ADD(
+                    LAST_DAY(enrollment.start_date),
+                    INTERVAL enrollment.payment_day DAY)
+        END
+    </sql>
+
+    <!-- 정액은 자동납입하고, 자유는 같은 납입일에 미납 여부만 확정한다. -->
     <select id="selectDueSavingPaymentEnrollmentIds" resultType="long">
         SELECT enrollment.id
         FROM T_SVG_ENROLL_M enrollment
         INNER JOIN T_SVG_PROD_M product ON product.id = enrollment.saving_id
         WHERE enrollment.status = 'ACTIVE'
-          AND product.savings_type = 'FIXED'
-          AND enrollment.auto_transfer = TRUE
-          AND enrollment.start_date &lt;= #{paymentDate}
-          AND TIMESTAMPDIFF(MONTH, enrollment.start_date, #{paymentDate})
+          AND (product.savings_type = 'FREE'
+               OR (product.savings_type = 'FIXED'
+                   AND enrollment.auto_transfer = TRUE))
+          AND (<include refid="firstSavingPaymentDate"/>) &lt;= #{paymentDate}
+          AND TIMESTAMPDIFF(
+                MONTH, (<include refid="firstSavingPaymentDate"/>), #{paymentDate})
                 BETWEEN 0 AND enrollment.term_months - 1
           AND DATE_ADD(
-                enrollment.start_date,
+                (<include refid="firstSavingPaymentDate"/>),
                 INTERVAL TIMESTAMPDIFF(
-                    MONTH, enrollment.start_date, #{paymentDate}) MONTH
+                    MONTH, (<include refid="firstSavingPaymentDate"/>),
+                    #{paymentDate}) MONTH
               ) = #{paymentDate}
         ORDER BY enrollment.id
     </select>
@@ -756,21 +827,27 @@
                enrollment.child_id,
                enrollment.wallet_id AS product_wallet_id,
                enrollment.monthly_amount,
-               TIMESTAMPDIFF(MONTH, enrollment.start_date, #{paymentDate}) + 1
+               product.savings_type,
+               TIMESTAMPDIFF(
+                   MONTH, (<include refid="firstSavingPaymentDate"/>),
+                   #{paymentDate}) + 1
                    AS installment_no
         FROM T_SVG_ENROLL_M enrollment
         INNER JOIN T_SVG_PROD_M product ON product.id = enrollment.saving_id
         WHERE enrollment.id = #{enrollmentId}
           AND enrollment.status = 'ACTIVE'
-          AND product.savings_type = 'FIXED'
-          AND enrollment.auto_transfer = TRUE
-          AND enrollment.start_date &lt;= #{paymentDate}
-          AND TIMESTAMPDIFF(MONTH, enrollment.start_date, #{paymentDate})
+          AND (product.savings_type = 'FREE'
+               OR (product.savings_type = 'FIXED'
+                   AND enrollment.auto_transfer = TRUE))
+          AND (<include refid="firstSavingPaymentDate"/>) &lt;= #{paymentDate}
+          AND TIMESTAMPDIFF(
+                MONTH, (<include refid="firstSavingPaymentDate"/>), #{paymentDate})
                 BETWEEN 0 AND enrollment.term_months - 1
           AND DATE_ADD(
-                enrollment.start_date,
+                (<include refid="firstSavingPaymentDate"/>),
                 INTERVAL TIMESTAMPDIFF(
-                    MONTH, enrollment.start_date, #{paymentDate}) MONTH
+                    MONTH, (<include refid="firstSavingPaymentDate"/>),
+                    #{paymentDate}) MONTH
               ) = #{paymentDate}
         FOR UPDATE
     </select>
@@ -792,6 +869,7 @@
              CASE WHEN #{status} = 'PAID' THEN CURRENT_TIMESTAMP ELSE NULL END)
     </insert>
 
+    <!-- 다시 공시된 상품은 기존 행을 재사용하면서 활성 상태로 복구한다. -->
     <insert id="upsertDepositProduct">
         INSERT INTO T_DPT_PROD_M (
             product_source, fin_co_no, fin_prdt_cd, kor_co_nm, name,
@@ -816,9 +894,20 @@
             rate_6m = VALUES(rate_6m),
             rate_12m = VALUES(rate_12m),
             description = VALUES(description),
+            is_active = VALUES(is_active),
             updated_at = CURRENT_TIMESTAMP
     </insert>
 
+    <!-- 삭제하지 않아 기존 가입의 FK를 보존하고, 현재 공시 예금만 upsert로 다시 활성화한다. -->
+    <update id="deactivateAllFinlifeDepositProducts">
+        UPDATE T_DPT_PROD_M
+        SET is_active = FALSE,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE product_source = 'FINLIFE'
+          AND is_active = TRUE
+    </update>
+
+    <!-- 다시 공시된 적금 옵션 조합은 기존 행을 재사용하면서 활성 상태로 복구한다. -->
     <insert id="upsertSavingProduct">
         INSERT INTO T_SVG_PROD_M (
             product_source, fin_co_no, fin_prdt_cd, kor_co_nm, name,
@@ -844,8 +933,18 @@
             rate_6m = VALUES(rate_6m),
             rate_12m = VALUES(rate_12m),
             description = VALUES(description),
+            is_active = VALUES(is_active),
             updated_at = CURRENT_TIMESTAMP
     </insert>
+
+    <!-- 삭제하지 않아 기존 가입의 FK를 보존하고, 현재 공시 상품만 upsert로 다시 활성화한다. -->
+    <update id="deactivateAllFinlifeSavingProducts">
+        UPDATE T_SVG_PROD_M
+        SET is_active = FALSE,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE product_source = 'FINLIFE'
+          AND is_active = TRUE
+    </update>
 
     <!-- 자유적금 가입 행을 먼저 잠가 같은 계좌의 동시 납입과 월 한도 경쟁을 막는다. -->
     <select id="selectFreeSavingForPaymentForUpdate"
@@ -854,6 +953,7 @@
                enrollment.child_id,
                enrollment.wallet_id AS product_wallet_id,
                enrollment.status,
+               enrollment.payment_day,
                enrollment.start_date,
                enrollment.maturity_date,
                product.savings_type,

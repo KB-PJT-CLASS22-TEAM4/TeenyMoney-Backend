@@ -119,6 +119,10 @@ public interface FinancialProductMapper {
                                    @Param("status") String status);
     int upsertDepositProduct(DepositProductVO product);
     int upsertSavingProduct(SavingProductVO product);
+    // 현재 공시 상품만 다시 활성화할 수 있도록 기존 FINLIFE 예금을 먼저 비활성화한다.
+    int deactivateAllFinlifeDepositProducts();
+    // 현재 공시 상품만 다시 활성화할 수 있도록 기존 FINLIFE 적금을 먼저 비활성화한다.
+    int deactivateAllFinlifeSavingProducts();
     // 자유적금 가입 행을 잠가 동시 납입 시 월 한도를 직렬화한다.
     FreeSavingPaymentVO selectFreeSavingForPaymentForUpdate(
             @Param("childId") Long childId,

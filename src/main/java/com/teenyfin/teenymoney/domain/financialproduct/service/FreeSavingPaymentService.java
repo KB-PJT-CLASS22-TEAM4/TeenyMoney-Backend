@@ -111,12 +111,22 @@ public class FreeSavingPaymentService {
     }
 
     private int installmentNo(FreeSavingPaymentVO saving, LocalDate paymentDate) {
-        if (saving.getStartDate() == null || paymentDate.isBefore(saving.getStartDate())) {
+        if (saving.getStartDate() == null || saving.getPaymentDay() == null) {
             return 1;
         }
+        // 승인일보다 납입일이 이미 지났으면 다음 달을 1회차로 본다.
+        LocalDate firstPaymentDate = firstPaymentDate(
+                saving.getStartDate(), saving.getPaymentDay());
+        if (!paymentDate.isAfter(firstPaymentDate)) return 1;
         return Math.toIntExact(ChronoUnit.MONTHS.between(
-                saving.getStartDate().withDayOfMonth(1),
+                firstPaymentDate.withDayOfMonth(1),
                 paymentDate.withDayOfMonth(1)) + 1);
+    }
+
+    private LocalDate firstPaymentDate(LocalDate startDate, int paymentDay) {
+        LocalDate sameMonth = startDate.withDayOfMonth(paymentDay);
+        return paymentDay > startDate.getDayOfMonth()
+                ? sameMonth : sameMonth.plusMonths(1);
     }
 
     private SavingPaymentResponseDTO response(

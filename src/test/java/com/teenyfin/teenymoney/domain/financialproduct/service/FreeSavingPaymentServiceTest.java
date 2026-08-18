@@ -44,7 +44,7 @@ class FreeSavingPaymentServiceTest {
     }
 
     @Test
-    @DisplayName("자유적금 직접납입 시 기존 송금 엔진으로 이체하고 PAID 이력을 저장한다")
+    @DisplayName("자유적금 납입은 최초 예정일 기준 회차로 PAID 이력을 저장한다")
     void paysFreeSavingWithExistingTransferSystem() {
         FreeSavingPaymentVO saving = activeFreeSaving();
         when(mapper.selectFreeSavingForPaymentForUpdate(2L, 7L)).thenReturn(saving);
@@ -149,6 +149,7 @@ class FreeSavingPaymentServiceTest {
         saving.setSavingsType("FREE");
         saving.setStatus("ACTIVE");
         saving.setMaxMonthAmount(100_000L);
+        saving.setPaymentDay(25);
         saving.setStartDate(java.time.LocalDate.of(2026, 8, 25));
         saving.setMaturityDate(java.time.LocalDate.of(2026, 11, 25));
         return saving;

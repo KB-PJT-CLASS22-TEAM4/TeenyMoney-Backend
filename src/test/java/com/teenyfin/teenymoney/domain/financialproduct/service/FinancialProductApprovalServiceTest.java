@@ -113,7 +113,7 @@ class FinancialProductApprovalServiceTest {
     }
 
     @Test
-    @DisplayName("적금 승인 시 바로 출금하지 않고 다음 납입일을 시작일로 설정한다")
+    @DisplayName("적금 승인일을 시작일로 저장하고 최초 납입일을 기준으로 만기를 계산한다")
     void approveSavingSchedulesFirstPaymentWithoutImmediateTransfer() {
         FinancialProductApprovalVO approval = approval(FinancialProductType.SAVING);
         approval.setPaymentDay(25);
@@ -135,12 +135,12 @@ class FinancialProductApprovalServiceTest {
         verify(mapper).approveSavingEnrollment(eq(7L),
                 eq(20L),
                 eq(new BigDecimal("4.20")), eq(new BigDecimal("1.00")),
-                eq(java.time.LocalDate.of(2026, 8, 25)),
+                eq(java.time.LocalDate.of(2026, 8, 11)),
                 eq(java.time.LocalDate.of(2027, 8, 25)));
     }
 
     @Test
-    @DisplayName("승인일과 납입일이 같으면 첫 납입일을 다음 달로 설정한다")
+    @DisplayName("승인일과 납입일이 같아도 승인일을 시작일로 저장하고 다음 달 납입일부터 만기를 계산한다")
     void approvalOnPaymentDaySchedulesFirstPaymentNextMonth() {
         FinancialProductApprovalVO approval = approval(FinancialProductType.SAVING);
         approval.setPaymentDay(11);
@@ -159,7 +159,7 @@ class FinancialProductApprovalServiceTest {
         verify(mapper).approveSavingEnrollment(eq(7L),
                 eq(20L),
                 eq(new BigDecimal("4.20")), eq(new BigDecimal("1.00")),
-                eq(java.time.LocalDate.of(2026, 9, 11)),
+                eq(java.time.LocalDate.of(2026, 8, 11)),
                 eq(java.time.LocalDate.of(2027, 9, 11)));
     }
 
