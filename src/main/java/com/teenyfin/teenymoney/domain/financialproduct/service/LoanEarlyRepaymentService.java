@@ -78,6 +78,18 @@ public class LoanEarlyRepaymentService {
         // 같은 계약을 동시에 정산하지 못하게 한다.
         LoanRepaymentVO loan = requireRepayableLoan(
                 mapper.selectLoanRepaymentForChildForUpdate(childId, enrollmentId));
+
+        // 락 획득 전 체크만으로는 부족하다: 같은 idempotencyKey로 거의 동시에(더블클릭, 네트워크
+        // 재시도) 두 요청이 들어오면 둘 다 위 체크를 통과할 수 있다. 이후 먼저 락을 잡은 요청이
+        // 커밋되고 나서야 뒤 요청이 락을 얻으므로, 락을 얻은 지금 다시 확인하면 먼저 처리된 결과가
+        // 보인다. 이렇게 안 하면 뒤 요청은 이력 insert에서 transfer_id UNIQUE 위반으로 500이
+        // 나버려서 "같은 요청 재시도는 같은 응답"이라는 멱등성 원칙이 깨진다.
+        LoanEarlyRepaymentHistoryVO existingAfterLock = mapper.selectLoanEarlyRepaymentByIdempotencyKey(
+                enrollmentId, request.getIdempotencyKey());
+        if (existingAfterLock != null) {
+            return retriedResponse(childId, enrollmentId, request.getAmount(), existingAfterLock);
+        }
+
         Calculation calculation = calculate(loan, request.getAmount());
 
         // 부분 상환은 지원하지 않는다: 잔액이 요청 금액보다 적으면 일부만 갚지 않고 그대로 거절한다.

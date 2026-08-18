@@ -206,6 +206,33 @@ class LoanEarlyRepaymentServiceTest {
     }
 
     @Test
+    @DisplayName("락 획득 전에는 없던 동일 요청이 락 획득 후 감지되면 중복 처리 없이 최초 결과를 반환한다")
+    void repayDetectsConcurrentDuplicateAfterAcquiringLock() {
+        LoanRepaymentVO loan = activeLoan(80_000L, 0L);
+        // 락 획득 전 체크(1번째 호출)는 통과시키고, 락 획득 후 재확인(2번째 호출)에서
+        // "그 사이 다른 요청이 먼저 커밋했다"는 상황을 시뮬레이션한다.
+        LoanEarlyRepaymentHistoryVO committedByConcurrentRequest = new LoanEarlyRepaymentHistoryVO();
+        committedByConcurrentRequest.setTransferId(30L);
+        committedByConcurrentRequest.setPaidPrincipalAmount(20_000L);
+        committedByConcurrentRequest.setPaidInterestAmount(1_000L);
+        when(mapper.selectLoanEarlyRepaymentByIdempotencyKey(7L, IDEMPOTENCY_KEY))
+                .thenReturn(null, committedByConcurrentRequest);
+        when(mapper.selectLoanRepaymentForChildForUpdate(2L, 7L)).thenReturn(loan);
+        when(mapper.selectLoanRepaymentForRead(2L, 7L)).thenReturn(loan);
+
+        LoanEarlyRepaymentResponseDTO response = service.repay(
+                CHILD, 7L, new LoanEarlyRepaymentRequestDTO(21_000L, IDEMPOTENCY_KEY));
+
+        // 두 번째로 락을 잡은 요청이라, 실제 송금/이력저장은 절대 다시 실행하면 안 된다.
+        assertThat(response.getPaidPrincipalAmount()).isEqualTo(20_000L);
+        assertThat(response.getPaidInterestAmount()).isEqualTo(1_000L);
+        verifyNoInteractions(transferService);
+        verify(mapper, never()).insertLoanRepaymentHistory(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+        verify(mapper, never()).updateLoanAfterRepayment(any(), any(), any(), any(), any());
+    }
+
+    @Test
     @DisplayName("조기상환 예상 조회는 지갑과 계약 상태를 변경하지 않는다")
     void quoteDoesNotMutateState() {
         LoanRepaymentVO loan = activeLoan(100_000L, 1_000L);
