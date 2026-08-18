@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
 import javax.validation.Valid;
 import java.util.List;
 
-@Api(tags = "업종 카테고리 정책")
+@Api(tags = "Category Policy", description = "업종 카테고리 정책 API")
 @RestController
 @RequestMapping("/category-policies")
 @RequiredArgsConstructor
