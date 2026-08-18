@@ -1,6 +1,7 @@
 package com.teenyfin.teenymoney.domain.family.store;
 
 import com.teenyfin.teenymoney.domain.categoryPolicy.mapper.CategoryPolicyMapper;
+import com.teenyfin.teenymoney.domain.family.mapper.FamilyConnectionMapper;
 import com.teenyfin.teenymoney.domain.family.service.FamilyLinkCodeService;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
@@ -100,6 +101,7 @@ class FamilyLinkCodeStoreRedisTest {
                 store,
                 mock(CategoryPolicyMapper.class),
                 memberMapper,
+                mock(FamilyConnectionMapper.class),
                 mock(NotificationService.class),
                 Clock.system(ZoneId.of("Asia/Seoul"))
         );

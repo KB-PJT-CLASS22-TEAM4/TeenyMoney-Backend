@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.teenyfin.teenymoney.domain.family.mapper.FamilyConnectionMapper">
+
+    <!--
+        해제. WHERE 의 status = 'ACTIVE' 가 멱등성 판단 근거다.
+        이미 해제된 관계면 0 건이 돌아오고 호출부가 409 를 낸다.
+    -->
+    <update id="deactivate">
+        UPDATE T_MBR_CONN_R
+        SET status = 'INACTIVE',
+            updated_at = #{now}
+        WHERE parent_id = #{parentId}
+          AND child_id = #{childId}
+          AND status = 'ACTIVE'
+    </update>
+
+    <!--
+        재연결. UNIQUE(parent_id, child_id) 때문에 같은 쌍은 행이 하나뿐이라
+        다시 연결하려면 INSERT 가 아니라 이 UPDATE 여야 한다.
+        처음 연결하는 쌍이면 0 건이 돌아오고 호출부가 INSERT 경로로 간다.
+
+        자녀가 다른 부모와 이미 연결돼 있으면 UQ_MBR_CONN_R_ACTIVE_CHILD 가 막는다.
+        호출부(linkChild)가 앞에서 existsActiveConnectionByChildId 로 먼저 거른다.
+    -->
+    <update id="reactivate">
+        UPDATE T_MBR_CONN_R
+        SET status = 'ACTIVE',
+            updated_at = #{now}
+        WHERE parent_id = #{parentId}
+          AND child_id = #{childId}
+          AND status = 'INACTIVE'
+    </update>
+
+</mapper>

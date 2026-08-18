@@ -4,12 +4,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.teenyfin.teenymoney.domain.family.dto.response.FamilyLinkCodeResponseDTO;
 import com.teenyfin.teenymoney.domain.family.service.FamilyLinkCodeService;
+import com.teenyfin.teenymoney.domain.family.service.FamilyUnlinkService;
 import com.teenyfin.teenymoney.global.exception.GlobalExceptionAdvice;
 import com.teenyfin.teenymoney.global.security.MemberPrincipal;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -31,6 +33,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 /**
@@ -46,16 +49,18 @@ class FamilyControllerTest {
     private static final String PATH = "/families/make-codes";
 
     private FamilyLinkCodeService familyLinkCodeService;
+    private FamilyUnlinkService familyUnlinkService;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         familyLinkCodeService = mock(FamilyLinkCodeService.class);
+        familyUnlinkService = mock(FamilyUnlinkService.class);
 
         ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new FamilyController(familyLinkCodeService))
+                .standaloneSetup(new FamilyController(familyLinkCodeService, familyUnlinkService))
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .setMessageConverters(new MappingJackson2HttpMessageConverter(objectMapper))
                 .setControllerAdvice(new GlobalExceptionAdvice())
@@ -125,5 +130,20 @@ class FamilyControllerTest {
 
         assertEquals(400, response.getStatus());
         verify(familyLinkCodeService, never()).linkChild(any(), anyString());
+    }
+
+    @Test
+    @DisplayName("연동 해제는 경로의 자녀 id를 그대로 서비스에 넘긴다")
+    void passesChildIdToUnlinkService() throws Exception {
+        var response = mockMvc.perform(delete("/families/unlink/33"))
+                .andReturn().getResponse();
+
+        assertEquals(200, response.getStatus());
+
+        ArgumentCaptor<MemberPrincipal> principalCaptor =
+                ArgumentCaptor.forClass(MemberPrincipal.class);
+        verify(familyUnlinkService).unlink(principalCaptor.capture(), eq(33L));
+        // 부모를 바디가 아니라 토큰에서 받는다. 클라이언트가 다른 부모를 지목할 자리가 없다.
+        assertEquals(17L, principalCaptor.getValue().memberId());
     }
 }
