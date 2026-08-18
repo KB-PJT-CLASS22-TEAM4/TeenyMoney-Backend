@@ -26,15 +26,25 @@ public class FcmService {
     public Message createMessage(String deviceToken, NotificationMessage notificationMessage, NotificationVO notificationVO) {
         Notification notification = notificationMessage.toNotification();
 
-        return Message.builder()
+        Message.Builder messageBuilder = Message.builder()
                 .setToken(deviceToken)
                 .setNotification(notification)
                 .setWebpushConfig(WebpushConfig.builder()
                         .putHeader("TTL", "600")
                         .build())
                 .putData("title", notificationVO.getTitle())
-                .putData("content", notificationVO.getContent())
-                .putData("referenceType", notificationVO.getReferenceType().toString())
-                .build();
+                .putData("content", notificationVO.getContent());
+
+        // referenceType이 존재할 경우 함께 전송
+        if (notificationVO.getReferenceType() != null) {
+            messageBuilder.putData("referenceType", notificationVO.getReferenceType().toString());
+        }
+
+        // referenceId가 존재할 경우 함께 전송
+        if (notificationVO.getReferenceType() != null) {
+            messageBuilder.putData("referenceId", String.valueOf(notificationVO.getReferenceId()));
+        }
+
+        return messageBuilder.build();
     }
 }
