@@ -9,6 +9,8 @@ import com.teenyfin.teenymoney.domain.categoryPolicy.mapper.CategoryPolicyMapper
 import com.teenyfin.teenymoney.domain.categoryPolicy.vo.CategoryPolicy;
 import com.teenyfin.teenymoney.domain.categoryPolicy.vo.CategoryPolicyVO;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
+import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -26,6 +28,8 @@ public class CategoryPolicyService {
 
     private final CategoryPolicyMapper categoryPolicyMapper;
     private final MemberMapper memberMapper;
+
+    private final NotificationService notificationService;
 
     private static final List<CategoryPolicy> POLICY_ORDER = List.of(CategoryPolicy.ALLOW, CategoryPolicy.WATCH, CategoryPolicy.BLOCK);
 
@@ -110,7 +114,7 @@ public class CategoryPolicyService {
 
     // 전체 카테고리 정책 단계 수정
     @Transactional
-    public List<CategoryPolicyResponseDTO> updateCategoryPolicy(Long memberId, String role, Long childId, List<CategoryPolicyUpdateRequestDTO> categoryPolicyList) {
+    public List<CategoryPolicyParentResponseDTO> updateCategoryPolicy(Long memberId, String role, Long childId, List<CategoryPolicyUpdateRequestDTO> categoryPolicyList) {
 
         // 자녀는 수정 권한 없음
         if (role.equals("CHILD")) {
@@ -121,6 +125,19 @@ public class CategoryPolicyService {
             throw new BusinessException(CategoryPolicyErrorCode.FORBIDDEN_TO_CHILD);
         }
 
+        // 기존 정책과 비교해서 실제로 바뀐 정책만 추림
+        Map<Long, CategoryPolicyVO> currentPolicyById = categoryPolicyMapper.selectByChildId(childId).stream()
+                .collect(Collectors.toMap(CategoryPolicyVO::getId, x -> x));
+
+        List<CategoryPolicyUpdateRequestDTO> changedPolicyList = categoryPolicyList.stream()
+                .filter(x -> currentPolicyById.get(x.getId()).getPolicy() != x.getPolicy())
+                .toList();
+
+        // 변경된 정책이 없을 경우 종료
+        if (changedPolicyList.isEmpty()) {
+            return getCategoryPolicyParentGroup(memberId, role, childId);
+        }
+
         int resultCount = categoryPolicyMapper.updateAllPolicies(memberId, childId, categoryPolicyList);
 
         // 일부 실패 시 전체 롤백
@@ -128,14 +145,16 @@ public class CategoryPolicyService {
             throw new BusinessException(CategoryPolicyErrorCode.INVALID_CATEGORY_POLICY_ID);
         }
 
-        List<CategoryPolicyVO> categoryPolicyVOList = categoryPolicyMapper.selectByChildId(childId);
+        // 자녀에게 푸시 알림 발송
+        String firstChangedCategoryName = currentPolicyById.get(changedPolicyList.get(0).getId()).getCategoryName();
 
-        return categoryPolicyVOList.stream()
-                .map(x -> CategoryPolicyResponseDTO.builder()
-                        .id(x.getId())
-                        .categoryName(x.getCategoryName())
-                        .policy(x.getPolicy())
-                        .build())
-                .toList();
+        String title = "카테고리 제한 설정이 바뀌었어요";
+        String content = changedPolicyList.size() > 1
+                ? firstChangedCategoryName + " 외 " + (changedPolicyList.size() - 1) + "건"
+                : firstChangedCategoryName;
+
+        notificationService.createNotification(childId, title, content, null, null, true);
+
+        return getCategoryPolicyParentGroup(memberId, role, childId);
     }
 }

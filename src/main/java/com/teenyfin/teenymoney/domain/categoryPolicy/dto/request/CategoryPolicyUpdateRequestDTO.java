@@ -5,19 +5,17 @@ import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Getter;
 
-import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
-import javax.validation.constraints.Pattern;
 
 @ApiModel(description = "카테고리 정책 DTO")
 @Getter
 public class CategoryPolicyUpdateRequestDTO {
 
     @ApiModelProperty(value = "카테고리 정책 ID", example = "1")
-    @NotBlank
+    @NotNull
     private Long id;
 
     @ApiModelProperty(value = "정책 단계 (ALLOW/WATCH/BLOCK)", example = "ALLOW")
-    @NotBlank
+    @NotNull
     private CategoryPolicy policy;
 }
