@@ -36,6 +36,11 @@ public class FinancialProductEnrollmentListResponseDTO {
     private final Integer termMonths;
     @JsonFormat(pattern = "yyyy-MM-dd")
     private final LocalDate startDate;
+    @ApiModelProperty(value = "매월 적금 납입일", example = "15")
+    private final Integer paymentDay;
+    @ApiModelProperty(value = "다음 적금 납입 예정일", example = "2026-09-15")
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private final LocalDate nextPaymentDate;
     @JsonFormat(pattern = "yyyy-MM-dd")
     private final LocalDate maturityDate;
     private final Integer paidCount;
@@ -59,6 +64,8 @@ public class FinancialProductEnrollmentListResponseDTO {
                 .monthlyAmount(enrollment.getMonthlyAmount())
                 .termMonths(enrollment.getTermMonths())
                 .startDate(enrollment.getStartDate())
+                .paymentDay(enrollment.getPaymentDay())
+                .nextPaymentDate(enrollment.getNextPaymentDate())
                 .maturityDate(enrollment.getMaturityDate())
                 .paidCount(enrollment.getPaidCount())
                 .totalPaymentCount(enrollment.getTotalPaymentCount())

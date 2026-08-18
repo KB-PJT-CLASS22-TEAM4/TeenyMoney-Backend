@@ -91,9 +91,11 @@ public class FinancialProductApprovalService {
                         startDate, maturityDate);
             }
             case SAVING -> {
-                LocalDate startDate = nextPaymentDate(
+                // 가입일은 승인일로 보존하고, 만기는 최초 정기 납입 예정일부터 계산한다.
+                LocalDate startDate = approvalDate;
+                LocalDate firstPaymentDate = nextPaymentDate(
                         approvalDate, approval.getPaymentDay());
-                LocalDate maturityDate = startDate.plusMonths(
+                LocalDate maturityDate = firstPaymentDate.plusMonths(
                         approval.getTermMonths());
                 SavingProductVO product = financialProductMapper
                         .selectActiveSavingProductById(approval.getProductId());

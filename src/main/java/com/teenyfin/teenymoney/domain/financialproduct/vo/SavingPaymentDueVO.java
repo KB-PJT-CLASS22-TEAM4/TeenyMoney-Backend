@@ -13,4 +13,5 @@ public class SavingPaymentDueVO {
     private Long productWalletId;
     private Long monthlyAmount;
     private Integer installmentNo;
+    private String savingsType;
 }
