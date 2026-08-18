@@ -87,6 +87,7 @@ class PermissionServiceCreateTest {
 
         given(permissionMapper.countCreatedAtThisMonth(childId)).willReturn(5);
         given(teenyScoreMapper.selectTeenyScoreGradeByChildId(childId)).willReturn(teenyScoreGradeWithLimit(5));
+        given(permissionMapper.selectCreatedTodayByChildId(childId)).willReturn(List.of());
 
         // when & then
         assertThatThrownBy(() -> permissionService.createPermission(childId, "CHILD", requestDTO))
@@ -95,6 +96,45 @@ class PermissionServiceCreateTest {
         verify(memberMapper, never()).selectActiveParentByChildId(any());
         verify(permissionMapper, never()).insertPermission(any());
         verify(notificationService, never()).createNotification(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void 오늘_이미_요청한_적이_있으면_월간_한도에_도달했어도_같은_날_추가_요청은_허용한다() {
+        // given
+        Long childId = 2L;
+        Long parentId = 1L;
+        PermissionRequestDTO requestDTO = PermissionRequestDTO.builder()
+                .categories(List.of(2L))
+                .reason("사유")
+                .build();
+
+        given(permissionMapper.countCreatedAtThisMonth(childId)).willReturn(5);
+        given(teenyScoreMapper.selectTeenyScoreGradeByChildId(childId)).willReturn(teenyScoreGradeWithLimit(5));
+
+        PermissionVO existingToday = PermissionVO.builder()
+                .id(50L).childId(childId).category("편의점").reason("아까 사유")
+                .status(PermissionStatus.PENDING).createdAt(LocalDateTime.now())
+                .build();
+        given(permissionMapper.selectCreatedTodayByChildId(childId)).willReturn(List.of(existingToday));
+
+        MemberParentVO parentVO = new MemberParentVO();
+        parentVO.setParentId(parentId);
+        given(memberMapper.selectActiveParentByChildId(childId)).willReturn(parentVO);
+
+        stubGeneratedIds(300L);
+
+        MemberVO childVO = new MemberVO();
+        childVO.setId(childId);
+        childVO.setName("김첫째");
+        given(memberMapper.selectById(childId)).willReturn(childVO);
+        given(categoryPolicyMapper.selectCategoryNameById(2L)).willReturn("PC방");
+
+        // when
+        List<PermissionResponseDTO> result = permissionService.createPermission(childId, "CHILD", requestDTO);
+
+        // then
+        verify(permissionMapper).insertPermission(any());
+        assertThat(result).isNotEmpty();
     }
 
     @Test

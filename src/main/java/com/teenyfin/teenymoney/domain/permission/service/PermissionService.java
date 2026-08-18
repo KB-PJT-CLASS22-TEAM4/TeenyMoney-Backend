@@ -70,10 +70,13 @@ public class PermissionService {
             throw new BusinessException(PermissionErrorCode.ONLY_CHILD_CAN_MANAGE_PERMISSION);
         }
 
-        int count = permissionMapper.countCreatedAtThisMonth(memberId); // 이번 달에 오늘만 허용을 요청한 일수
+        int count = permissionMapper.countCreatedAtThisMonth(memberId); // 이번 달에 오늘만 허용을 요청한 일수 (오늘 포함)
         int monthlyLimit = teenyScoreMapper.selectTeenyScoreGradeByChildId(memberId).getMonthlyOverrideLimit();  // 이번 달에 요청할 수 있는 일수
 
-        if (count >= monthlyLimit) {
+        // 오늘 이미 요청한 적이 있으면 이번 요청은 새로운 날짜를 소모하지 않으므로 월간 한도 검사에서 제외한다
+        boolean requestedToday = !permissionMapper.selectCreatedTodayByChildId(memberId).isEmpty();
+
+        if (!requestedToday && count >= monthlyLimit) {
             throw new BusinessException(PermissionErrorCode.MONTHLY_LIMIT_EXCEEDED);
         }
 
