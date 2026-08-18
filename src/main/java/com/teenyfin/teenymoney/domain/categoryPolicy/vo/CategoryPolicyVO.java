@@ -14,5 +14,6 @@ public class CategoryPolicyVO {
     private Long id;
     private Long categoryId;
     private String categoryName;
+    private String parentCategoryName;
     private CategoryPolicy policy;
 }

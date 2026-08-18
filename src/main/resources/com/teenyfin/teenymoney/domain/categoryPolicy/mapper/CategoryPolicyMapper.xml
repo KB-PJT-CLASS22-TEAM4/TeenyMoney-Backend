@@ -8,6 +8,7 @@
         <id property="id" column="id"/>
         <result property="categoryId" column="merchant_category_id"/>
         <result property="categoryName" column="name"/>
+        <result property="parentCategoryName" column="parent_name"/>
         <result property="policy" column="policy"/>
     </resultMap>
 
@@ -20,10 +21,13 @@
     </select>
 
     <select id="selectByChildId" resultMap="categoryPolicyResultMap">
-        SELECT p.id, p.merchant_category_id, c.name, p.policy
+        SELECT p.id, p.merchant_category_id, c.name, p.policy,
+        COALESCE(pc.name, c.name) AS parent_name
         FROM T_MCC_POLICY_M p
         JOIN T_MCC_CTGR_C c
         ON p.merchant_category_id = c.id
+        LEFT JOIN T_MCC_CTGR_C pc
+        ON c.parent_id = pc.id
         WHERE p.child_id = #{childId}
     </select>
 

@@ -2,6 +2,7 @@ package com.teenyfin.teenymoney.domain.categoryPolicy.service;
 
 import com.teenyfin.teenymoney.domain.categoryPolicy.dto.request.CategoryPolicyUpdateRequestDTO;
 import com.teenyfin.teenymoney.domain.categoryPolicy.dto.response.CategoryPolicyGroupResponseDTO;
+import com.teenyfin.teenymoney.domain.categoryPolicy.dto.response.CategoryPolicyParentResponseDTO;
 import com.teenyfin.teenymoney.domain.categoryPolicy.dto.response.CategoryPolicyResponseDTO;
 import com.teenyfin.teenymoney.domain.categoryPolicy.exception.CategoryPolicyErrorCode;
 import com.teenyfin.teenymoney.domain.categoryPolicy.mapper.CategoryPolicyMapper;
@@ -68,6 +69,41 @@ public class CategoryPolicyService {
                         .id(x.getId())
                         .categoryName(x.getCategoryName())
                         .policy(x.getPolicy())
+                        .build())
+                .toList();
+    }
+
+    // 상위 카테고리 별 카테고리 정책 조회
+    @Transactional(readOnly = true)
+    public List<CategoryPolicyParentResponseDTO> getCategoryPolicyParentGroup(Long memberId, String role, Long childId) {
+
+        if (role.equals("CHILD")) {
+            childId = memberId;
+        } else if (childId == null) {   // 부모의 경우 childId 값은 필수
+            throw new BusinessException(CategoryPolicyErrorCode.CHILD_ID_REQUIRED);
+        } else if (!Objects.equals(memberMapper.selectActiveParentByChildId(childId).getParentId(), memberId)) {  // 해당 자녀와 연결된 부모인지 확인
+            throw new BusinessException(CategoryPolicyErrorCode.FORBIDDEN_TO_CHILD);
+        }
+
+        List<CategoryPolicyVO> categoryPolicyVOList = categoryPolicyMapper.selectByChildId(childId);
+
+        // 상위 카테고리 이름을 기준으로 그룹화
+        Map<String, List<CategoryPolicyResponseDTO>> grouped = categoryPolicyVOList.stream()
+                .collect(Collectors.groupingBy(
+                        CategoryPolicyVO::getParentCategoryName,
+                        LinkedHashMap::new,
+                        Collectors.mapping(x -> CategoryPolicyResponseDTO.builder()
+                                        .id(x.getId())
+                                        .categoryName(x.getCategoryName())
+                                        .policy(x.getPolicy())
+                                        .build(),
+                                Collectors.toList())
+                ));
+
+        return grouped.entrySet().stream()
+                .map(entry -> CategoryPolicyParentResponseDTO.builder()
+                        .name(entry.getKey())
+                        .categoryPolicyList(entry.getValue())
                         .build())
                 .toList();
     }
