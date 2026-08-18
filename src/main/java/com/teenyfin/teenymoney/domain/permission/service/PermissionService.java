@@ -6,9 +6,12 @@ import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
 import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
 import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
+import com.teenyfin.teenymoney.domain.categoryPolicy.vo.CategoryPolicyVO;
 import com.teenyfin.teenymoney.domain.permission.dto.request.PermissionRequestDTO;
 import com.teenyfin.teenymoney.domain.permission.dto.request.PermissionUpdateRequestDTO;
+import com.teenyfin.teenymoney.domain.permission.dto.response.PermissionCategoryStatusResponseDTO;
 import com.teenyfin.teenymoney.domain.permission.dto.response.PermissionResponseDTO;
+import com.teenyfin.teenymoney.domain.permission.dto.response.PermissionStatusResponseDTO;
 import com.teenyfin.teenymoney.domain.permission.exception.PermissionErrorCode;
 import com.teenyfin.teenymoney.domain.permission.mapper.PermissionMapper;
 import com.teenyfin.teenymoney.domain.permission.vo.PermissionInsertVO;
@@ -17,12 +20,15 @@ import com.teenyfin.teenymoney.domain.permission.vo.PermissionVO;
 import com.teenyfin.teenymoney.domain.teenyscore.mapper.TeenyScoreMapper;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -60,6 +66,43 @@ public class PermissionService {
                 .toList();
     }
 
+    // 이번 달 오늘만 허용 사용 현황과 카테고리별 오늘 기준 현재 상태 조회
+    @Transactional(readOnly = true)
+    public PermissionStatusResponseDTO getPermissionStatus(Long memberId, String role, Long childId) {
+
+        if (role.equals("CHILD")) {
+            childId = memberId;
+        } else if (childId == null) {   // 부모의 경우 childId 값은 필수
+            throw new BusinessException(CategoryPolicyErrorCode.CHILD_ID_REQUIRED);
+        } else if (!Objects.equals(memberMapper.selectActiveParentByChildId(childId).getParentId(), memberId)) {  // 해당 자녀와 연결된 부모인지 확인
+            throw new BusinessException(CategoryPolicyErrorCode.FORBIDDEN_TO_CHILD);
+        }
+
+        int usedCount = permissionMapper.countCreatedAtThisMonth(childId); // 이번 달에 오늘만 허용을 요청한 일수 (오늘 포함)
+        int monthlyLimit = teenyScoreMapper.selectTeenyScoreGradeByChildId(childId).getMonthlyOverrideLimit(); // 이번 달에 요청할 수 있는 일수
+        int remainingCount = Math.max(monthlyLimit - usedCount, 0);
+
+        // 오늘 카테고리별로 이미 생성된 요청의 상태 (없으면 AVAILABLE)
+        Map<Long, PermissionStatus> statusByCategoryId = permissionMapper.selectCreatedTodayByChildId(childId).stream()
+                .collect(Collectors.toMap(PermissionVO::getCategoryId, PermissionVO::getStatus));
+
+        List<CategoryPolicyVO> categoryPolicyVOList = categoryPolicyMapper.selectByChildId(childId);
+
+        List<PermissionCategoryStatusResponseDTO> categories = categoryPolicyVOList.stream()
+                .map(x -> PermissionCategoryStatusResponseDTO.builder()
+                        .categoryId(x.getCategoryId())
+                        .categoryName(x.getCategoryName())
+                        .status(statusByCategoryId.getOrDefault(x.getCategoryId(), PermissionStatus.AVAILABLE))
+                        .build())
+                .toList();
+
+        return PermissionStatusResponseDTO.builder()
+                .monthlyUsedCount(usedCount)
+                .monthlyRemainingCount(remainingCount)
+                .categories(categories)
+                .build();
+    }
+
     // 새로운 오늘만 허용 요청 생성
     @Transactional
     public List<PermissionResponseDTO> createPermission(Long memberId, String role, PermissionRequestDTO permissionRequestDTO) {
@@ -69,10 +112,13 @@ public class PermissionService {
             throw new BusinessException(PermissionErrorCode.ONLY_CHILD_CAN_MANAGE_PERMISSION);
         }
 
-        int count = permissionMapper.countCreatedAtThisMonth(memberId); // 이번 달에 오늘만 허용을 요청한 일수
+        int count = permissionMapper.countCreatedAtThisMonth(memberId); // 이번 달에 오늘만 허용을 요청한 일수 (오늘 포함)
         int monthlyLimit = teenyScoreMapper.selectTeenyScoreGradeByChildId(memberId).getMonthlyOverrideLimit();  // 이번 달에 요청할 수 있는 일수
 
-        if (count >= monthlyLimit) {
+        // 오늘 이미 요청한 적이 있으면 이번 요청은 새로운 날짜를 소모하지 않으므로 월간 한도 검사에서 제외한다
+        boolean requestedToday = !permissionMapper.selectCreatedTodayByChildId(memberId).isEmpty();
+
+        if (!requestedToday && count >= monthlyLimit) {
             throw new BusinessException(PermissionErrorCode.MONTHLY_LIMIT_EXCEEDED);
         }
 
@@ -87,14 +133,17 @@ public class PermissionService {
             PermissionInsertVO permissionInsertVO = PermissionInsertVO.builder()
                     .parentId(parentId)
                     .childId(memberId)
+                    .categoryId(categoryId)
                     .reason(permissionRequestDTO.getReason())
                     .build();
 
-            // 오늘만 요청 row 삽입
-            permissionMapper.insertPermission(permissionInsertVO);
-
-            // 오늘만 허용 대상 카테고리 row 삽입
-            permissionMapper.insertPermissionCategory(permissionInsertVO.getId(), categoryId);
+            // 오늘만 요청 row 삽입 (카테고리 포함). 같은 날 같은 카테고리로 이미 요청한 적이 있으면
+            // UQ_T_TDP_REQ_L_CHILD_CATEGORY_DATE 유니크 제약에 걸려 여기서 터진다.
+            try {
+                permissionMapper.insertPermission(permissionInsertVO);
+            } catch (DuplicateKeyException e) {
+                throw new BusinessException(PermissionErrorCode.DUPLICATE_TODAY_PERMISSION_REQUEST);
+            }
         }
 
         MemberVO memberVO = memberMapper.selectById(memberId);
@@ -190,9 +239,6 @@ public class PermissionService {
 
         PermissionVO permissionVO = permissionMapper.selectById(permissionId);
         validatePermission(memberId, role, permissionVO);
-
-        // 오늘만 허용 대상 카테고리 row 일괄 삭제
-        permissionMapper.deletePermissionCategoriesByPermissionId(permissionId);
 
         // 오늘만 허용 요청 row 삭제
         permissionMapper.deletePermissionById(permissionId);

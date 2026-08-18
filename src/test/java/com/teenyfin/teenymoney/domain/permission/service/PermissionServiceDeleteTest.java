@@ -39,7 +39,6 @@ class PermissionServiceDeleteTest {
         assertThatThrownBy(() -> permissionService.deletePermission(2L, "CHILD", permissionId))
                 .isInstanceOf(BusinessException.class);
 
-        verify(permissionMapper, never()).deletePermissionCategoriesByPermissionId(anyLong());
         verify(permissionMapper, never()).deletePermissionById(anyLong());
     }
 
@@ -62,7 +61,6 @@ class PermissionServiceDeleteTest {
         assertThatThrownBy(() -> permissionService.deletePermission(memberId, "CHILD", permissionId))
                 .isInstanceOf(BusinessException.class);
 
-        verify(permissionMapper, never()).deletePermissionCategoriesByPermissionId(anyLong());
         verify(permissionMapper, never()).deletePermissionById(anyLong());
     }
 
@@ -85,7 +83,6 @@ class PermissionServiceDeleteTest {
         assertThatThrownBy(() -> permissionService.deletePermission(memberId, "CHILD", permissionId))
                 .isInstanceOf(BusinessException.class);
 
-        verify(permissionMapper, never()).deletePermissionCategoriesByPermissionId(anyLong());
         verify(permissionMapper, never()).deletePermissionById(anyLong());
     }
 
@@ -108,12 +105,11 @@ class PermissionServiceDeleteTest {
         assertThatThrownBy(() -> permissionService.deletePermission(memberId, "CHILD", permissionId))
                 .isInstanceOf(BusinessException.class);
 
-        verify(permissionMapper, never()).deletePermissionCategoriesByPermissionId(anyLong());
         verify(permissionMapper, never()).deletePermissionById(anyLong());
     }
 
     @Test
-    void 정상_삭제되면_카테고리와_요청_row가_순서대로_삭제된다() {
+    void 정상_삭제되면_요청_row가_삭제된다() {
         // given
         Long memberId = 2L;
         Long permissionId = 10L;
@@ -131,7 +127,6 @@ class PermissionServiceDeleteTest {
         permissionService.deletePermission(memberId, "CHILD", permissionId);
 
         // then
-        verify(permissionMapper).deletePermissionCategoriesByPermissionId(permissionId);
         verify(permissionMapper).deletePermissionById(permissionId);
     }
 }

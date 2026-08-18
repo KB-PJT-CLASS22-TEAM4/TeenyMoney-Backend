@@ -73,7 +73,6 @@ class PermissionServiceCreateTest {
         verify(permissionMapper, never()).countCreatedAtThisMonth(any());
         verify(teenyScoreMapper, never()).selectTeenyScoreGradeByChildId(any());
         verify(permissionMapper, never()).insertPermission(any());
-        verify(permissionMapper, never()).insertPermissionCategory(any(), any());
         verify(notificationService, never()).createNotification(any(), any(), any(), any(), any(), any());
     }
 
@@ -88,6 +87,7 @@ class PermissionServiceCreateTest {
 
         given(permissionMapper.countCreatedAtThisMonth(childId)).willReturn(5);
         given(teenyScoreMapper.selectTeenyScoreGradeByChildId(childId)).willReturn(teenyScoreGradeWithLimit(5));
+        given(permissionMapper.selectCreatedTodayByChildId(childId)).willReturn(List.of());
 
         // when & then
         assertThatThrownBy(() -> permissionService.createPermission(childId, "CHILD", requestDTO))
@@ -96,6 +96,45 @@ class PermissionServiceCreateTest {
         verify(memberMapper, never()).selectActiveParentByChildId(any());
         verify(permissionMapper, never()).insertPermission(any());
         verify(notificationService, never()).createNotification(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void 오늘_이미_요청한_적이_있으면_월간_한도에_도달했어도_같은_날_추가_요청은_허용한다() {
+        // given
+        Long childId = 2L;
+        Long parentId = 1L;
+        PermissionRequestDTO requestDTO = PermissionRequestDTO.builder()
+                .categories(List.of(2L))
+                .reason("사유")
+                .build();
+
+        given(permissionMapper.countCreatedAtThisMonth(childId)).willReturn(5);
+        given(teenyScoreMapper.selectTeenyScoreGradeByChildId(childId)).willReturn(teenyScoreGradeWithLimit(5));
+
+        PermissionVO existingToday = PermissionVO.builder()
+                .id(50L).childId(childId).category("편의점").reason("아까 사유")
+                .status(PermissionStatus.PENDING).createdAt(LocalDateTime.now())
+                .build();
+        given(permissionMapper.selectCreatedTodayByChildId(childId)).willReturn(List.of(existingToday));
+
+        MemberParentVO parentVO = new MemberParentVO();
+        parentVO.setParentId(parentId);
+        given(memberMapper.selectActiveParentByChildId(childId)).willReturn(parentVO);
+
+        stubGeneratedIds(300L);
+
+        MemberVO childVO = new MemberVO();
+        childVO.setId(childId);
+        childVO.setName("김첫째");
+        given(memberMapper.selectById(childId)).willReturn(childVO);
+        given(categoryPolicyMapper.selectCategoryNameById(2L)).willReturn("PC방");
+
+        // when
+        List<PermissionResponseDTO> result = permissionService.createPermission(childId, "CHILD", requestDTO);
+
+        // then
+        verify(permissionMapper).insertPermission(any());
+        assertThat(result).isNotEmpty();
     }
 
     @Test
@@ -123,7 +162,6 @@ class PermissionServiceCreateTest {
         // then
         assertThat(result).isEmpty();
         verify(permissionMapper, never()).insertPermission(any());
-        verify(permissionMapper, never()).insertPermissionCategory(any(), any());
         verify(notificationService, never()).createNotification(any(), any(), any(), any(), any(), any());
     }
 
@@ -165,17 +203,17 @@ class PermissionServiceCreateTest {
         // when
         List<PermissionResponseDTO> result = permissionService.createPermission(childId, "CHILD", requestDTO);
 
-        // then: 카테고리 개수(2개)만큼 permission row와 category row가 각각 삽입된다
+        // then: 카테고리 개수(2개)만큼 permission row가 카테고리를 포함해서 각각 삽입된다
         ArgumentCaptor<PermissionInsertVO> insertCaptor = ArgumentCaptor.forClass(PermissionInsertVO.class);
         verify(permissionMapper, Mockito.times(2)).insertPermission(insertCaptor.capture());
-        for (PermissionInsertVO captured : insertCaptor.getAllValues()) {
+        List<PermissionInsertVO> insertedList = insertCaptor.getAllValues();
+        for (PermissionInsertVO captured : insertedList) {
             assertThat(captured.getParentId()).isEqualTo(parentId);
             assertThat(captured.getChildId()).isEqualTo(childId);
             assertThat(captured.getReason()).isEqualTo(reason);
         }
-
-        verify(permissionMapper).insertPermissionCategory(100L, 1L);
-        verify(permissionMapper).insertPermissionCategory(101L, 2L);
+        assertThat(insertedList).extracting(PermissionInsertVO::getCategoryId)
+                .containsExactly(1L, 2L);
 
         // then: 부모에게 첫 카테고리 이름 + "외 1건" 문구로 알림이 발송된다
         verify(notificationService).createNotification(
@@ -231,5 +269,35 @@ class PermissionServiceCreateTest {
                 eq(NotificationReferenceType.TODAY_PERMISSION),
                 eq(null),
                 eq(true));
+    }
+
+    @Test
+    void 같은_날_같은_카테고리로_이미_요청했으면_유니크_제약_위반을_전용_에러로_변환한다() {
+        // given
+        Long childId = 2L;
+        Long parentId = 1L;
+
+        PermissionRequestDTO requestDTO = PermissionRequestDTO.builder()
+                .categories(List.of(1L))
+                .reason("사유")
+                .build();
+
+        given(permissionMapper.countCreatedAtThisMonth(childId)).willReturn(0);
+        given(teenyScoreMapper.selectTeenyScoreGradeByChildId(childId)).willReturn(teenyScoreGradeWithLimit(5));
+
+        MemberParentVO parentVO = new MemberParentVO();
+        parentVO.setParentId(parentId);
+        given(memberMapper.selectActiveParentByChildId(childId)).willReturn(parentVO);
+
+        // UQ_T_TDP_REQ_L_CHILD_CATEGORY_DATE 유니크 제약 위반을 흉내낸다
+        Mockito.doThrow(new org.springframework.dao.DuplicateKeyException("duplicate"))
+                .when(permissionMapper).insertPermission(any());
+
+        // when & then
+        assertThatThrownBy(() -> permissionService.createPermission(childId, "CHILD", requestDTO))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(com.teenyfin.teenymoney.domain.permission.exception.PermissionErrorCode.DUPLICATE_TODAY_PERMISSION_REQUEST);
+        verify(notificationService, never()).createNotification(any(), any(), any(), any(), any(), any());
     }
 }

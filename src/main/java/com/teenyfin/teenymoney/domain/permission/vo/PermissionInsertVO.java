@@ -11,5 +11,6 @@ public class PermissionInsertVO {
     private Long id;
     private Long parentId;
     private Long childId;
+    private Long categoryId;
     private String reason;
 }

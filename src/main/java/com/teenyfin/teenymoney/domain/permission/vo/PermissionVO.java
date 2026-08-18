@@ -16,6 +16,7 @@ public class PermissionVO {
     private Long id;
     private Long parentId;
     private Long childId;
+    private Long categoryId;
     private String category;
     private String reason;
     private PermissionStatus status;
