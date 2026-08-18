@@ -64,6 +64,8 @@ public class SecurityConfig {
             "/api/v1/auth/legal-guardian-verification/confirm", // [보호자 가입 흐름 3] 가입 전 동의 토큰 발급 API
             "/api/v1/health",         // 헬스체크 — 모니터링이 토큰 없이 호출
             "/api/v1/health/**",
+            "/api/v1/terms",          // 약관 조회 — 가입 전에도 봐야 하는 문서다
+            "/api/v1/terms/**",
 
             // Swagger (springfox 2.9.2) — UI 자체 + UI가 로드하는 정적 리소스 + 스펙 JSON
             "/swagger-ui.html",
