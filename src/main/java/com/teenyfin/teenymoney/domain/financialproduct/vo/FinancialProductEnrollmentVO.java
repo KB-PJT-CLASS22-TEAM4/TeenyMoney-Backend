@@ -35,6 +35,7 @@ public class FinancialProductEnrollmentVO {
     private Integer paidCount;
     private Integer totalPaymentCount;
     private Integer paymentDay;
+    private LocalDate nextPaymentDate;
     private Boolean autoTransfer;
     private Long principalAmount;
     private Long outstandingPrincipal;

@@ -335,7 +335,7 @@ class FinancialProductServiceTest {
     }
 
     @Test
-    @DisplayName("자녀 본인 계약 목록은 로그인한 자녀 ID로 조회하고 금액을 currentAmount로 반환한다")
+    @DisplayName("적금 목록은 납입일과 다음 납입 예정일을 함께 반환한다")
     void childReadsOwnEnrollmentListWithCurrentAmount() {
         FinancialProductEnrollmentVO saving = new FinancialProductEnrollmentVO();
         saving.setEnrollmentId(31L);
@@ -346,6 +346,8 @@ class FinancialProductServiceTest {
         saving.setSavingsType("FIXED");
         saving.setInterestCalculationType("SIMPLE");
         saving.setStartDate(LocalDate.of(2026, 8, 1));
+        saving.setPaymentDay(15);
+        saving.setNextPaymentDate(LocalDate.of(2026, 8, 15));
         saving.setMonthlyAmount(30_000L);
         saving.setAccumulatedAmount(90_000L);
         when(mapper.selectSavingEnrollmentsByChildId(CHILD.memberId()))
@@ -360,6 +362,9 @@ class FinancialProductServiceTest {
         assertEquals("매월 자동으로 모으는 목표 적금",
                 response.getDescription());
         assertEquals(LocalDate.of(2026, 8, 1), response.getStartDate());
+        assertEquals(15, response.getPaymentDay());
+        assertEquals(LocalDate.of(2026, 8, 15),
+                response.getNextPaymentDate());
         assertEquals(30_000L, response.getMonthlyAmount());
         assertEquals(90_000L, response.getCurrentAmount());
     }

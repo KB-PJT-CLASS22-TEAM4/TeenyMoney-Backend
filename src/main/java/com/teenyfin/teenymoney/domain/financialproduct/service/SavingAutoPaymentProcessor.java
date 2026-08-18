@@ -49,6 +49,14 @@ public class SavingAutoPaymentProcessor {
             return;
         }
 
+        // 자유적금은 자동 출금하지 않고 지정일까지 납입 이력이 없을 때만 미납으로 확정한다.
+        if ("FREE".equals(payment.getSavingsType())) {
+            financialProductMapper.insertSavingPaymentHistory(
+                    enrollmentId, null, payment.getInstallmentNo(),
+                    payment.getMonthlyAmount(), 0L, "MISSED");
+            return;
+        }
+
         WalletVO memberWallet = walletMapper.selectMemberWalletByMemberId(
                 payment.getChildId());
         if (memberWallet == null) {
