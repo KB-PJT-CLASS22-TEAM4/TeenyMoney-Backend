@@ -37,6 +37,9 @@
         SELECT
         #{parentId}, #{childId}, c.id, c.default_policy, NOW()
         FROM T_MCC_CTGR_C c
+        WHERE c.id NOT IN (
+            SELECT DISTINCT parent_id FROM T_MCC_CTGR_C WHERE parent_id IS NOT NULL
+        )
     </insert>
 
     <update id="updateAllPolicies">
