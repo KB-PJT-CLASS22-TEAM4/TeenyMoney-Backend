@@ -61,33 +61,29 @@ public class ReportAnalysisService {
         }
         Long childId = principal.memberId();
 
-
         YearMonth thisMonth = YearMonth.now(clock);
         YearMonth lastMonth = thisMonth.minusMonths(1);
 
-        // === 트랜잭션 구간 시작 ===
-        // 이번 달 + 지난달 데이터를 모으는 동안만 DB 커넥션을 잡는다. execute()가 리턴하는
-        // 순간(즉 이 블록이 끝나는 순간) 트랜잭션이 커밋되고 커넥션이 커넥션 풀로 반납된다.
-        ReportAnalysisPayload payload = transactionTemplate.execute(status -> {
-            MonthlyHabitData thisMonthData = collect(principal, childId, thisMonth);
-            // 지난달은 가입 첫 달인 경우 존재하지 않을 수 있다 - 그럴 땐 null로 넘어간다.
-            MonthlyHabitData lastMonthData = collectIfAvailable(principal, childId, lastMonth);
-            return new ReportAnalysisPayload(thisMonthData, lastMonthData);
-        });
+        // 이번 달과 지난달을 "각자 자기만의 트랜잭션"으로 분리한다 - 하나로 묶으면 지난달
+        // 조회 실패가 이번 달 결과까지 커밋 못 하게 만드는 문제(UnexpectedRollbackException)가 생긴다.
+        MonthlyHabitData thisMonthData = transactionTemplate.execute(status -> collect(principal, childId, thisMonth));
+        MonthlyHabitData lastMonthData = collectIfAvailable(principal, childId, lastMonth);
 
-        String reportDataJson = serialize(payload);
-
-        // Dify가 아무리 느려도(최대 120초) 여기선 DB 커넥션을 붙잡고 있지 않으므로
-        // 다른 요청들이 커넥션 풀을 못 써서 같이 멈추는 일이 없다.
+        String reportDataJson = serialize(new ReportAnalysisPayload(thisMonthData, lastMonthData));
         String analysis = difyClient.analyze(reportDataJson, "member-" + childId);
 
         return new ReportAnalysisResponseDTO(analysis);
     }
 
+    // 지난달 조회는 실패할 수 있다는 전제로 자기만의 트랜잭션에 넣는다. collect() 내부에서
+    // BusinessException이 나면 그 트랜잭션은 정상적인 방식으로(=트랜잭션 밖으로 예외가
+    // 그대로 새나가면서) 롤백된다 - 트랜잭션 "안"에서 잡으면 rollback-only로 표시된
+    // 트랜잭션을 그대로 커밋하려다 UnexpectedRollbackException이 나므로, catch는 반드시
+    // execute() 호출 바깥(여기)에 있어야 한다.
     private MonthlyHabitData collectIfAvailable(MemberPrincipal principal, Long childId, YearMonth month) {
         try {
-            return collect(principal, childId, month);
-        }catch (BusinessException e) {
+            return transactionTemplate.execute(status -> collect(principal, childId, month));
+        } catch (BusinessException e) {
             if (e.getErrorCode() == MoneyReportErrorCode.MONEY_REPORT_MONTH_BEFORE_JOIN) {
                 return null;
             }
