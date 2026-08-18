@@ -51,7 +51,7 @@ public class CategoryPolicyController {
 
     @ApiOperation(value = "전체 카테고리 정책 단계 수정", notes = "모든 카테고리의 정책 단계를 동시에 수정합니다.")
     @PatchMapping
-    public ApiResponse<List<CategoryPolicyResponseDTO>> updateCategoryPolicy(
+    public ApiResponse<List<CategoryPolicyParentResponseDTO>> updateCategoryPolicy(
             @AuthenticationPrincipal MemberPrincipal memberPrincipal,
             @RequestParam(required = false) Long childId,
             @ApiParam(value = "전체 카테고리에 대한 ID와 변경 후 정책 단계", required = true) @RequestBody @Valid CategoryPolicyUpdateRequestListDTO categoryPolicyUpdateRequestDTOList) {
