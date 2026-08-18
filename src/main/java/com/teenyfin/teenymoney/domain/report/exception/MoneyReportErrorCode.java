@@ -27,7 +27,7 @@ public enum MoneyReportErrorCode implements ErrorCode {
     MONEY_REPORT_ANALYSIS_REQUEST_FAILED(
             HttpStatus.BAD_GATEWAY, "리포트 분석 응답을 받아오지 못했습니다. 잠시 후 다시 시도해주세요."),
 
-    // Dify가 200을 줬는데 분석 텍스트(outputs.analysis)가 없거나 빈 경우
+    // Dify가 200을 줬는데 분석 텍스트(outputs.text)가 없거나 빈 경우
     MONEY_REPORT_ANALYSIS_RESPONSE_INVALID(
             HttpStatus.BAD_GATEWAY, "리포트 분석 응답이 올바르지 않습니다."),
 
