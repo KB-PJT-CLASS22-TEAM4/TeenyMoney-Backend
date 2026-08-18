@@ -8,6 +8,7 @@
         <id property="id" column="id"/>
         <result property="parentId" column="parent_id"/>
         <result property="childId" column="child_id"/>
+        <result property="categoryId" column="category_id"/>
         <result property="category" column="name"/>
         <result property="reason" column="reason"/>
         <result property="status" column="status"/>
@@ -19,6 +20,7 @@
         r.id,
         r.parent_id,
         r.child_id,
+        r.merchant_category_id AS category_id,
         c.name,
         r.reason,
         r.status,
@@ -34,6 +36,7 @@
         r.id,
         r.parent_id,
         r.child_id,
+        r.merchant_category_id AS category_id,
         c.name,
         r.reason,
         r.status,

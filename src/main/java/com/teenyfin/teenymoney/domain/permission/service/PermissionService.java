@@ -6,9 +6,12 @@ import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
 import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
 import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
+import com.teenyfin.teenymoney.domain.categoryPolicy.vo.CategoryPolicyVO;
 import com.teenyfin.teenymoney.domain.permission.dto.request.PermissionRequestDTO;
 import com.teenyfin.teenymoney.domain.permission.dto.request.PermissionUpdateRequestDTO;
+import com.teenyfin.teenymoney.domain.permission.dto.response.PermissionCategoryStatusResponseDTO;
 import com.teenyfin.teenymoney.domain.permission.dto.response.PermissionResponseDTO;
+import com.teenyfin.teenymoney.domain.permission.dto.response.PermissionStatusResponseDTO;
 import com.teenyfin.teenymoney.domain.permission.exception.PermissionErrorCode;
 import com.teenyfin.teenymoney.domain.permission.mapper.PermissionMapper;
 import com.teenyfin.teenymoney.domain.permission.vo.PermissionInsertVO;
@@ -23,7 +26,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -59,6 +64,43 @@ public class PermissionService {
                         .createdAt(x.getCreatedAt())
                         .build())
                 .toList();
+    }
+
+    // 이번 달 오늘만 허용 사용 현황과 카테고리별 오늘 기준 현재 상태 조회
+    @Transactional(readOnly = true)
+    public PermissionStatusResponseDTO getPermissionStatus(Long memberId, String role, Long childId) {
+
+        if (role.equals("CHILD")) {
+            childId = memberId;
+        } else if (childId == null) {   // 부모의 경우 childId 값은 필수
+            throw new BusinessException(CategoryPolicyErrorCode.CHILD_ID_REQUIRED);
+        } else if (!Objects.equals(memberMapper.selectActiveParentByChildId(childId).getParentId(), memberId)) {  // 해당 자녀와 연결된 부모인지 확인
+            throw new BusinessException(CategoryPolicyErrorCode.FORBIDDEN_TO_CHILD);
+        }
+
+        int usedCount = permissionMapper.countCreatedAtThisMonth(childId); // 이번 달에 오늘만 허용을 요청한 일수 (오늘 포함)
+        int monthlyLimit = teenyScoreMapper.selectTeenyScoreGradeByChildId(childId).getMonthlyOverrideLimit(); // 이번 달에 요청할 수 있는 일수
+        int remainingCount = Math.max(monthlyLimit - usedCount, 0);
+
+        // 오늘 카테고리별로 이미 생성된 요청의 상태 (없으면 AVAILABLE)
+        Map<Long, PermissionStatus> statusByCategoryId = permissionMapper.selectCreatedTodayByChildId(childId).stream()
+                .collect(Collectors.toMap(PermissionVO::getCategoryId, PermissionVO::getStatus));
+
+        List<CategoryPolicyVO> categoryPolicyVOList = categoryPolicyMapper.selectByChildId(childId);
+
+        List<PermissionCategoryStatusResponseDTO> categories = categoryPolicyVOList.stream()
+                .map(x -> PermissionCategoryStatusResponseDTO.builder()
+                        .categoryId(x.getCategoryId())
+                        .categoryName(x.getCategoryName())
+                        .status(statusByCategoryId.getOrDefault(x.getCategoryId(), PermissionStatus.AVAILABLE))
+                        .build())
+                .toList();
+
+        return PermissionStatusResponseDTO.builder()
+                .monthlyUsedCount(usedCount)
+                .monthlyRemainingCount(remainingCount)
+                .categories(categories)
+                .build();
     }
 
     // 새로운 오늘만 허용 요청 생성

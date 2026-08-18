@@ -3,6 +3,7 @@ package com.teenyfin.teenymoney.domain.permission.controller;
 import com.teenyfin.teenymoney.domain.permission.dto.request.PermissionRequestDTO;
 import com.teenyfin.teenymoney.domain.permission.dto.request.PermissionUpdateRequestDTO;
 import com.teenyfin.teenymoney.domain.permission.dto.response.PermissionResponseDTO;
+import com.teenyfin.teenymoney.domain.permission.dto.response.PermissionStatusResponseDTO;
 import com.teenyfin.teenymoney.domain.permission.service.PermissionService;
 import com.teenyfin.teenymoney.global.response.ApiResponse;
 import com.teenyfin.teenymoney.global.security.MemberPrincipal;
@@ -30,6 +31,14 @@ public class PermissionController {
             @AuthenticationPrincipal MemberPrincipal memberPrincipal,
             @RequestParam(required = false) Long childId) {
         return ApiResponse.ok(permissionService.getPermission(memberPrincipal.memberId(), memberPrincipal.role(), childId));
+    }
+
+    @ApiOperation(value = "오늘만 허용 요청 현황 조회", notes = "이번 달 오늘만 허용을 요청한 일수, 앞으로 요청 가능한 일수와 카테고리별 오늘 기준 현재 상태(AVAILABLE/PENDING/APPROVED/REJECTED/EXPIRED)를 조회합니다.")
+    @GetMapping("/status")
+    public ApiResponse<PermissionStatusResponseDTO> getPermissionStatus(
+            @AuthenticationPrincipal MemberPrincipal memberPrincipal,
+            @RequestParam(required = false) Long childId) {
+        return ApiResponse.ok(permissionService.getPermissionStatus(memberPrincipal.memberId(), memberPrincipal.role(), childId));
     }
 
     @ApiOperation(value = "오늘만 허용 요청", notes = "원하는 카테고리와 사유를 포함해 오늘만 허용을 요청합니다.")
