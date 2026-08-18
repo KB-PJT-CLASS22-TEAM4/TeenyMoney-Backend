@@ -45,7 +45,7 @@ public class ReportAnalysisService {
         this.objectMapper = objectMapper;
         this.clock = clock;
     }
-
+// 트랜잭션 사용 이유는 중간에 다른 트랜잭션이 끼어들어 숫자가 안맞는 일을 막기 위함
     @Transactional(readOnly = true)
     public ReportAnalysisResponseDTO analyze(MemberPrincipal principal) {
         Long childId = principal.memberId();
@@ -53,9 +53,11 @@ public class ReportAnalysisService {
         YearMonth thisMonth = YearMonth.now(clock);
         YearMonth lastMonth = thisMonth.minusMonths(1);
 
+        // "이번 달 vs 지난달" 비교의 실체 - 같은 collect()를 월만 바꿔 두 번 부른다.
         MonthlyHabitData thisMonthData = collect(principal, childId, thisMonth);
         MonthlyHabitData lastMonthData = collect(principal, childId, lastMonth);
 
+        // 두 달치를 JSON 문자열 하나로 뭉친 뒤 Dify로 보내고, 서술형 분석 텍스트를 그대로 받아온다.
         String reportDataJson = serialize(thisMonthData, lastMonthData);
         String analysis = difyClient.analyze(reportDataJson, "member-" + childId);
 
@@ -82,6 +84,7 @@ public class ReportAnalysisService {
 
     }
 
+    // 이번 달/지난달 두 MonthlyHabitData를 ReportAnalysisPayload로 감싼 뒤 JSON 문자열로 직렬화
     private String serialize(MonthlyHabitData thisMonth, MonthlyHabitData lastMonth) {
 
         try{
@@ -99,6 +102,7 @@ public class ReportAnalysisService {
     private record ReportAnalysisPayload(MonthlyHabitData thisMonth, MonthlyHabitData lastMonth) {
     }
 
+    //한 달치 분석 재료를 한 덩어리로 묶는 상자 record가 없으면 collect()가 값 3개를 따로따로 리턴해야 하는데 이걸 한덩어리로 묶기 위함
     private record MonthlyHabitData(
             String yearMonth,
             MoneyReportResponseDTO report,
