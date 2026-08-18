@@ -13,7 +13,8 @@ import com.teenyfin.teenymoney.domain.report.vo.DailySpendingVO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import com.teenyfin.teenymoney.global.security.MemberPrincipal;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Clock;
 import java.time.LocalDate;
@@ -38,30 +39,60 @@ public class ReportAnalysisService {
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
-    public ReportAnalysisService(MoneyReportService moneyReportService, MoneyReportMapper moneyReportMapper, ReportAnalysisDifyClient difyClient, ObjectMapper objectMapper, Clock clock) {
+    // DB 조회 구간만 트랜잭션으로 묶기 위한 프로그래밍 방식 트랜잭션. 클래스 전체에
+    // @Transactional을 붙이면 Dify 호출(최대 120초 걸릴 수 있는 외부 HTTP 요청)까지
+    // 같은 트랜잭션 = 같은 DB 커넥션 안에 들어가버려서, 이걸 분리하려고 도입했다.
+    private final TransactionTemplate transactionTemplate;
+
+    public ReportAnalysisService(MoneyReportService moneyReportService, MoneyReportMapper moneyReportMapper, ReportAnalysisDifyClient difyClient, ObjectMapper objectMapper, Clock clock, PlatformTransactionManager transactionManager) {
         this.moneyReportService = moneyReportService;
         this.moneyReportMapper = moneyReportMapper;
         this.difyClient = difyClient;
         this.objectMapper = objectMapper;
         this.clock = clock;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.transactionTemplate.setReadOnly(true);
     }
-// 트랜잭션 사용 이유는 중간에 다른 트랜잭션이 끼어들어 숫자가 안맞는 일을 막기 위함
-    @Transactional(readOnly = true)
+
     public ReportAnalysisResponseDTO analyze(MemberPrincipal principal) {
+
+        if (!difyClient.isConfigured()) {
+            throw new BusinessException(MoneyReportErrorCode.MONEY_REPORT_ANALYSIS_API_KEY_MISSING);
+        }
         Long childId = principal.memberId();
+
 
         YearMonth thisMonth = YearMonth.now(clock);
         YearMonth lastMonth = thisMonth.minusMonths(1);
 
-        // "이번 달 vs 지난달" 비교의 실체 - 같은 collect()를 월만 바꿔 두 번 부른다.
-        MonthlyHabitData thisMonthData = collect(principal, childId, thisMonth);
-        MonthlyHabitData lastMonthData = collect(principal, childId, lastMonth);
+        // === 트랜잭션 구간 시작 ===
+        // 이번 달 + 지난달 데이터를 모으는 동안만 DB 커넥션을 잡는다. execute()가 리턴하는
+        // 순간(즉 이 블록이 끝나는 순간) 트랜잭션이 커밋되고 커넥션이 커넥션 풀로 반납된다.
+        ReportAnalysisPayload payload = transactionTemplate.execute(status -> {
+            MonthlyHabitData thisMonthData = collect(principal, childId, thisMonth);
+            // 지난달은 가입 첫 달인 경우 존재하지 않을 수 있다 - 그럴 땐 null로 넘어간다.
+            MonthlyHabitData lastMonthData = collectIfAvailable(principal, childId, lastMonth);
+            return new ReportAnalysisPayload(thisMonthData, lastMonthData);
+        });
 
-        // 두 달치를 JSON 문자열 하나로 뭉친 뒤 Dify로 보내고, 서술형 분석 텍스트를 그대로 받아온다.
-        String reportDataJson = serialize(thisMonthData, lastMonthData);
+        String reportDataJson = serialize(payload);
+
+        // Dify가 아무리 느려도(최대 120초) 여기선 DB 커넥션을 붙잡고 있지 않으므로
+        // 다른 요청들이 커넥션 풀을 못 써서 같이 멈추는 일이 없다.
         String analysis = difyClient.analyze(reportDataJson, "member-" + childId);
 
         return new ReportAnalysisResponseDTO(analysis);
+    }
+
+    private MonthlyHabitData collectIfAvailable(MemberPrincipal principal, Long childId, YearMonth month) {
+        try {
+            return collect(principal, childId, month);
+        }catch (BusinessException e) {
+            if (e.getErrorCode() == MoneyReportErrorCode.MONEY_REPORT_MONTH_BEFORE_JOIN) {
+                return null;
+            }
+            throw e;
+        }
     }
 
     /**
@@ -85,10 +116,10 @@ public class ReportAnalysisService {
     }
 
     // 이번 달/지난달 두 MonthlyHabitData를 ReportAnalysisPayload로 감싼 뒤 JSON 문자열로 직렬화
-    private String serialize(MonthlyHabitData thisMonth, MonthlyHabitData lastMonth) {
+    private String serialize(ReportAnalysisPayload payload) {
 
         try{
-            return objectMapper.writeValueAsString(new ReportAnalysisPayload(thisMonth, lastMonth));
+            return objectMapper.writeValueAsString(payload);
         } catch(JsonProcessingException exception ) {
             // 우리가 만든 DTO/record들의 조합이라 직렬화가 실패할 일이 사실상 없다 -
             // 방어적으로만 처리하고, 바깥에서 보기엔 "분석 요청을 못 보냈다"는 점에서
