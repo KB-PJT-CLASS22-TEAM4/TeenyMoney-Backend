@@ -119,6 +119,32 @@
           AND effective_at &lt;= #{now}
           AND (expired_at IS NULL OR expired_at &gt; #{now})
     </select>
+
+    <!-- 약관 조회 API. content를 빼는 건 실수가 아니라 의도다 - 약관 전문은 길어서
+         목록에 실으면 화면 하나가 수십 KB를 받는다. 전문은 아래 상세 조회로 가져간다. -->
+    <select id="selectEffectiveAgreements"
+            resultType="com.teenyfin.teenymoney.domain.member.vo.AgreementVO">
+        SELECT id, code, version, title, is_required, effective_at
+        FROM T_MBR_AGRMT_M
+        WHERE effective_at &lt;= #{now}
+          AND (expired_at IS NULL OR expired_at &gt; #{now})
+        ORDER BY is_required DESC, id
+    </select>
+
+    <!-- ORDER BY + LIMIT 1은 안전장치다. UNIQUE(code, version)은 있지만
+         (code, effective_at)에는 제약이 없어서, 같은 code의 유효기간을 겹치게 등록하면
+         단건 select가 TooManyResultsException으로 터진다. LIMIT 1이면 최신 버전을 준다. -->
+    <select id="selectEffectiveAgreementByCode"
+            resultType="com.teenyfin.teenymoney.domain.member.vo.AgreementVO">
+        SELECT id, code, version, title, content, is_required, effective_at
+        FROM T_MBR_AGRMT_M
+        WHERE code = #{code}
+          AND effective_at &lt;= #{now}
+          AND (expired_at IS NULL OR expired_at &gt; #{now})
+        ORDER BY effective_at DESC, id DESC
+        LIMIT 1
+    </select>
+
     <select id="selectChildrenByParentId" resultType="com.teenyfin.teenymoney.domain.member.vo.MemberChildVO">
         SELECT c.id AS child_id, c.name, c.email, c.profile_image_key, c.teeny_score,
         COALESCE(w.balance, 0) AS balance

@@ -1,5 +1,6 @@
 package com.teenyfin.teenymoney.domain.member.mapper;
 
+import com.teenyfin.teenymoney.domain.member.vo.AgreementVO;
 import com.teenyfin.teenymoney.domain.member.vo.MemberChildVO;
 import com.teenyfin.teenymoney.domain.member.vo.MemberParentVO;
 import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
@@ -36,6 +37,13 @@ public interface MemberMapper {
             @Param("code") String code,
             @Param("version") String version,
             @Param("now") LocalDateTime now);
+
+    // 약관 조회 API용. 목록은 전문(content)을 제외한다 - 약관 전문은 길어서
+    // 목록 응답에 실으면 화면 하나가 수십 KB를 받는다.
+    List<AgreementVO> selectEffectiveAgreements(@Param("now") LocalDateTime now);
+
+    AgreementVO selectEffectiveAgreementByCode(@Param("code") String code,
+                                               @Param("now") LocalDateTime now);
 
     int insertAgreementHistory(
             // [보호자 가입 흐름 14] 회원별 약관 동의 주체와 인증 근거를 이력으로 남긴다.
