@@ -133,8 +133,10 @@ public class LoanRepaymentProcessor {
                 ? "PAID" : paidAmount == 0 ? "OVERDUE" : "PARTIAL";
         String enrollmentStatus = repaid ? "REPAID" : "DEFAULTED";
 
+        // repayment_type='SCHEDULED': 자녀가 직접 요청하는 조기상환(LoanEarlyRepaymentService)의
+        // 'EARLY' 이력과 구분하기 위한 값이다.
         mapper.insertLoanRepaymentHistory(
-                loan.getEnrollmentId(), transferId, finalInstallment,
+                loan.getEnrollmentId(), transferId, finalInstallment, "SCHEDULED",
                 principalDue, paidPrincipal, interestDue, paidInterest,
                 historyStatus, processingDate);
         requireLoanUpdated(mapper.updateLoanAfterRepayment(
@@ -199,7 +201,7 @@ public class LoanRepaymentProcessor {
         String enrollmentStatus = repaid ? "REPAID" : overdue ? "OVERDUE" : "ACTIVE";
 
         mapper.insertLoanRepaymentHistory(
-                loan.getEnrollmentId(), transferId, installmentNo,
+                loan.getEnrollmentId(), transferId, installmentNo, "SCHEDULED",
                 principalDue, paidPrincipal, interestDue, paidInterest,
                 historyStatus, dueDate);
         int updated = mapper.updateLoanAfterRepayment(

@@ -13,6 +13,7 @@ import com.teenyfin.teenymoney.domain.financialproduct.vo.FreeSavingMonthlyVO;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.SavingContributionVO;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductTerminationVO;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.LoanRepaymentVO;
+import com.teenyfin.teenymoney.domain.financialproduct.vo.LoanEarlyRepaymentHistoryVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -177,6 +178,13 @@ public interface FinancialProductMapper {
 
     List<Long> selectLoanRepaymentTargetIds(@Param("processingDate") LocalDate processingDate);
     LoanRepaymentVO selectLoanRepaymentForUpdate(@Param("enrollmentId") Long enrollmentId);
+    LoanRepaymentVO selectLoanRepaymentForRead(
+            @Param("childId") Long childId, @Param("enrollmentId") Long enrollmentId);
+    LoanRepaymentVO selectLoanRepaymentForChildForUpdate(
+            @Param("childId") Long childId, @Param("enrollmentId") Long enrollmentId);
+    LoanEarlyRepaymentHistoryVO selectLoanEarlyRepaymentByIdempotencyKey(
+            @Param("enrollmentId") Long enrollmentId,
+            @Param("idempotencyKey") String idempotencyKey);
     int countLoanRepaymentHistory(@Param("enrollmentId") Long enrollmentId,
                                   @Param("installmentNo") Integer installmentNo);
     int countLoanRepaymentHistoryOnDate(
@@ -190,6 +198,7 @@ public interface FinancialProductMapper {
             @Param("enrollmentId") Long enrollmentId,
             @Param("transferId") Long transferId,
             @Param("installmentNo") Integer installmentNo,
+            @Param("repaymentType") String repaymentType,
             @Param("principalAmount") Long principalAmount,
             @Param("paidPrincipalAmount") Long paidPrincipalAmount,
             @Param("interestAmount") Long interestAmount,

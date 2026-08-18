@@ -46,6 +46,10 @@ public enum FinancialProductErrorCode implements ErrorCode {
             HttpStatus.CONFLICT, "만기 전 진행 중인 예금·적금만 중도해지할 수 있습니다."),
     FINANCIAL_PRODUCT_SAVING_MONTHLY_LIMIT_EXCEEDED(
             HttpStatus.BAD_REQUEST, "자유적금의 월 최대 납입 한도를 초과했습니다."),
+    FINANCIAL_PRODUCT_LOAN_EARLY_REPAYMENT_NOT_AVAILABLE(
+            HttpStatus.CONFLICT, "상환 중인 대출만 조기상환할 수 있습니다."),
+    FINANCIAL_PRODUCT_LOAN_EARLY_REPAYMENT_AMOUNT_EXCEEDED(
+            HttpStatus.BAD_REQUEST, "조기상환 금액이 남은 상환 금액을 초과했습니다."),
     FINLIFE_API_KEY_MISSING(
             HttpStatus.SERVICE_UNAVAILABLE, "금감원 API 설정이 필요합니다."),
     FINLIFE_API_UNAVAILABLE(

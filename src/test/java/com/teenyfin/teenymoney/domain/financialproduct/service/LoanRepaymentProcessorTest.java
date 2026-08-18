@@ -48,7 +48,7 @@ class LoanRepaymentProcessorTest {
         verify(transferService).transferInExistingTransaction(
                 10L, 11L, 10_700L, TransferType.LOAN, "LOAN:7:1");
         verify(mapper).insertLoanRepaymentHistory(
-                7L, 30L, 1, 10_000L, 10_000L,
+                7L, 30L, 1, "SCHEDULED", 10_000L, 10_000L,
                 700L, 700L, "PAID", LocalDate.of(2026, 1, 15));
         verify(mapper).updateLoanAfterRepayment(7L, 110_000L, 0L, 1, "ACTIVE");
         verifyNoInteractions(scoreChangeService);
@@ -64,7 +64,7 @@ class LoanRepaymentProcessorTest {
         verify(transferService).transferInExistingTransaction(
                 10L, 11L, 500L, TransferType.LOAN, "LOAN:7:1");
         verify(mapper).insertLoanRepaymentHistory(
-                7L, 30L, 1, 10_000L, 0L,
+                7L, 30L, 1, "SCHEDULED", 10_000L, 0L,
                 700L, 500L, "PARTIAL", LocalDate.of(2026, 1, 15));
         verify(mapper).updateLoanAfterRepayment(7L, 120_000L, 200L, 0, "OVERDUE");
         verify(scoreChangeService).change(any());
@@ -79,7 +79,7 @@ class LoanRepaymentProcessorTest {
 
         verifyNoInteractions(transferService);
         verify(mapper).insertLoanRepaymentHistory(
-                7L, null, 1, 10_000L, 0L,
+                7L, null, 1, "SCHEDULED", 10_000L, 0L,
                 700L, 0L, "OVERDUE", LocalDate.of(2026, 1, 15));
         verify(mapper).updateLoanAfterRepayment(7L, 120_000L, 700L, 0, "OVERDUE");
         verify(scoreChangeService).change(any());
@@ -109,7 +109,7 @@ class LoanRepaymentProcessorTest {
 
         verifyNoInteractions(transferService, walletMapper, scoreChangeService);
         verify(mapper, never()).insertLoanRepaymentHistory(
-                any(), any(), any(), any(), any(), any(), any(), any(), any());
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
         verify(mapper, never()).updateLoanAfterRepayment(
                 any(), any(), any(), any(), any());
     }
@@ -136,9 +136,40 @@ class LoanRepaymentProcessorTest {
         verify(transferService).transferInExistingTransaction(
                 10L, 11L, 20_767L, TransferType.LOAN, "LOAN:7:2");
         verify(mapper).insertLoanRepaymentHistory(
-                7L, 30L, 2, 20_000L, 20_000L,
+                7L, 30L, 2, "SCHEDULED", 20_000L, 20_000L,
                 767L, 767L, "PAID", LocalDate.of(2026, 2, 15));
         verify(mapper).updateLoanAfterRepayment(7L, 100_000L, 0L, 1, "ACTIVE");
+    }
+
+    @Test
+    @DisplayName("조기상환으로 원금이 미리 줄어든 상태에서도 다음 정규 회차를 정상 계산한다")
+    void nextInstallmentReflectsPriorEarlyRepayment() {
+        LoanRepaymentVO loan = activeLoan(120_000L, 12);
+        // 1회차는 이미 처리됐고, 그 사이 조기상환으로 원금이 예정보다 훨씬 낮은 60,000원까지 줄었다고 가정한다.
+        loan.setOutstandingPrincipal(60_000L);
+        when(mapper.selectLoanRepaymentForUpdate(7L)).thenReturn(loan);
+        when(mapper.countLoanRepaymentHistory(7L, 1)).thenReturn(1);
+        when(walletMapper.selectMemberWalletByMemberId(2L)).thenReturn(wallet(10L, 20_000L));
+        when(walletMapper.selectWalletForUpdate(10L)).thenReturn(wallet(10L, 20_000L));
+        when(walletMapper.selectMemberWalletByMemberId(1L)).thenReturn(wallet(11L, 0L));
+        TransferVO transfer = new TransferVO();
+        transfer.setId(30L);
+        when(transferService.transferInExistingTransaction(
+                anyLong(), anyLong(), anyLong(), eq(TransferType.LOAN), anyString()))
+                .thenReturn(transfer);
+        when(mapper.updateLoanAfterRepayment(
+                anyLong(), anyLong(), anyLong(), anyInt(), anyString())).thenReturn(1);
+
+        processor.process(7L, LocalDate.of(2026, 2, 15));
+
+        // 실제 잔액(60,000)이 정상 스케줄상 잔액(110,000)보다 낮아도 미납으로 오인하지 않고
+        // 이번 회차 약정 원금(10,000)만 정상 청구한다.
+        verify(transferService).transferInExistingTransaction(
+                10L, 11L, 10_350L, TransferType.LOAN, "LOAN:7:2");
+        verify(mapper).insertLoanRepaymentHistory(
+                7L, 30L, 2, "SCHEDULED", 10_000L, 10_000L,
+                350L, 350L, "PAID", LocalDate.of(2026, 2, 15));
+        verify(mapper).updateLoanAfterRepayment(7L, 50_000L, 0L, 1, "ACTIVE");
     }
 
     @Test
@@ -179,7 +210,7 @@ class LoanRepaymentProcessorTest {
                 10L, 11L, 10_102L, TransferType.LOAN,
                 "LOAN:OVERDUE:7:2026-01-16");
         verify(mapper).insertLoanRepaymentHistory(
-                7L, 30L, 1, 10_000L, 10_000L,
+                7L, 30L, 1, "SCHEDULED", 10_000L, 10_000L,
                 102L, 102L, "PAID", LocalDate.of(2026, 1, 16));
         verify(mapper).updateLoanAfterRepayment(7L, 0L, 0L, 0, "REPAID");
         verify(scoreChangeService).change(argThat(request ->
@@ -201,7 +232,7 @@ class LoanRepaymentProcessorTest {
 
         verifyNoInteractions(walletMapper, transferService);
         verify(mapper, never()).insertLoanRepaymentHistory(
-                any(), any(), any(), any(), any(), any(), any(), any(), any());
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
         verify(mapper, never()).updateLoanAfterRepayment(
                 any(), any(), any(), any(), any());
     }

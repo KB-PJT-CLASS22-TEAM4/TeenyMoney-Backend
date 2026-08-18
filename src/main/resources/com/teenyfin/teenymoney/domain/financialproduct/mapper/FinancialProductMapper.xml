@@ -1201,6 +1201,62 @@
         FOR UPDATE
     </select>
 
+    <!--
+        조기상환 예상 조회는 잠그지 않고 계약 소유자(child_id)만 확인한다.
+        상태(ACTIVE/OVERDUE/DEFAULTED/REPAID)는 여기서 거르지 않고 서비스 계층에서 판단한다.
+        "계약이 없음"과 "계약은 있지만 상환 대상이 아님"을 서로 다른 에러로 응답하기 위해서다.
+    -->
+    <select id="selectLoanRepaymentForRead"
+            resultType="com.teenyfin.teenymoney.domain.financialproduct.vo.LoanRepaymentVO">
+        SELECT enrollment.id AS enrollment_id, enrollment.parent_id,
+               enrollment.child_id, enrollment.principal_amount,
+               enrollment.outstanding_principal, enrollment.overdue_interest,
+               enrollment.applied_rate, enrollment.applied_late_fee_rate,
+               enrollment.payment_day, enrollment.paid_count,
+               enrollment.term_months, enrollment.start_date,
+               enrollment.maturity_date, enrollment.status,
+               product.repayment_type
+        FROM T_LON_ENROLL_M enrollment
+        INNER JOIN T_LON_PROD_M product ON product.id = enrollment.loan_id
+        WHERE enrollment.id = #{enrollmentId}
+          AND enrollment.child_id = #{childId}
+    </select>
+
+    <!-- 자녀가 직접 실행하는 조기상환은 계약 소유자를 확인하고 잠근 뒤 스케줄러와 같은 락으로 경쟁을 막는다. -->
+    <select id="selectLoanRepaymentForChildForUpdate"
+            resultType="com.teenyfin.teenymoney.domain.financialproduct.vo.LoanRepaymentVO">
+        SELECT enrollment.id AS enrollment_id, enrollment.parent_id,
+               enrollment.child_id, enrollment.principal_amount,
+               enrollment.outstanding_principal, enrollment.overdue_interest,
+               enrollment.applied_rate, enrollment.applied_late_fee_rate,
+               enrollment.payment_day, enrollment.paid_count,
+               enrollment.term_months, enrollment.start_date,
+               enrollment.maturity_date, enrollment.status,
+               product.repayment_type
+        FROM T_LON_ENROLL_M enrollment
+        INNER JOIN T_LON_PROD_M product ON product.id = enrollment.loan_id
+        WHERE enrollment.id = #{enrollmentId}
+          AND enrollment.child_id = #{childId}
+        FOR UPDATE
+    </select>
+
+    <!--
+        네트워크 재시도로 같은 idempotencyKey가 다시 들어오면 이 조회로 잡아내서
+        지갑을 다시 건드리지 않고 최초 처리 결과를 그대로 돌려준다(자유적금 직접납입과 동일한 패턴).
+        repayment_type = 'EARLY' 조건으로 정규 자동상환 이력과는 섞이지 않게 한다.
+    -->
+    <select id="selectLoanEarlyRepaymentByIdempotencyKey"
+            resultType="com.teenyfin.teenymoney.domain.financialproduct.vo.LoanEarlyRepaymentHistoryVO">
+        SELECT history.transfer_id, history.paid_principal_amount, history.paid_interest_amount
+        FROM T_LON_REPAYHIST_H history
+        INNER JOIN T_WLT_TRF_L transfer ON transfer.id = history.transfer_id
+        WHERE history.loan_enrollment_id = #{enrollmentId}
+          AND history.repayment_type = 'EARLY'
+          AND transfer.idempotency_key = #{idempotencyKey}
+          AND transfer.status = 'COMPLETED'
+        LIMIT 1
+    </select>
+
     <select id="countLoanRepaymentHistory" resultType="int">
         SELECT COUNT(*)
         FROM T_LON_REPAYHIST_H
@@ -1226,12 +1282,12 @@
 
     <insert id="insertLoanRepaymentHistory">
         INSERT INTO T_LON_REPAYHIST_H
-            (loan_enrollment_id, transfer_id, installment_no,
+            (loan_enrollment_id, transfer_id, installment_no, repayment_type,
              principal_amount, paid_principal_amount,
              interest_amount, paid_interest_amount, status,
              overdue_start_at, paid_at)
         VALUES
-            (#{enrollmentId}, #{transferId}, #{installmentNo},
+            (#{enrollmentId}, #{transferId}, #{installmentNo}, #{repaymentType},
              #{principalAmount}, #{paidPrincipalAmount},
              #{interestAmount}, #{paidInterestAmount}, #{status},
              CASE WHEN #{status} IN ('OVERDUE', 'PARTIAL')
