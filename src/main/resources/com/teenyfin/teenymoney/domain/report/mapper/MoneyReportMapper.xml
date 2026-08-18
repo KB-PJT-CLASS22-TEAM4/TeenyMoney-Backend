@@ -354,4 +354,23 @@
         WHERE e.child_id = #{childId} AND e.start_date IS NOT NULL
     </select>
 
+    <!--
+          정기 용돈 입금일. 완료 시점(updated_at)을 쓴다 -
+          created_at은 "시도 일시"라 월말에 걸쳐 지연 처리된 건이 신청한 달로 잘못 잡힌다.
+          to_wallet_id 기준으로만 본다 - 용돈은 항상 부모 -> 자녀 방향이라 from 쪽은 볼 필요가 없다.
+      -->
+    <select id="selectAllowanceCredits"
+            resultType="com.teenyfin.teenymoney.domain.report.vo.AllowanceCreditVO">
+        SELECT DATE(COALESCE(t.updated_at, t.created_at)) AS credited_on,
+            t.amount                                    AS amount
+        FROM T_WLT_TRF_L t
+            JOIN T_WLT_BASE_M tw ON tw.id = t.to_wallet_id
+        WHERE t.type = 'ALLOWANCE'
+          AND t.status = 'COMPLETED'
+          AND tw.member_id = #{childId}
+          AND COALESCE(t.updated_at, t.created_at) &gt;= #{from}
+          AND COALESCE(t.updated_at, t.created_at) &lt; DATE_ADD(#{to}, INTERVAL 1 DAY)
+        ORDER BY credited_on
+    </select>
+
 </mapper>
