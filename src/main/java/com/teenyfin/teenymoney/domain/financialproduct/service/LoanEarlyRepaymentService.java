@@ -115,11 +115,11 @@ public class LoanEarlyRepaymentService {
             throw new IllegalStateException("대출 조기상환 상태 변경에 실패했습니다.");
         }
 
-        // 완제된 경우에만 점수를 반영한다. 만기 정상완납과 같은 정책(loanMaturity)을 재사용하는데,
-        // 이벤트 키가 "LOAN_REPAID:{enrollmentId}"로 계약당 한 번뿐이라 스케줄러의 정상완납과
-        // 조기상환의 완제가 같은 계약에서 동시에 중복 반영될 일은 없다.
+        // 완제 보너스는 ACTIVE/OVERDUE에서 완제했을 때만 준다. DEFAULTED에서 완제한 경우는
+        // LoanRepaymentProcessor.processPostMaturity()와 동일하게 페널티에서 벗어날 뿐 보너스는 없다
+        // (한 번 만기를 넘겨 DEFAULTED가 확정된 이상 "정상완납"으로 보지 않는다).
         int scoreChange = NO_SCORE_CHANGE;
-        if (repaid) {
+        if (repaid && isMaturityBonusEligible(loan.getStatus())) {
             var scoreRequest = scorePolicyService.loanMaturity(loan.getChildId(), enrollmentId);
             scoreChangeService.change(scoreRequest);
             scoreChange = scoreRequest.getAmount();
@@ -184,7 +184,7 @@ public class LoanEarlyRepaymentService {
         long remainingOutstanding = loan.getOutstandingPrincipal() - calculation.paidPrincipal;
         long remainingOverdueInterest = loan.getOverdueInterest() - calculation.paidInterest;
         boolean wouldRepay = remainingOutstanding == 0 && remainingOverdueInterest == 0;
-        int scoreChange = wouldRepay
+        int scoreChange = wouldRepay && isMaturityBonusEligible(loan.getStatus())
                 ? scorePolicyService.loanMaturity(
                         loan.getChildId(), loan.getEnrollmentId()).getAmount()
                 : NO_SCORE_CHANGE;
@@ -195,6 +195,11 @@ public class LoanEarlyRepaymentService {
                 calculation.paidInterest, calculation.paidPrincipal,
                 remainingOutstanding, remainingOverdueInterest,
                 status, scoreChange, executed);
+    }
+
+    /** DEFAULTED에서 완제된 경우는 만기 정상완납 보너스 대상이 아니다. */
+    private boolean isMaturityBonusEligible(String statusBeforeRepayment) {
+        return "ACTIVE".equals(statusBeforeRepayment) || "OVERDUE".equals(statusBeforeRepayment);
     }
 
     private LoanRepaymentVO requireRepayableLoan(LoanRepaymentVO loan) {

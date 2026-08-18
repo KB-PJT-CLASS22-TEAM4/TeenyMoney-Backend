@@ -132,8 +132,8 @@ class LoanEarlyRepaymentServiceTest {
     }
 
     @Test
-    @DisplayName("DEFAULTED 상태인 대출도 조기상환으로 갚아 REPAID로 종료할 수 있다")
-    void repayAllowsDefaultedLoanToBeClosed() {
+    @DisplayName("DEFAULTED 상태인 대출도 조기상환으로 갚아 REPAID로 종료할 수 있지만 완납 보너스는 없다")
+    void repayAllowsDefaultedLoanToBeClosedWithoutMaturityBonus() {
         LoanRepaymentVO loan = activeLoan(5_000L, 2_000L);
         loan.setStatus("DEFAULTED");
         when(mapper.selectLoanRepaymentForChildForUpdate(2L, 7L)).thenReturn(loan);
@@ -145,9 +145,12 @@ class LoanEarlyRepaymentServiceTest {
         LoanEarlyRepaymentResponseDTO response = service.repay(
                 CHILD, 7L, new LoanEarlyRepaymentRequestDTO(7_000L, IDEMPOTENCY_KEY));
 
+        // 스케줄러의 processPostMaturity()도 DEFAULTED에서 완제되면 페널티에서 벗어날 뿐
+        // 만기 정상완납 보너스는 주지 않는다 — 조기상환도 같은 정책을 따른다.
         assertThat(response.getStatus()).isEqualTo("REPAID");
+        assertThat(response.getScoreChange()).isZero();
         verify(mapper).updateLoanAfterRepayment(7L, 0L, 0L, 0, "REPAID");
-        verify(scoreChangeService).change(any());
+        verifyNoInteractions(scoreChangeService);
     }
 
     @Test
