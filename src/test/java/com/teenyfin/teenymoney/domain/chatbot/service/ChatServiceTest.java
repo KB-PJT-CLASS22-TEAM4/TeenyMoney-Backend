@@ -6,11 +6,17 @@ import com.teenyfin.teenymoney.domain.chatbot.dto.request.ChatMessageRequestDTO;
 import com.teenyfin.teenymoney.domain.chatbot.dto.response.ChatMessageResponseDTO;
 import com.teenyfin.teenymoney.domain.chatbot.exception.ChatbotErrorCode;
 import com.teenyfin.teenymoney.domain.chatbot.store.ChatConversationOwnerStore;
+import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
+import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import com.teenyfin.teenymoney.global.security.MemberPrincipal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import java.time.Clock;
+import java.time.LocalDate;
+import java.time.ZoneId;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -28,13 +34,21 @@ class ChatServiceTest {
 
     private DifyClient difyClient;
     private ChatConversationOwnerStore conversationOwnerStore;
+    private MemberMapper memberMapper;
     private ChatService service;
 
     @BeforeEach
     void setUp() {
         difyClient = mock(DifyClient.class);
         conversationOwnerStore = mock(ChatConversationOwnerStore.class);
-        service = new ChatService(difyClient, conversationOwnerStore);
+        memberMapper = mock(MemberMapper.class);
+        // memberMapper.selectById(...)를 따로 스텁하지 않으면 기본값 null을 돌려주므로,
+        // withAgePrefix()가 "자녀 정보 없음" 경로를 타서 질문을 원본 그대로 보낸다 -
+        // 그래서 아래 기존 테스트들의 질문 문자열 검증은 그대로 유지된다.
+        Clock clock = Clock.fixed(
+                LocalDate.of(2026, 8, 18).atStartOfDay(ZoneId.of("Asia/Seoul")).toInstant(),
+                ZoneId.of("Asia/Seoul"));
+        service = new ChatService(difyClient, conversationOwnerStore, memberMapper, clock);
     }
 
     @Test
@@ -52,6 +66,40 @@ class ChatServiceTest {
         verify(conversationOwnerStore).saveOwner("new-conv-id", 1L);
         assertEquals("이자는...", response.getAnswer());
         assertEquals("new-conv-id", response.getConversationId());
+    }
+
+    @Test
+    @DisplayName("새 대화 시작 시 생년월일을 알 수 있으면 질문 앞에 나이를 붙여서 Dify에 보낸다")
+    void newConversationPrependsAgeWhenBirthDateKnown() {
+        ChatMessageRequestDTO request = request("티니점수가 뭐야?", null);
+        MemberVO member = new MemberVO();
+        member.setBirthDate(LocalDate.of(2015, 5, 20)); // 2026-08-18 기준 만 11세
+        when(memberMapper.selectById(1L)).thenReturn(member);
+        when(difyClient.sendMessage("나는 11살이야. 티니점수가 뭐야?", null, "member-1"))
+                .thenReturn(difyResponse("티니점수는...", "new-conv-id"));
+
+        ChatMessageResponseDTO response = service.sendMessage(ME, request);
+
+        assertEquals("티니점수는...", response.getAnswer());
+    }
+
+    @Test
+    @DisplayName("이어지는 대화(conversationId 있음)에는 나이를 다시 붙이지 않는다")
+    void continuingConversationDoesNotPrependAgeAgain() {
+        ChatMessageRequestDTO request = request("더 자세히 알려줘", "conv-1");
+        MemberVO member = new MemberVO();
+        member.setBirthDate(LocalDate.of(2015, 5, 20));
+        when(memberMapper.selectById(1L)).thenReturn(member);
+        when(conversationOwnerStore.findOwner("conv-1")).thenReturn(1L);
+        when(difyClient.sendMessage("더 자세히 알려줘", "conv-1", "member-1"))
+                .thenReturn(difyResponse("더 자세히 설명하면...", "conv-1"));
+
+        ChatMessageResponseDTO response = service.sendMessage(ME, request);
+
+        assertEquals("더 자세히 설명하면...", response.getAnswer());
+        // 나이 프리픽스가 안 붙었다는 걸 확인하려면 memberMapper가 아예 호출 안 됐는지 보면 된다 -
+        // 이어지는 대화는 나이 조회 자체를 시도하지 않는다.
+        verify(memberMapper, never()).selectById(any());
     }
 
     @Test

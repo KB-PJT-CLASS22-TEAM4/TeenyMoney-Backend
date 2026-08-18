@@ -12,7 +12,9 @@ import com.teenyfin.teenymoney.domain.report.dto.response.SummaryResponseDTO;
 import com.teenyfin.teenymoney.domain.report.dto.response.WatchSpendingResponseDTO;
 import com.teenyfin.teenymoney.domain.report.dto.response.WeeklyTrendResponseDTO;
 import com.teenyfin.teenymoney.domain.report.exception.MoneyReportErrorCode;
+import com.teenyfin.teenymoney.domain.report.dto.response.ReportAnalysisResponseDTO;
 import com.teenyfin.teenymoney.domain.report.service.MoneyReportService;
+import com.teenyfin.teenymoney.domain.report.service.ReportAnalysisService;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import com.teenyfin.teenymoney.global.exception.CommonErrorCode;
 import com.teenyfin.teenymoney.global.exception.GlobalExceptionAdvice;
@@ -64,15 +66,21 @@ class MoneyReportControllerTest {
     private static final MemberPrincipal OTHER_CHILD = new MemberPrincipal(3L, "CHILD");
 
     private MoneyReportService moneyReportService;
+    private ReportAnalysisService reportAnalysisService;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         moneyReportService = mock(MoneyReportService.class);
+        reportAnalysisService = mock(ReportAnalysisService.class);
         ObjectMapper objectMapper = Jackson2ObjectMapperBuilder.json().build();
 
+        // standaloneSetup은 @PreAuthorize를 실제로 강제하지 않는다(스프링 시큐리티 필터체인이
+        // 없는 순수 MockMvc라서) - 그래서 이 테스트 파일에서 /reports/money/analysis의
+        // "자녀만 호출 가능" 여부는 검증하지 않는다. 여기서는 컨트롤러가 서비스 호출과
+        // 응답 매핑을 제대로 하는지만 본다.
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new MoneyReportController(moneyReportService))
+                .standaloneSetup(new MoneyReportController(moneyReportService, reportAnalysisService))
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .setControllerAdvice(new GlobalExceptionAdvice())
                 .setMessageConverters(new MappingJackson2HttpMessageConverter(objectMapper))
@@ -96,6 +104,24 @@ class MoneyReportControllerTest {
 
     private int status(String url) throws Exception {
         return mockMvc.perform(get(url)).andReturn().getResponse().getStatus();
+    }
+
+    // ---- AI 분석 (/reports/money/analysis) -------------------------------------
+    // @PreAuthorize("hasRole('CHILD')") 자체는 standaloneSetup에서 검증 안 됨 (위 setUp 주석 참고).
+    // 여기서는 컨트롤러가 서비스 결과를 그대로 ApiResponse로 감싸서 내려주는지만 확인한다.
+
+    @Test
+    @DisplayName("분석 API를 호출하면 서비스가 만든 분석 텍스트를 그대로 감싸서 내려준다")
+    void analyzeReturnsAnalysisFromService() throws Exception {
+        authenticate(CHILD);
+        when(reportAnalysisService.analyze(CHILD))
+                .thenReturn(new ReportAnalysisResponseDTO("이번 달엔 용돈을 받은 날 크게 쓰는 습관이 보였어요."));
+
+        String body = body("/reports/money/analysis");
+
+        assertTrue(body.contains("\"success\":true"), body);
+        assertTrue(body.contains("이번 달엔 용돈을 받은 날 크게 쓰는 습관이 보였어요."), body);
+        verify(reportAnalysisService).analyze(CHILD);
     }
 
     // ---- 정상 -----------------------------------------------------------------
