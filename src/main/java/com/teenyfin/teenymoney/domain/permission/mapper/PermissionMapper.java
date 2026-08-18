@@ -23,9 +23,6 @@ public interface PermissionMapper {
     // 오늘만 허용 요청 생성
     void insertPermission(PermissionInsertVO permission);
 
-    // 오늘만 허용 대상 카테고리 생성
-    void insertPermissionCategory(@Param("permissionId") Long permissionId, @Param("categoryId") Long categoryId);
-
     // 오늘만 허용 요청의 사유 수정
     void updatePermissionReason(@Param("permissionId") Long permissionId, @Param("reason") String reason);
 
@@ -35,6 +32,4 @@ public interface PermissionMapper {
     // 오늘만 허용 요청 삭제
     void deletePermissionById(@Param("permissionId") Long permissionId);
 
-    // 오늘만 허용 대상 카테고리 삭제
-    void deletePermissionCategoriesByPermissionId(@Param("permissionId") Long permissionId);
 }

@@ -17,6 +17,7 @@ import com.teenyfin.teenymoney.domain.permission.vo.PermissionVO;
 import com.teenyfin.teenymoney.domain.teenyscore.mapper.TeenyScoreMapper;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -87,14 +88,17 @@ public class PermissionService {
             PermissionInsertVO permissionInsertVO = PermissionInsertVO.builder()
                     .parentId(parentId)
                     .childId(memberId)
+                    .categoryId(categoryId)
                     .reason(permissionRequestDTO.getReason())
                     .build();
 
-            // 오늘만 요청 row 삽입
-            permissionMapper.insertPermission(permissionInsertVO);
-
-            // 오늘만 허용 대상 카테고리 row 삽입
-            permissionMapper.insertPermissionCategory(permissionInsertVO.getId(), categoryId);
+            // 오늘만 요청 row 삽입 (카테고리 포함). 같은 날 같은 카테고리로 이미 요청한 적이 있으면
+            // UQ_T_TDP_REQ_L_CHILD_CATEGORY_DATE 유니크 제약에 걸려 여기서 터진다.
+            try {
+                permissionMapper.insertPermission(permissionInsertVO);
+            } catch (DuplicateKeyException e) {
+                throw new BusinessException(PermissionErrorCode.DUPLICATE_TODAY_PERMISSION_REQUEST);
+            }
         }
 
         MemberVO memberVO = memberMapper.selectById(memberId);
@@ -190,9 +194,6 @@ public class PermissionService {
 
         PermissionVO permissionVO = permissionMapper.selectById(permissionId);
         validatePermission(memberId, role, permissionVO);
-
-        // 오늘만 허용 대상 카테고리 row 일괄 삭제
-        permissionMapper.deletePermissionCategoriesByPermissionId(permissionId);
 
         // 오늘만 허용 요청 row 삭제
         permissionMapper.deletePermissionById(permissionId);

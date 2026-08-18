@@ -24,10 +24,8 @@
         r.status,
         r.created_at
         FROM T_TDP_REQ_L r
-        JOIN T_TDP_REQCTGR_R rc
-        ON r.id = rc.today_permission_id
         JOIN T_MCC_CTGR_C c
-        ON rc.merchant_category_id = c.id
+        ON r.merchant_category_id = c.id
         WHERE r.id = #{permissionId}
     </select>
 
@@ -41,10 +39,8 @@
         r.status,
         r.created_at
         FROM T_TDP_REQ_L r
-        JOIN T_TDP_REQCTGR_R rc
-        ON r.id = rc.today_permission_id
         JOIN T_MCC_CTGR_C c
-        ON rc.merchant_category_id = c.id
+        ON r.merchant_category_id = c.id
         WHERE r.child_id = #{childId}
         AND DATE(r.created_at) = CURDATE()
     </select>
@@ -58,22 +54,14 @@
     </select>
 
     <insert id="insertPermission" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
-        INSERT INTO T_TDP_REQ_L (parent_id, child_id, reason, status, expired_at, created_at)
+        INSERT INTO T_TDP_REQ_L (parent_id, child_id, merchant_category_id, reason, status, expired_at, created_at)
         VALUES (
             #{parentId},
             #{childId},
+            #{categoryId},
             #{reason},
             'PENDING',
             DATE_ADD(CURDATE(), INTERVAL 1 DAY),
-            NOW()
-        )
-    </insert>
-
-    <insert id="insertPermissionCategory">
-        INSERT INTO T_TDP_REQCTGR_R (today_permission_id, merchant_category_id, created_at)
-        VALUES (
-            #{permissionId},
-            #{categoryId},
             NOW()
         )
     </insert>
@@ -94,12 +82,6 @@
         DELETE
         FROM T_TDP_REQ_L
         WHERE id = #{permissionId}
-    </delete>
-
-    <delete id="deletePermissionCategoriesByPermissionId">
-        DELETE
-        FROM T_TDP_REQCTGR_R
-        WHERE today_permission_id = #{permissionId}
     </delete>
 
 </mapper>
