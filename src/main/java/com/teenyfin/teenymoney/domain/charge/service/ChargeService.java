@@ -12,6 +12,7 @@ import com.teenyfin.teenymoney.domain.charge.vo.ChargeMethodVO;
 import com.teenyfin.teenymoney.domain.charge.vo.ChargeVO;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
+import com.teenyfin.teenymoney.domain.paymentPassword.service.PaymentPasswordService;
 import com.teenyfin.teenymoney.domain.wallet.exception.WalletErrorCode;
 import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
 import com.teenyfin.teenymoney.domain.wallet.vo.WalletVO;
@@ -44,8 +45,9 @@ public class ChargeService {
     private final BillingKeyEncryptor billingKeyEncryptor;
     private final ChargeExecutor chargeExecutor;
     private final ChargeFailureRecorder chargeFailureRecorder;
+    private final PaymentPasswordService paymentPasswordService;
 
-    public ChargeService(ChargeMapper chargeMapper, ChargeMethodMapper chargeMethodMapper, WalletMapper walletMapper, MemberMapper memberMapper, TossPaymentsClient tossPaymentsClient, BillingKeyEncryptor billingKeyEncryptor, ChargeExecutor chargeExecutor, ChargeFailureRecorder chargeFailureRecorder) {
+    public ChargeService(ChargeMapper chargeMapper, ChargeMethodMapper chargeMethodMapper, WalletMapper walletMapper, MemberMapper memberMapper, TossPaymentsClient tossPaymentsClient, BillingKeyEncryptor billingKeyEncryptor, ChargeExecutor chargeExecutor, ChargeFailureRecorder chargeFailureRecorder, PaymentPasswordService paymentPasswordService) {
         this.chargeMapper = chargeMapper;
         this.chargeMethodMapper = chargeMethodMapper;
         this.walletMapper = walletMapper;
@@ -54,6 +56,7 @@ public class ChargeService {
         this.billingKeyEncryptor = billingKeyEncryptor;
         this.chargeExecutor = chargeExecutor;
         this.chargeFailureRecorder = chargeFailureRecorder;
+        this.paymentPasswordService = paymentPasswordService;
     }
 
 
@@ -61,7 +64,7 @@ public class ChargeService {
     // walletId를 파라미터로 안 받는 이유: 부모는 지갑이 하나뿐이라, principal로
     // 서버가 직접 조회한다 (클라이언트가 남의 walletId를 넣을 수 있는 취약점 자체를 없앰).
     @Transactional
-    public ChargeVO createPendingCharge(MemberPrincipal principal, Long paymentMethodId, Long amount, String idempotencyKey) {
+    public ChargeVO createPendingCharge(MemberPrincipal principal, Long paymentMethodId, Long amount, String idempotencyKey, String password) {
         Long parentId = principal.memberId();
 
         if (amount == null || amount <= 0) {
