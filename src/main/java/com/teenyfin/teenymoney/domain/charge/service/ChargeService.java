@@ -93,6 +93,12 @@ public class ChargeService {
             return existing;
         }
 
+        // 여기부터는 진짜 새로 접수되는 충전 시도. 실제 카드 결제로 이어지기 전에
+        // 결제 비밀번호로 한 번 더 본인 확인한다. 오답/미등록/잠금이면 여기서
+        // BusinessException이 던져지고, 아래 insertCharge()는 실행되지 않는다.
+        paymentPasswordService.checkPaymentPassword(parentId, password);
+
+
         ChargeVO charge = new ChargeVO();
         charge.setWalletId(wallet.getId());
         charge.setPaymentMethodId(paymentMethodId);

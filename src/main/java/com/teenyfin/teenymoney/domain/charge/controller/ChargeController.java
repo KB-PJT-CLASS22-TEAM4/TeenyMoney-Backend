@@ -47,7 +47,7 @@ public class ChargeController {
 
         // 1단계: PENDING으로 접수 (검증 + 중복 체크, 아직 토스 호출 없음)
         ChargeVO pending = chargeService.createPendingCharge(
-                principal, request.getPaymentMethodId(), request.getAmount(), request.getIdempotencyKey());
+                principal, request.getPaymentMethodId(), request.getAmount(), request.getIdempotencyKey(), request.getPassword());
 
         // 2단계: 실제로 토스 승인 + 지갑 크레딧까지 실행
         ChargeVO result = chargeService.executeCharge(pending.getId());
