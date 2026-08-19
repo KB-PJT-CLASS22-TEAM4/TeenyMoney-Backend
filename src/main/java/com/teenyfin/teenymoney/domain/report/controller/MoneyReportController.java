@@ -15,6 +15,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import com.teenyfin.teenymoney.domain.report.dto.response.ReportAnalysisResponseDTO;
+import com.teenyfin.teenymoney.domain.report.service.ReportAnalysisService;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 @RestController
 @RequestMapping("/reports")
@@ -22,9 +25,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class MoneyReportController {
 
     private final MoneyReportService moneyReportService;
+    private final ReportAnalysisService reportAnalysisService;
 
-    public MoneyReportController(MoneyReportService moneyReportService) {
+    public MoneyReportController(MoneyReportService moneyReportService, ReportAnalysisService reportAnalysisService) {
         this.moneyReportService = moneyReportService;
+        this.reportAnalysisService = reportAnalysisService;
     }
 
     @GetMapping("/money/children/{childId}")
@@ -60,5 +65,24 @@ public class MoneyReportController {
 
         return ApiResponse.ok(
                 moneyReportService.getMoneyReport(principal, childId, month));
+    }
+
+    @GetMapping("/money/analysis")
+    @PreAuthorize("hasRole('CHILD')") // 자녀 전용 - 부모는 아예 호출 자체가 403
+    @ApiOperation(
+            value = "이번 달·지난달 금융 습관 AI 분석 및 행동 조언",
+            notes = "자녀 본인의 이번 달·지난달 데이터를 그대로 Dify(LLM)에 보내 분석과 조언을 받아옵니다.\n\n"
+                    + "자녀 전용 API입니다. 호출할 때마다 매번 새로 분석하며 결과를 서버에 저장하지 않습니다.",
+            authorizations = { @Authorization(value = "JWT") })
+    @ApiResponses({
+            @io.swagger.annotations.ApiResponse(code = 200, message = "분석 성공"),
+            @io.swagger.annotations.ApiResponse(code = 401, message = "로그인 필요"),
+            @io.swagger.annotations.ApiResponse(code = 403, message = "자녀 전용 API"),
+            @io.swagger.annotations.ApiResponse(code = 502, message = "Dify 분석 요청 실패"),
+            @io.swagger.annotations.ApiResponse(code = 503, message = "Dify API 설정 누락") })
+    public ApiResponse<ReportAnalysisResponseDTO> analyzeReport(
+            @AuthenticationPrincipal MemberPrincipal principal) {
+
+        return ApiResponse.ok(reportAnalysisService.analyze(principal));
     }
 }

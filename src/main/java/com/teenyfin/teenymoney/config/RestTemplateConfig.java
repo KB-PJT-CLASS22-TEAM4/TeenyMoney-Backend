@@ -12,7 +12,7 @@ import org.springframework.web.client.RestTemplate;
 @Configuration
 public class RestTemplateConfig {
 
-    private static final int TIMEOUT_MILLISECONDS = 60_000;
+    private static final int TIMEOUT_MILLISECONDS = 180_000;
 
     // @Bean: 이 메서드가 리턴하는 RestTemplate 객체 하나를 스프링 컨테이너에 등록.
     // 이후 어디서든 생성자에 `RestTemplate restTemplate` 파라미터를 두면 스프링이

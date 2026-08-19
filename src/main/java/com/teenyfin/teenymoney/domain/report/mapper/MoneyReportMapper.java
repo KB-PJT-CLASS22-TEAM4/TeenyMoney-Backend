@@ -1,17 +1,6 @@
 package com.teenyfin.teenymoney.domain.report.mapper;
 
-import com.teenyfin.teenymoney.domain.report.vo.ChildProfileVO;
-import com.teenyfin.teenymoney.domain.report.vo.ClosingProductVO;
-import com.teenyfin.teenymoney.domain.report.vo.DailySpendingVO;
-import com.teenyfin.teenymoney.domain.report.vo.LoanOverdueVO;
-import com.teenyfin.teenymoney.domain.report.vo.LoanRepaymentVO;
-import com.teenyfin.teenymoney.domain.report.vo.MoneyFlowVO;
-import com.teenyfin.teenymoney.domain.report.vo.PermissionSummaryVO;
-import com.teenyfin.teenymoney.domain.report.vo.ProductPeriodVO;
-import com.teenyfin.teenymoney.domain.report.vo.QuestSummaryVO;
-import com.teenyfin.teenymoney.domain.report.vo.ScoreHistoryVO;
-import com.teenyfin.teenymoney.domain.report.vo.SpendingCategoryVO;
-import com.teenyfin.teenymoney.domain.report.vo.SpendingTotalVO;
+import com.teenyfin.teenymoney.domain.report.vo.*;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -96,4 +85,10 @@ public interface MoneyReportMapper {
 
     // 활동이 하나라도 있었던 달 (yyyy-MM). 월 선택의 '기록 없음' 판정에 쓴다.
     List<String> selectActivityMonths(@Param("childId") Long childId);
+
+    //기간 내 실제로 완료된 정기 용돈 입금 내역 찾기 - 언제 얼마 받았는지
+    List<AllowanceCreditVO> selectAllowanceCredits(
+            @Param("childId") Long childId,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to);
 }
