@@ -20,8 +20,9 @@
 
     <update id="updateFcmToken">
         UPDATE T_MBR_INFO_M
-        SET fcm_token = #{fcmToken}
+        SET fcm_token = IF(id = #{memberId}, #{fcmToken,jdbcType=VARCHAR}, NULL)
         WHERE id = #{memberId}
+           OR fcm_token = #{fcmToken,jdbcType=VARCHAR}
     </update>
 
     <update id="updateNotificationSetting">

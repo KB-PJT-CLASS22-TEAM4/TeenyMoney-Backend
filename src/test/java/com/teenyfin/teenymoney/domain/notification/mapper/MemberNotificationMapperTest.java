@@ -39,6 +39,7 @@ public class MemberNotificationMapperTest {
     private JdbcTemplate jdbcTemplate;
 
     private Long memberId;
+    private Long otherMemberId;
 
     @Autowired
     void setDataSource(DataSource dataSource) {
@@ -53,6 +54,10 @@ public class MemberNotificationMapperTest {
     @AfterEach
     void tearDown() {
         jdbcTemplate.update("DELETE FROM T_MBR_INFO_M WHERE id = ?", memberId);
+        if (otherMemberId != null) {
+            jdbcTemplate.update("DELETE FROM T_MBR_INFO_M WHERE id = ?", otherMemberId);
+            otherMemberId = null;
+        }
     }
 
     private Long insertMember() {
@@ -108,5 +113,36 @@ public class MemberNotificationMapperTest {
         System.out.println("[UNKNOWN] " + info);
 
         assertNull(info);
+    }
+
+    @Test
+    void updateFcmTokenMovesOwnershipAwayFromThePreviousMember() {
+        otherMemberId = insertMember();
+
+        // 같은 기기(=같은 토큰)에서 계정을 갈아탄 상황
+        memberNotificationMapper.updateFcmToken(memberId, "shared-device-token");
+        memberNotificationMapper.updateFcmToken(otherMemberId, "shared-device-token");
+
+        // 마지막에 로그인한 회원만 토큰을 갖고, 이전 회원 행은 비워져야 한다.
+        // 안 비우면 이전 회원의 푸시가 지금 그 기기를 쓰는 사람에게 간다.
+        assertNull(memberNotificationMapper.selectNotificationInfo(memberId).getFcmToken());
+        assertEquals("shared-device-token",
+                memberNotificationMapper.selectNotificationInfo(otherMemberId).getFcmToken());
+    }
+
+    @Test
+    void updateFcmTokenWithNullClearsOnlyThatMember() {
+        otherMemberId = insertMember();
+
+        memberNotificationMapper.updateFcmToken(memberId, "logout-token");
+        memberNotificationMapper.updateFcmToken(otherMemberId, "another-device-token");
+
+        // 로그아웃 경로. null이 들어와도 매퍼가 터지지 않아야 하고,
+        // 남의 토큰까지 쓸어가서는 안 된다.
+        memberNotificationMapper.updateFcmToken(memberId, null);
+
+        assertNull(memberNotificationMapper.selectNotificationInfo(memberId).getFcmToken());
+        assertEquals("another-device-token",
+                memberNotificationMapper.selectNotificationInfo(otherMemberId).getFcmToken());
     }
 }
