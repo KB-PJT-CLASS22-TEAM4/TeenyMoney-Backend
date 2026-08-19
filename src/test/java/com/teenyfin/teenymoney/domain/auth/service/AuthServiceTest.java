@@ -5,6 +5,7 @@ import com.teenyfin.teenymoney.domain.auth.dto.request.SignupRequestDTO;
 import com.teenyfin.teenymoney.domain.auth.dto.response.SignupResponseDTO;
 import com.teenyfin.teenymoney.domain.auth.exception.AuthErrorCode;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
+import com.teenyfin.teenymoney.domain.notification.mapper.MemberNotificationMapper;
 import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
 import com.teenyfin.teenymoney.domain.teenyscore.service.TeenyScoreGradeService;
 import com.teenyfin.teenymoney.domain.wallet.service.WalletService;
@@ -57,6 +58,7 @@ class AuthServiceTest {
     private AuthService authService;
     private WalletService walletService;
     private TeenyScoreGradeService teenyScoreGradeService;
+    private MemberNotificationMapper memberNotificationMapper;
 
     @BeforeEach
     void setUp() {
@@ -68,6 +70,7 @@ class AuthServiceTest {
         legalGuardianConsentStore = mock(LegalGuardianConsentStore.class);
         walletService = mock(WalletService.class);
         teenyScoreGradeService = mock(TeenyScoreGradeService.class);
+        memberNotificationMapper = mock(MemberNotificationMapper.class);
         authService = new AuthService(
                 memberMapper,
                 passwordEncoder,
@@ -77,7 +80,8 @@ class AuthServiceTest {
                 legalGuardianConsentStore,
                 CLOCK,
                 walletService,
-                teenyScoreGradeService);
+                teenyScoreGradeService,
+                memberNotificationMapper);
         when(passwordEncoder.encode("password123")).thenReturn("encoded-password");
         when(memberMapper.selectEffectiveAgreementId(
                 eq("SERVICE_TERMS"), eq("1.0"), any(LocalDateTime.class)))
@@ -471,6 +475,9 @@ class AuthServiceTest {
 
         verify(refreshTokenStore).revokeAll(17L);
         verify(refreshTokenStore, never()).revokeAll(18L);
+        // 기기에 남은 FCM 토큰도 같이 떼어낸다. 안 지우면 로그아웃한 계정의 푸시가
+        // 그 기기를 다음에 쓰는 사람에게 계속 간다.
+        verify(memberNotificationMapper).updateFcmToken(17L, null);
     }
 
     @Test
@@ -494,6 +501,7 @@ class AuthServiceTest {
         authService.logout("old-access", null);
 
         verify(refreshTokenStore, never()).revokeAll(any());
+        verify(memberNotificationMapper, never()).updateFcmToken(any(), any());
     }
 
     @Test

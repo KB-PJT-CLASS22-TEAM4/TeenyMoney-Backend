@@ -6,6 +6,7 @@ import com.teenyfin.teenymoney.domain.auth.dto.response.SignupResponseDTO;
 import com.teenyfin.teenymoney.domain.auth.exception.AuthErrorCode;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
+import com.teenyfin.teenymoney.domain.notification.mapper.MemberNotificationMapper;
 import com.teenyfin.teenymoney.domain.teenyscore.service.TeenyScoreGradeService;
 import com.teenyfin.teenymoney.domain.wallet.service.WalletService;
 import com.teenyfin.teenymoney.domain.wallet.vo.WalletType;
@@ -46,6 +47,7 @@ public class AuthService {
     private final Clock clock;
     private final WalletService walletService;
     private final TeenyScoreGradeService teenyScoreGradeService;
+    private final MemberNotificationMapper memberNotificationMapper;
 
     public AuthService(
             MemberMapper memberMapper,
@@ -56,7 +58,7 @@ public class AuthService {
             LegalGuardianConsentStore legalGuardianConsentStore,
             Clock clock,
             WalletService walletService,
-            TeenyScoreGradeService teenyScoreGradeService) {
+            TeenyScoreGradeService teenyScoreGradeService, MemberNotificationMapper memberNotificationMapper) {
         this.memberMapper = memberMapper;
         this.passwordEncoder = passwordEncoder;
         this.phoneVerificationService = phoneVerificationService;
@@ -66,6 +68,7 @@ public class AuthService {
         this.clock = clock;
         this.walletService = walletService;
         this.teenyScoreGradeService = teenyScoreGradeService;
+        this.memberNotificationMapper = memberNotificationMapper;
     }
 
     @Transactional
@@ -261,6 +264,7 @@ public class AuthService {
             if (generation != null && generation.equals(
                     refreshTokenStore.findGeneration(memberId))) {
                 refreshTokenStore.revokeAll(memberId);
+                memberNotificationMapper.updateFcmToken(memberId, null);
             }
         } catch (NumberFormatException ignored) {
             // Invalid tokens make logout a no-op.

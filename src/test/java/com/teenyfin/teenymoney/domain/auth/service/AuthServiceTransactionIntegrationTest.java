@@ -4,6 +4,7 @@ import com.teenyfin.teenymoney.config.RootConfig;
 import com.teenyfin.teenymoney.domain.auth.dto.request.SignupRequestDTO;
 import com.teenyfin.teenymoney.domain.family.service.FamilyAccessService;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
+import com.teenyfin.teenymoney.domain.notification.mapper.MemberNotificationMapper;
 import com.teenyfin.teenymoney.domain.teenyscore.service.TeenyScoreGradeService;
 import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
 import com.teenyfin.teenymoney.domain.wallet.service.WalletService;
@@ -285,7 +286,8 @@ public class AuthServiceTransactionIntegrationTest {
                 LegalGuardianConsentStore legalGuardianConsentStore,
                 Clock clock,
                 WalletService walletService,
-                TeenyScoreGradeService teenyScoreGradeService
+                TeenyScoreGradeService teenyScoreGradeService,
+                MemberNotificationMapper memberNotificationMapper
                 ) {
 
             return new AuthService(
@@ -297,7 +299,8 @@ public class AuthServiceTransactionIntegrationTest {
                     legalGuardianConsentStore,
                     clock,
                     walletService,
-                    teenyScoreGradeService
+                    teenyScoreGradeService,
+                    memberNotificationMapper
             );
         }
     }
