@@ -5,6 +5,7 @@ import com.teenyfin.teenymoney.domain.financialproduct.exception.FinancialProduc
 import com.teenyfin.teenymoney.domain.financialproduct.mapper.FinancialProductMapper;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.*;
 import com.teenyfin.teenymoney.domain.family.service.FamilyAccessService;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
 import com.teenyfin.teenymoney.domain.wallet.exception.WalletErrorCode;
 import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
 import com.teenyfin.teenymoney.domain.wallet.service.TransferService;
@@ -31,6 +32,7 @@ public class FinancialProductApprovalService {
     private final TransferService transferService;
     private final WalletService walletService;
     private final Clock clock;
+    private final NotificationService notificationService;
 
     public FinancialProductApprovalService(
             FinancialProductMapper financialProductMapper,
@@ -38,13 +40,15 @@ public class FinancialProductApprovalService {
             WalletMapper walletMapper,
             TransferService transferService,
             WalletService walletService,
-            Clock clock) {
+            Clock clock,
+            NotificationService notificationService) {
         this.financialProductMapper = financialProductMapper;
         this.familyAccessService = familyAccessService;
         this.walletMapper = walletMapper;
         this.transferService = transferService;
         this.walletService = walletService;
         this.clock = clock;
+        this.notificationService = notificationService;
     }
 
     @Transactional(readOnly = true)
@@ -133,6 +137,7 @@ public class FinancialProductApprovalService {
                     FinancialProductErrorCode.FINANCIAL_PRODUCT_TYPE_INVALID);
         }
         if (updated != 1) throw notPending();
+        notifyEnrollmentDecision(true, approval, type, enrollmentId);
     }
 
     @Transactional
@@ -152,6 +157,24 @@ public class FinancialProductApprovalService {
             case LOAN -> financialProductMapper.rejectLoanEnrollment(enrollmentId);
         };
         if (updated != 1) throw notPending();
+        notifyEnrollmentDecision(false, approval, type, enrollmentId);
+    }
+
+    /** 자녀에게 승인/거절 결과 알림을 보낸다. approve()/reject()와 같은 트랜잭션에 합류한다. */
+    private void notifyEnrollmentDecision(
+            boolean approved, FinancialProductApprovalVO approval,
+            FinancialProductType type, Long enrollmentId) {
+        String title = approved
+                ? FinancialProductNotificationMessages.approvedTitle(type)
+                : FinancialProductNotificationMessages.rejectedTitle(type);
+        String content = approved
+                ? FinancialProductNotificationMessages.approvedContent(
+                        type, approval.getProductName(), approval.getRequestedAmount())
+                : FinancialProductNotificationMessages.rejectedContent(approval.getProductName());
+        notificationService.createNotification(
+                approval.getChildId(), title, content,
+                FinancialProductNotificationMessages.referenceType(type),
+                enrollmentId, true);
     }
 
     private FinancialProductApprovalVO approvalForUpdate(

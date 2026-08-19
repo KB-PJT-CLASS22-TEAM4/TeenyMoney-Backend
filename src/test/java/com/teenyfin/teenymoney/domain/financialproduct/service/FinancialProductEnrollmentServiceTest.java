@@ -9,6 +9,9 @@ import com.teenyfin.teenymoney.domain.financialproduct.mapper.FinancialProductMa
 import com.teenyfin.teenymoney.domain.financialproduct.vo.*;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.domain.member.vo.MemberParentVO;
+import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
+import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
 import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
 import com.teenyfin.teenymoney.domain.wallet.vo.WalletVO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
@@ -30,6 +33,7 @@ class FinancialProductEnrollmentServiceTest {
 
     private FinancialProductMapper mapper;
     private WalletMapper walletMapper;
+    private NotificationService notificationService;
     private FinancialProductEnrollmentService service;
 
     @BeforeEach
@@ -37,13 +41,18 @@ class FinancialProductEnrollmentServiceTest {
         mapper = mock(FinancialProductMapper.class);
         MemberMapper memberMapper = mock(MemberMapper.class);
         walletMapper = mock(WalletMapper.class);
+        notificationService = mock(NotificationService.class);
         service = new FinancialProductEnrollmentService(mapper,
                 new FinancialProductRateCalculator(), memberMapper,
-                walletMapper);
+                walletMapper, notificationService);
 
         MemberParentVO parent = new MemberParentVO();
         parent.setParentId(1L);
         when(memberMapper.selectActiveParentByChildId(2L)).thenReturn(parent);
+        MemberVO child = new MemberVO();
+        child.setId(2L);
+        child.setName("김첫째");
+        when(memberMapper.selectById(2L)).thenReturn(child);
         FinancialProductBenefitVO benefit = new FinancialProductBenefitVO();
         benefit.setChildId(2L);
         benefit.setGradeId(2L);
@@ -87,6 +96,26 @@ class FinancialProductEnrollmentServiceTest {
                         command.getAppliedEarlyTerminationRate())
                         && command.getWalletId() == null
                         && Long.valueOf(50_000L).equals(command.getAmount())));
+    }
+
+    @Test
+    @DisplayName("예금 가입 요청 시 부모에게 알림을 보낸다")
+    void requestDepositNotifiesParent() {
+        DepositProductVO product = new DepositProductVO();
+        product.setId(1L);
+        product.setName("티니 자유예금");
+        product.setProductSource(FinancialProductSource.PARENT);
+        product.setRate12m(new BigDecimal("3.20"));
+        product.setEarlyTerminationRate(new BigDecimal("0.50"));
+        product.setMinAmount(10_000L);
+        product.setMaxAmount(5_000_000L);
+        when(mapper.selectVisibleDepositProductById(1L, 2L)).thenReturn(product);
+
+        service.requestDeposit(CHILD, new DepositEnrollmentRequestDTO(1L, 50_000L, 12));
+
+        verify(notificationService).createNotification(
+                1L, "김첫째님이 예금 가입을 요청했어요", "티니 자유예금 · 50000원",
+                NotificationReferenceType.DEPOSIT_ENROLLMENT, 100L, true);
     }
 
     @Test

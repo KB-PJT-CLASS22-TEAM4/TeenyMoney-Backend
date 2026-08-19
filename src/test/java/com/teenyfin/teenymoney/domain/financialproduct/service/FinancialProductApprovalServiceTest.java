@@ -4,6 +4,8 @@ import com.teenyfin.teenymoney.domain.family.service.FamilyAccessService;
 import com.teenyfin.teenymoney.domain.financialproduct.exception.FinancialProductErrorCode;
 import com.teenyfin.teenymoney.domain.financialproduct.mapper.FinancialProductMapper;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.*;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
+import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
 import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
 import com.teenyfin.teenymoney.domain.wallet.service.TransferService;
 import com.teenyfin.teenymoney.domain.wallet.service.WalletService;
@@ -32,6 +34,7 @@ class FinancialProductApprovalServiceTest {
     private TransferService transferService;
     private WalletService walletService;
     private WalletMapper walletMapper;
+    private NotificationService notificationService;
     private FinancialProductApprovalService service;
 
     @BeforeEach
@@ -41,11 +44,13 @@ class FinancialProductApprovalServiceTest {
         transferService = mock(TransferService.class);
         walletService = mock(WalletService.class);
         walletMapper = mock(WalletMapper.class);
+        notificationService = mock(NotificationService.class);
         when(walletService.createWallet(anyLong(), any())).thenReturn(20L);
         service = new FinancialProductApprovalService(mapper,
                 familyAccessService,
                 walletMapper, transferService, walletService,
-                Clock.fixed(Instant.parse("2026-08-11T00:00:00Z"), ZoneOffset.UTC));
+                Clock.fixed(Instant.parse("2026-08-11T00:00:00Z"), ZoneOffset.UTC),
+                notificationService);
     }
 
     @Test
@@ -202,6 +207,50 @@ class FinancialProductApprovalServiceTest {
 
         verify(transferService).cancelPendingTransfer(30L);
         verify(mapper).rejectDepositEnrollment(7L);
+    }
+
+    @Test
+    @DisplayName("대출 승인 시 자녀에게 알림을 보낸다")
+    void approveLoanNotifiesChild() {
+        FinancialProductApprovalVO approval = approval(FinancialProductType.LOAN);
+        approval.setProductName("스타터 원리금균등 대출");
+        approval.setRequestedAmount(100_000L);
+        when(mapper.selectLoanApprovalForUpdate(1L, 7L)).thenReturn(approval);
+        LoanProductVO product = new LoanProductVO();
+        product.setId(3L);
+        product.setRequiredGradeId(2L);
+        when(mapper.selectActiveLoanProductById(3L)).thenReturn(product);
+        when(mapper.selectBenefitByChildId(2L)).thenReturn(benefit());
+        WalletVO wallet = new WalletVO();
+        wallet.setId(10L);
+        when(walletMapper.selectMemberWalletByMemberId(anyLong())).thenReturn(wallet);
+        TransferVO transfer = new TransferVO();
+        transfer.setId(30L);
+        when(transferService.createPendingTransfer(
+                anyLong(), anyLong(), anyLong(), any(), anyString())).thenReturn(transfer);
+        when(transferService.executeTransferAtomically(30L)).thenReturn(transfer);
+        when(mapper.approveLoanEnrollment(eq(7L), any(), any(), any(), any())).thenReturn(1);
+
+        service.approve(PARENT, "loan", 7L);
+
+        verify(notificationService).createNotification(
+                2L, "대출 신청이 승인됐어요", "스타터 원리금균등 대출 · 100000원",
+                NotificationReferenceType.LOAN_ENROLLMENT, 7L, true);
+    }
+
+    @Test
+    @DisplayName("대출 거절 시 자녀에게 알림을 보낸다")
+    void rejectLoanNotifiesChild() {
+        FinancialProductApprovalVO approval = approval(FinancialProductType.LOAN);
+        approval.setProductName("스타터 원리금균등 대출");
+        when(mapper.selectLoanApprovalForUpdate(1L, 7L)).thenReturn(approval);
+        when(mapper.rejectLoanEnrollment(7L)).thenReturn(1);
+
+        service.reject(PARENT, "LOAN", 7L);
+
+        verify(notificationService).createNotification(
+                2L, "대출 신청이 거절됐어요", "스타터 원리금균등 대출",
+                NotificationReferenceType.LOAN_ENROLLMENT, 7L, true);
     }
 
     @Test
