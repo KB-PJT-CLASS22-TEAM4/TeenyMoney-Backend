@@ -14,6 +14,7 @@
         <result property="profileImageKey" column="profile_image_key"/>
         <result property="status" column="status"/>
         <result property="customerKey" column="customer_key"/>
+        <result property="paymentPassword" column="payment_password"/>
     </resultMap>
 
     <sql id="memberColumns">
@@ -26,7 +27,8 @@
         password,
         profile_image_key,
         status,
-        customer_key
+        customer_key,
+        payment_password
     </sql>
 
     <select id="selectByEmail" resultMap="memberResultMap">

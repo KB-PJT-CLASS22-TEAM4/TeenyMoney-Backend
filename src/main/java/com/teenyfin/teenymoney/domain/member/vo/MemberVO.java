@@ -22,4 +22,7 @@ public class MemberVO {
     private String profileImageKey;
     private String status;
     private String customerKey;
+    // 값(bcrypt 해시) 자체는 DTO 밖으로 절대 안 나감 - MemberMeResponseDTO가
+    // null 여부만 뽑아서 hasPaymentPassword로 변환한 뒤 이 필드는 버린다.
+    private String paymentPassword;
 }

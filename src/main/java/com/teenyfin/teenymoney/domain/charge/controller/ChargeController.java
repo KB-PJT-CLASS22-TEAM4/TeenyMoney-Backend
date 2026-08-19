@@ -35,9 +35,9 @@ public class ChargeController {
     )
     @ApiResponses({
             @io.swagger.annotations.ApiResponse(code = 200, message = "충전 성공"),
-            @io.swagger.annotations.ApiResponse(code = 400, message = "요청 값이 올바르지 않음"),
+            @io.swagger.annotations.ApiResponse(code = 400, message = "요청 값이 올바르지 않음 / 결제 비밀번호가 올바르지 않음 / 결제 비밀번호 미등록"),
             @io.swagger.annotations.ApiResponse(code = 401, message = "로그인 필요"),
-            @io.swagger.annotations.ApiResponse(code = 403, message = "부모만 충전 가능 / 본인 결제수단만 사용 가능"),
+            @io.swagger.annotations.ApiResponse(code = 403, message = "부모만 충전 가능 / 본인 결제수단만 사용 가능/ 결제 비밀번호 잠금"),
             @io.swagger.annotations.ApiResponse(code = 404, message = "결제수단 또는 충전 시도를 찾을 수 없음"),
             @io.swagger.annotations.ApiResponse(code = 409, message = "이미 처리 중이거나 충돌하는 요청"),
             @io.swagger.annotations.ApiResponse(code = 502, message = "토스페이먼츠 승인 실패")})
@@ -47,7 +47,7 @@ public class ChargeController {
 
         // 1단계: PENDING으로 접수 (검증 + 중복 체크, 아직 토스 호출 없음)
         ChargeVO pending = chargeService.createPendingCharge(
-                principal, request.getPaymentMethodId(), request.getAmount(), request.getIdempotencyKey());
+                principal, request.getPaymentMethodId(), request.getAmount(), request.getIdempotencyKey(), request.getPassword());
 
         // 2단계: 실제로 토스 승인 + 지갑 크레딧까지 실행
         ChargeVO result = chargeService.executeCharge(pending.getId());

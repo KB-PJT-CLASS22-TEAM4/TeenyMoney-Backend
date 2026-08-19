@@ -29,6 +29,14 @@ public class MemberMeResponseDTO {
     @ApiModelProperty(value = "프로필 이미지 URL", example = "https://example.com/profile.png")
     private final String profileImageUrl;
 
+    // 결제 비밀번호 "등록 여부"만 내려준다 - 값 자체는 절대 안 내려줌.
+    // 프론트는 이 값이 false일 때만 결제 비밀번호 설정 화면으로 분기하는 용도로 쓴다.
+    // 실제 보안 검증은 여전히 ChargeService.createPendingCharge()가 매 충전마다
+    // checkPaymentPassword()로 따로 하므로, 이 값이 stale하거나 프론트가 무시해도
+    // 서버가 최종적으로 막아준다.
+    @ApiModelProperty(value = "결제 비밀번호 등록 여부", example = "true or false")
+    private final boolean hasPaymentPassword;
+
     private MemberMeResponseDTO(MemberVO member, String profileImageUrl) {
         this.memberId = member.getId();
         this.role = member.getRole();
@@ -37,6 +45,7 @@ public class MemberMeResponseDTO {
         this.phoneNumber = member.getPhoneNumber();
         this.birthDate = member.getBirthDate();
         this.profileImageUrl = profileImageUrl;
+        this.hasPaymentPassword = member.getPaymentPassword() != null;
     }
 
     /**
