@@ -9,6 +9,7 @@ import com.teenyfin.teenymoney.domain.financialproduct.mapper.FinancialProductMa
 import com.teenyfin.teenymoney.domain.financialproduct.vo.*;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.domain.member.vo.MemberParentVO;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
 import com.teenyfin.teenymoney.domain.wallet.exception.WalletErrorCode;
 import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
 import com.teenyfin.teenymoney.domain.wallet.vo.WalletVO;
@@ -25,16 +26,19 @@ public class FinancialProductEnrollmentService {
     private final FinancialProductRateCalculator rateCalculator;
     private final MemberMapper memberMapper;
     private final WalletMapper walletMapper;
+    private final NotificationService notificationService;
 
     public FinancialProductEnrollmentService(
             FinancialProductMapper financialProductMapper,
             FinancialProductRateCalculator rateCalculator,
             MemberMapper memberMapper,
-            WalletMapper walletMapper) {
+            WalletMapper walletMapper,
+            NotificationService notificationService) {
         this.financialProductMapper = financialProductMapper;
         this.rateCalculator = rateCalculator;
         this.memberMapper = memberMapper;
         this.walletMapper = walletMapper;
+        this.notificationService = notificationService;
     }
 
     @Transactional
@@ -65,6 +69,8 @@ public class FinancialProductEnrollmentService {
         command.setAmount(request.getAmount());
         command.setAppliedEarlyTerminationRate(baseRate);
         financialProductMapper.insertDepositEnrollment(command);
+        notifyEnrollmentRequested(parentId, childId, FinancialProductType.DEPOSIT,
+                product.getName(), request.getAmount(), command.getId());
         return response(command.getId(), FinancialProductType.DEPOSIT, rate);
     }
 
@@ -96,6 +102,8 @@ public class FinancialProductEnrollmentService {
         command.setPaymentDay(request.getPaymentDay());
         command.setAutoTransfer(request.getAutoTransfer());
         financialProductMapper.insertSavingEnrollment(command);
+        notifyEnrollmentRequested(parentId, childId, FinancialProductType.SAVING,
+                product.getName(), request.getMonthlyAmount(), command.getId());
         return response(command.getId(), FinancialProductType.SAVING, rate);
     }
 
@@ -133,7 +141,27 @@ public class FinancialProductEnrollmentService {
         command.setPaymentDay(request.getPaymentDay());
         command.setAutoTransfer(request.getAutoTransfer());
         financialProductMapper.insertLoanEnrollment(command);
+        notifyEnrollmentRequested(parentId, childId, FinancialProductType.LOAN,
+                product.getName(), request.getPrincipalAmount(), command.getId());
         return response(command.getId(), FinancialProductType.LOAN, rate);
+    }
+
+    /**
+     * 부모에게 가입 요청 알림을 보낸다. NotificationService.createNotification()도 @Transactional이라
+     * 이 메서드와 같은 트랜잭션에 합류하므로, 인앱 알림 이력 저장은 가입 요청과 원자적으로 묶인다.
+     * FCM 푸시 발송 실패는 FcmService 내부에서 로그만 남기고 삼켜지므로 가입 요청에 영향을 주지 않는다.
+     */
+    private void notifyEnrollmentRequested(
+            Long parentId, Long childId, FinancialProductType type,
+            String productName, long amount, Long enrollmentId) {
+        String childName = memberMapper.selectById(childId).getName();
+        notificationService.createNotification(
+                parentId,
+                FinancialProductNotificationMessages.requestTitle(type, childName),
+                FinancialProductNotificationMessages.requestContent(type, productName, amount),
+                FinancialProductNotificationMessages.referenceType(type),
+                enrollmentId,
+                true);
     }
 
     private Long requireChild(MemberPrincipal principal) {
