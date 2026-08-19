@@ -8,6 +8,7 @@ import lombok.Setter;
 
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
+import javax.validation.constraints.Pattern;
 import javax.validation.constraints.Positive;
 
 
@@ -35,4 +36,12 @@ public class ChargeRequestDTO {
     @ApiModelProperty(value = "멱등성 키 (UUID). 재시도 시에도 항상 같은 값을 보내야 함", required = true)
     @NotBlank(message = "멱등성 키는 필수입니다.")
     private String idempotencyKey;
+
+    // PaymentRequestDTO.password와 동일한 형식(숫자 6자리) - 프론트가 결제 비밀번호
+    // 입력창에서 받는 값을 그대로 태워보낸다. 재시도(같은 idempotencyKey)일 때도
+    // 필드 자체는 항상 채워서 보내야 함 - 검증을 스킵할지 말지는 서버가 판단한다.
+    @ApiModelProperty(value = "결제 비밀번호 (숫자 6자리)", required = true, example = "123456")
+    @NotBlank(message = "결제 비밀번호는 필수입니다.")
+    @Pattern(regexp = "^\\d{6}$", message = "결제 비밀번호는 숫자 6자리여야 합니다.")
+    private String password;
 }
