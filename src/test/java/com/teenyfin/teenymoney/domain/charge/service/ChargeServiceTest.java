@@ -12,6 +12,10 @@ import com.teenyfin.teenymoney.domain.charge.toss.dto.TossPaymentApprovalRespons
 import com.teenyfin.teenymoney.domain.charge.vo.ChargeVO;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
+import com.teenyfin.teenymoney.domain.paymentPassword.exception.PaymentPasswordErrorCode;
+import com.teenyfin.teenymoney.domain.paymentPassword.mapper.PaymentPasswordMapper;
+import com.teenyfin.teenymoney.domain.paymentPassword.service.PaymentPasswordService;
+import com.teenyfin.teenymoney.domain.paymentPassword.service.PaymentPasswordTransactionHelper;
 import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
 import com.teenyfin.teenymoney.domain.wallet.service.WalletLedgerService;
 import com.teenyfin.teenymoney.domain.wallet.vo.WalletVO;
@@ -24,6 +28,8 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.web.client.ResourceAccessException;
@@ -65,6 +71,11 @@ public class ChargeServiceTest {
     @Autowired
     private MemberMapper memberMapper;
 
+    // PasswordEncoder 빈은 SecurityConfig(이 root-only 컨텍스트엔 안 올라옴)에 있어서,
+    // BillingKeyEncryptor와 같은 이유로 직접 new해서 쓴다.
+    @Autowired
+    private PaymentPasswordMapper paymentPasswordMapper;
+
     private JdbcTemplate jdbcTemplate;
 
     // 진짜 토스 서버를 호출하면 안 되니 Mockito로 가짜 응답/예외를 만들어 넣는다.
@@ -73,8 +84,10 @@ public class ChargeServiceTest {
     // 암호화는 외부 의존이 없는 순수 로직이라 mock 안 하고 실제로 사용한다 (ChargeMethodServiceTest와 같은 이유).
     private BillingKeyEncryptor billingKeyEncryptor;
 
-    // ChargeService/ChargeExecutor/ChargeFailureRecorder는 @Service라서 이 root-only
-    // 컨텍스트엔 빈으로 없다. 진짜 매퍼를 직접 new로 꽂아서 만든다 (TransferServiceTest와 같은 방식).
+    private PasswordEncoder passwordEncoder;
+
+    // ChargeService/ChargeExecutor/ChargeFailureRecorder/PaymentPasswordService는 @Service라서
+    // 이 root-only 컨텍스트엔 빈으로 없다. 진짜 매퍼를 직접 new로 꽂아서 만든다 (TransferServiceTest와 같은 방식).
     private ChargeService chargeService;
 
     private Long parentId;
@@ -83,6 +96,9 @@ public class ChargeServiceTest {
 
     // 등록할 때 암호화하기 전 원본 빌링키 값.
     private static final String PLAIN_BILLING_KEY = "test-real-billing-key";
+
+    // setUp()에서 parentId에 등록해두는 결제 비밀번호 평문. 정상 흐름 테스트는 전부 이 값을 그대로 쓴다.
+    private static final String PLAIN_PAYMENT_PASSWORD = "123456";
 
     @Autowired
     void setDataSource(DataSource dataSource) {
@@ -96,16 +112,31 @@ public class ChargeServiceTest {
         byte[] keyBytes = new byte[32];
         new SecureRandom().nextBytes(keyBytes);
         billingKeyEncryptor = new BillingKeyEncryptor(Base64.getEncoder().encodeToString(keyBytes));
+        passwordEncoder = new BCryptPasswordEncoder();
 
         WalletLedgerService walletLedgerService = new WalletLedgerService(walletMapper);
         ChargeExecutor chargeExecutor = new ChargeExecutor(chargeMapper, walletLedgerService);
         ChargeFailureRecorder chargeFailureRecorder = new ChargeFailureRecorder(chargeMapper);
 
+        // PaymentPasswordTransactionHelper의 @Transactional(REQUIRES_NEW)는 이렇게 new로 만들면
+        // AOP 프록시가 안 걸려서 실제로는 안 먹는다 - 근데 ChargeService 자체도 이 테스트에서
+        // 같은 이유로 @Transactional이 안 먹는 채로 이미 쓰이고 있어서(위 클래스 주석 참고),
+        // 일관된 제약이고 SQL 로직(암호화 비교, 실패 카운트 증가, 잠금) 검증엔 지장이 없다.
+        PaymentPasswordTransactionHelper paymentPasswordTransactionHelper =
+                new PaymentPasswordTransactionHelper(paymentPasswordMapper);
+        PaymentPasswordService paymentPasswordService = new PaymentPasswordService(
+                paymentPasswordMapper, paymentPasswordTransactionHelper, passwordEncoder);
+
         chargeService = new ChargeService(
                 chargeMapper, chargeMethodMapper, walletMapper, memberMapper,
-                tossPaymentsClient, billingKeyEncryptor, chargeExecutor, chargeFailureRecorder);
+                tossPaymentsClient, billingKeyEncryptor, chargeExecutor, chargeFailureRecorder,
+                paymentPasswordService);
 
         parentId = insertMember("PARENT");
+        // 결제 비밀번호를 미리 등록해둔다 - 안 해두면 충전 목적과 무관한 기존 테스트들까지
+        // 전부 NOT_SET_PAYMENT_PASSWORD로 죽는다. 정상 흐름 테스트는 전부 이 값(PLAIN_PAYMENT_PASSWORD)을 그대로 쓴다.
+        jdbcTemplate.update("UPDATE T_MBR_INFO_M SET payment_password = ? WHERE id = ?",
+                passwordEncoder.encode(PLAIN_PAYMENT_PASSWORD), parentId);
         walletId = insertWallet(parentId, 100000L);
         // 결제수단은 반드시 "진짜로 암호화된" billing_key를 넣어야 한다 - executeCharge()가
         // billingKeyEncryptor.decrypt()를 실제로 부르기 때문에, 가짜 텍스트를 넣으면
@@ -205,7 +236,8 @@ public class ChargeServiceTest {
     void createPendingChargeInsertsRowWithPendingStatus() {
         String idempotencyKey = newIdempotencyKey();
 
-        ChargeVO pending = chargeService.createPendingCharge(principal(), paymentMethodId, 10000L, idempotencyKey);
+        ChargeVO pending = chargeService.createPendingCharge(
+                principal(), paymentMethodId, 10000L, idempotencyKey, PLAIN_PAYMENT_PASSWORD);
         System.out.println("[CREATE] chargeId=" + pending.getId() + ", status=" + pending.getStatus()
                 + ", orderId=" + pending.getOrderId());
 
@@ -222,8 +254,10 @@ public class ChargeServiceTest {
     void createPendingChargeReturnsSameRowWhenIdempotencyKeyReused() {
         String idempotencyKey = newIdempotencyKey();
 
-        ChargeVO first = chargeService.createPendingCharge(principal(), paymentMethodId, 10000L, idempotencyKey);
-        ChargeVO second = chargeService.createPendingCharge(principal(), paymentMethodId, 10000L, idempotencyKey);
+        ChargeVO first = chargeService.createPendingCharge(
+                principal(), paymentMethodId, 10000L, idempotencyKey, PLAIN_PAYMENT_PASSWORD);
+        ChargeVO second = chargeService.createPendingCharge(
+                principal(), paymentMethodId, 10000L, idempotencyKey, PLAIN_PAYMENT_PASSWORD);
 
         System.out.println("[IDEMPOTENCY] first.id=" + first.getId() + ", second.id=" + second.getId());
         assertEquals(first.getId(), second.getId());
@@ -232,10 +266,12 @@ public class ChargeServiceTest {
     @Test
     void createPendingChargeThrowsWhenIdempotencyKeyReusedWithDifferentAmount() {
         String idempotencyKey = newIdempotencyKey();
-        chargeService.createPendingCharge(principal(), paymentMethodId, 10000L, idempotencyKey);
+        chargeService.createPendingCharge(
+                principal(), paymentMethodId, 10000L, idempotencyKey, PLAIN_PAYMENT_PASSWORD);
 
         BusinessException exception = assertThrows(BusinessException.class,
-                () -> chargeService.createPendingCharge(principal(), paymentMethodId, 20000L, idempotencyKey));
+                () -> chargeService.createPendingCharge(
+                        principal(), paymentMethodId, 20000L, idempotencyKey, PLAIN_PAYMENT_PASSWORD));
 
         System.out.println("[EXCEPTION] " + exception.getErrorCode());
         assertEquals(ChargeErrorCode.IDEMPOTENCY_KEY_CONFLICT, exception.getErrorCode());
@@ -244,7 +280,8 @@ public class ChargeServiceTest {
     @Test
     void createPendingChargeThrowsWhenPaymentMethodNotFound() {
         BusinessException exception = assertThrows(BusinessException.class,
-                () -> chargeService.createPendingCharge(principal(), 999_999_999L, 10000L, newIdempotencyKey()));
+                () -> chargeService.createPendingCharge(
+                        principal(), 999_999_999L, 10000L, newIdempotencyKey(), PLAIN_PAYMENT_PASSWORD));
 
         System.out.println("[EXCEPTION] " + exception.getErrorCode());
         assertEquals(ChargeErrorCode.CHARGE_METHOD_NOT_FOUND, exception.getErrorCode());
@@ -255,7 +292,8 @@ public class ChargeServiceTest {
         Long inactiveId = insertPaymentMethod(parentId, billingKeyEncryptor.encrypt("inactive-key"), "INACTIVE");
 
         BusinessException exception = assertThrows(BusinessException.class,
-                () -> chargeService.createPendingCharge(principal(), inactiveId, 10000L, newIdempotencyKey()));
+                () -> chargeService.createPendingCharge(
+                        principal(), inactiveId, 10000L, newIdempotencyKey(), PLAIN_PAYMENT_PASSWORD));
 
         System.out.println("[EXCEPTION] " + exception.getErrorCode());
         assertEquals(ChargeErrorCode.CHARGE_METHOD_NOT_FOUND, exception.getErrorCode());
@@ -271,7 +309,8 @@ public class ChargeServiceTest {
         try {
             // when & then: 내 principal로 남의 결제수단 id를 써서 충전 시도
             BusinessException exception = assertThrows(BusinessException.class,
-                    () -> chargeService.createPendingCharge(principal(), otherPaymentMethodId, 10000L, newIdempotencyKey()));
+                    () -> chargeService.createPendingCharge(
+                            principal(), otherPaymentMethodId, 10000L, newIdempotencyKey(), PLAIN_PAYMENT_PASSWORD));
 
             System.out.println("[EXCEPTION] " + exception.getErrorCode());
             assertEquals(ChargeErrorCode.CHARGE_METHOD_ACCESS_DENIED, exception.getErrorCode());
@@ -280,6 +319,88 @@ public class ChargeServiceTest {
             jdbcTemplate.update("DELETE FROM T_PAY_METHOD_M WHERE id = ?", otherPaymentMethodId);
             jdbcTemplate.update("DELETE FROM T_MBR_INFO_M WHERE id = ?", otherParentId);
         }
+    }
+
+    // ---------- createPendingCharge() : 결제 비밀번호 검증 ----------
+
+    @Test
+    void createPendingChargeThrowsWhenPaymentPasswordIsInvalidAndCreatesNoRow() {
+        String idempotencyKey = newIdempotencyKey();
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> chargeService.createPendingCharge(
+                        principal(), paymentMethodId, 10000L, idempotencyKey, "000000"));
+
+        System.out.println("[EXCEPTION] " + exception.getErrorCode());
+        assertEquals(PaymentPasswordErrorCode.INVALID_PAYMENT_PASSWORD, exception.getErrorCode());
+
+        // then: 비밀번호 검증이 insert보다 먼저 일어나므로, 오답이면 PENDING 충전 행 자체가 생기면 안 된다
+        assertNull(chargeMapper.selectByIdempotencyKey(idempotencyKey));
+    }
+
+    @Test
+    void createPendingChargeThrowsWhenPaymentPasswordNotSet() {
+        // given: 결제 비밀번호를 한 번도 등록한 적 없는 별도 부모 (setUp()의 parentId와 달리
+        // payment_password를 UPDATE하는 단계를 안 거쳤으므로 컬럼이 NULL로 남아있다)
+        Long noPasswordParentId = insertMember("PARENT");
+        Long noPasswordWalletId = insertWallet(noPasswordParentId, 100000L);
+        Long noPasswordMethodId = insertPaymentMethod(
+                noPasswordParentId, billingKeyEncryptor.encrypt("no-password-key"), "ACTIVE");
+        MemberPrincipal noPasswordPrincipal = new MemberPrincipal(noPasswordParentId, "PARENT");
+
+        try {
+            BusinessException exception = assertThrows(BusinessException.class,
+                    () -> chargeService.createPendingCharge(
+                            noPasswordPrincipal, noPasswordMethodId, 10000L,
+                            newIdempotencyKey(), PLAIN_PAYMENT_PASSWORD));
+
+            System.out.println("[EXCEPTION] " + exception.getErrorCode());
+            assertEquals(PaymentPasswordErrorCode.NOT_SET_PAYMENT_PASSWORD, exception.getErrorCode());
+        } finally {
+            jdbcTemplate.update("DELETE FROM T_PAY_METHOD_M WHERE id = ?", noPasswordMethodId);
+            jdbcTemplate.update("DELETE FROM T_WLT_BASE_M WHERE id = ?", noPasswordWalletId);
+            jdbcTemplate.update("DELETE FROM T_MBR_INFO_M WHERE id = ?", noPasswordParentId);
+        }
+    }
+
+    @Test
+    void createPendingChargeLocksAfterFiveFailedPasswordAttempts() {
+        // when: 오답을 4번 반복 - 매번 INVALID_PAYMENT_PASSWORD (아직 잠기지 않음)
+        for (int i = 0; i < 4; i++) {
+            BusinessException exception = assertThrows(BusinessException.class,
+                    () -> chargeService.createPendingCharge(
+                            principal(), paymentMethodId, 10000L, newIdempotencyKey(), "000000"));
+            assertEquals(PaymentPasswordErrorCode.INVALID_PAYMENT_PASSWORD, exception.getErrorCode());
+        }
+
+        // then: 5번째 오답에서 막 잠긴다
+        BusinessException fifth = assertThrows(BusinessException.class,
+                () -> chargeService.createPendingCharge(
+                        principal(), paymentMethodId, 10000L, newIdempotencyKey(), "000000"));
+        System.out.println("[5th attempt] " + fifth.getErrorCode());
+        assertEquals(PaymentPasswordErrorCode.PAYMENT_JUST_LOCKED, fifth.getErrorCode());
+
+        // then: 잠긴 뒤엔 정답을 넣어도 막혀야 한다
+        BusinessException sixth = assertThrows(BusinessException.class,
+                () -> chargeService.createPendingCharge(
+                        principal(), paymentMethodId, 10000L, newIdempotencyKey(), PLAIN_PAYMENT_PASSWORD));
+        System.out.println("[6th attempt, correct password but locked] " + sixth.getErrorCode());
+        assertEquals(PaymentPasswordErrorCode.PAYMENT_LOCKED, sixth.getErrorCode());
+    }
+
+    @Test
+    void createPendingChargeSkipsPasswordCheckWhenIdempotencyKeyReused() {
+        String idempotencyKey = newIdempotencyKey();
+        ChargeVO first = chargeService.createPendingCharge(
+                principal(), paymentMethodId, 10000L, idempotencyKey, PLAIN_PAYMENT_PASSWORD);
+
+        // when: 같은 idempotencyKey로 재시도하면서 이번엔 일부러 틀린 비밀번호를 보낸다
+        ChargeVO second = chargeService.createPendingCharge(
+                principal(), paymentMethodId, 10000L, idempotencyKey, "000000");
+
+        // then: 예외 없이 기존 결과를 그대로 돌려줘야 한다 - 재시도는 비밀번호 검증 자체를 안 탄다는 뜻
+        System.out.println("[RETRY] first.id=" + first.getId() + ", second.id=" + second.getId());
+        assertEquals(first.getId(), second.getId());
     }
 
     // ---------- executeCharge() ----------
@@ -291,7 +412,8 @@ public class ChargeServiceTest {
         Long balanceBefore = walletMapper.selectWalletForUpdate(walletId).getBalance();
         System.out.println("[BEFORE] balance=" + balanceBefore);
 
-        ChargeVO pending = chargeService.createPendingCharge(principal(), paymentMethodId, 10000L, newIdempotencyKey());
+        ChargeVO pending = chargeService.createPendingCharge(
+                principal(), paymentMethodId, 10000L, newIdempotencyKey(), PLAIN_PAYMENT_PASSWORD);
         ChargeVO result = chargeService.executeCharge(pending.getId());
 
         System.out.println("[EXECUTE] status=" + result.getStatus() + ", paymentKey=" + result.getPaymentKey());
@@ -307,7 +429,8 @@ public class ChargeServiceTest {
     void executeChargeDoesNotReprocessWhenAlreadySuccess() {
         stubTossApprovalSuccess("toss-payment-key-once");
 
-        ChargeVO pending = chargeService.createPendingCharge(principal(), paymentMethodId, 10000L, newIdempotencyKey());
+        ChargeVO pending = chargeService.createPendingCharge(
+                principal(), paymentMethodId, 10000L, newIdempotencyKey(), PLAIN_PAYMENT_PASSWORD);
         ChargeVO first = chargeService.executeCharge(pending.getId());
         assertEquals("SUCCESS", first.getStatus());
 
@@ -331,7 +454,8 @@ public class ChargeServiceTest {
 
         Long balanceBefore = walletMapper.selectWalletForUpdate(walletId).getBalance();
 
-        ChargeVO pending = chargeService.createPendingCharge(principal(), paymentMethodId, 10000L, newIdempotencyKey());
+        ChargeVO pending = chargeService.createPendingCharge(
+                principal(), paymentMethodId, 10000L, newIdempotencyKey(), PLAIN_PAYMENT_PASSWORD);
 
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> chargeService.executeCharge(pending.getId()));
@@ -354,7 +478,8 @@ public class ChargeServiceTest {
     void executeChargeRevertsToPendingWhenTossStillProcessing() {
         stubTossRequestInProgress();
 
-        ChargeVO pending = chargeService.createPendingCharge(principal(), paymentMethodId, 10000L, newIdempotencyKey());
+        ChargeVO pending = chargeService.createPendingCharge(
+                principal(), paymentMethodId, 10000L, newIdempotencyKey(), PLAIN_PAYMENT_PASSWORD);
 
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> chargeService.executeCharge(pending.getId()));
@@ -372,7 +497,8 @@ public class ChargeServiceTest {
     void executeChargeRevertsToPendingOnCommunicationFailure() {
         stubTossCommunicationFailure();
 
-        ChargeVO pending = chargeService.createPendingCharge(principal(), paymentMethodId, 10000L, newIdempotencyKey());
+        ChargeVO pending = chargeService.createPendingCharge(
+                principal(), paymentMethodId, 10000L, newIdempotencyKey(), PLAIN_PAYMENT_PASSWORD);
 
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> chargeService.executeCharge(pending.getId()));
@@ -388,7 +514,8 @@ public class ChargeServiceTest {
     void executeChargeSucceedsOnRetryAfterCommunicationFailure() {
         // given: 첫 시도는 통신 실패로 PENDING으로 되돌아감
         stubTossCommunicationFailure();
-        ChargeVO pending = chargeService.createPendingCharge(principal(), paymentMethodId, 10000L, newIdempotencyKey());
+        ChargeVO pending = chargeService.createPendingCharge(
+                principal(), paymentMethodId, 10000L, newIdempotencyKey(), PLAIN_PAYMENT_PASSWORD);
         assertThrows(BusinessException.class, () -> chargeService.executeCharge(pending.getId()));
 
         ChargeVO afterFailure = chargeMapper.selectById(pending.getId());
