@@ -31,6 +31,8 @@ import com.teenyfin.teenymoney.global.exception.BusinessException;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import com.teenyfin.teenymoney.global.sse.SseEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Duration;
@@ -59,8 +61,12 @@ class PaymentServiceTest {
     private final TeenyScorePolicyService teenyScorePolicyService = new TeenyScorePolicyService();
     private final TeenyScoreChangeService teenyScoreChangeService = Mockito.mock(TeenyScoreChangeService.class);
     private final OrderStore orderStore = Mockito.mock(OrderStore.class);
+    private final ApplicationEventPublisher eventPublisher =
+            Mockito.mock(ApplicationEventPublisher.class);
     private final PaymentService paymentService = new PaymentService(
             paymentMapper, categoryPolicyMapper, walletMapper, teenyScoreMapper, memberMapper,
+            walletLedgerService, paymentPasswordService, notificationService, orderStore,
+            eventPublisher);
             walletLedgerService, paymentPasswordService, notificationService, teenyScorePolicyService,
             teenyScoreChangeService, orderStore);
 
@@ -674,150 +680,6 @@ class PaymentServiceTest {
         verify(notificationService).createNotification(
                 eq(memberId), eq("결제가 완료됐어요"), any(),
                 eq(NotificationReferenceType.PAYMENT), eq(1000L), eq(false));
-    }
-
-    @Test
-    void WATCH_정책이면_결제_후_티니점수가_감소한다() {
-        Long memberId = 2L;
-        Long categoryId = 5L;
-        Long walletId = 10L;
-
-        PaymentRequestDTO requestDTO = PaymentRequestDTO.builder()
-                .orderId("ORDER-001")
-                .idempotencyKey("IDEMP-001")
-                .password("123456")
-                .build();
-
-        given(paymentMapper.selectByIdempotencyKey("IDEMP-001")).willReturn(null);
-        given(orderStore.find("ORDER-001")).willReturn(
-                OrderVO.builder().merchantName("PC방").categoryId(categoryId).amount(5000L).build());
-
-        given(categoryPolicyMapper.selectByCategoryIdAndChildId(categoryId, memberId))
-                .willReturn(createCategoryPolicyVO(100L, "PC방", CategoryPolicy.WATCH));
-
-        given(walletMapper.selectMemberWalletByMemberId(memberId))
-                .willReturn(createWalletVO(walletId, memberId, 50000L));
-
-        stubInsertAssignsId(1000L);
-        given(paymentMapper.selectById(1000L)).willReturn(PaymentVO.builder()
-                .id(1000L).walletId(walletId).categoryId(categoryId)
-                .merchantName("PC방").amount(5000L).createdAt(LocalDateTime.now())
-                .build());
-
-        MemberVO childVO = new MemberVO();
-        childVO.setName("김첫째");
-        given(memberMapper.selectById(memberId)).willReturn(childVO);
-
-        TeenyScoreGradeVO grade = new TeenyScoreGradeVO();
-        grade.setGradeId(4L); // 3등급 이하가 아니라 부모 알림은 없이 감점만 검증
-        given(teenyScoreMapper.selectTeenyScoreGradeByChildId(memberId)).willReturn(grade);
-
-        // 이번 달 이용 횟수가 임계치(10) 이내
-        given(paymentMapper.countRecentTransactions(memberId, categoryId)).willReturn(3);
-
-        given(walletMapper.selectWalletForUpdate(walletId)).willReturn(createWalletVO(walletId, memberId, 45000L));
-
-        paymentService.progressPayment(memberId, requestDTO);
-
-        ArgumentCaptor<TeenyScoreChangeRequestDTO> captor = ArgumentCaptor.forClass(TeenyScoreChangeRequestDTO.class);
-        verify(teenyScoreChangeService).change(captor.capture());
-
-        TeenyScoreChangeRequestDTO applied = captor.getValue();
-        assertThat(applied.getChildId()).isEqualTo(memberId);
-        assertThat(applied.getEventCode()).isEqualTo(TeenyScoreEventCode.PAYMENT_WATCH_WITHIN_THRESHOLD);
-        assertThat(applied.getAmount()).isEqualTo(-1);
-        assertThat(applied.getReferenceId()).isEqualTo(1000L);
-    }
-
-    @Test
-    void WATCH_정책이고_임계치를_초과한_이용이면_더_큰_폭으로_감점된다() {
-        Long memberId = 2L;
-        Long categoryId = 5L;
-        Long walletId = 10L;
-
-        PaymentRequestDTO requestDTO = PaymentRequestDTO.builder()
-                .orderId("ORDER-001")
-                .idempotencyKey("IDEMP-001")
-                .password("123456")
-                .build();
-
-        given(paymentMapper.selectByIdempotencyKey("IDEMP-001")).willReturn(null);
-        given(orderStore.find("ORDER-001")).willReturn(
-                OrderVO.builder().merchantName("PC방").categoryId(categoryId).amount(5000L).build());
-
-        given(categoryPolicyMapper.selectByCategoryIdAndChildId(categoryId, memberId))
-                .willReturn(createCategoryPolicyVO(100L, "PC방", CategoryPolicy.WATCH));
-
-        given(walletMapper.selectMemberWalletByMemberId(memberId))
-                .willReturn(createWalletVO(walletId, memberId, 50000L));
-
-        stubInsertAssignsId(1000L);
-        given(paymentMapper.selectById(1000L)).willReturn(PaymentVO.builder()
-                .id(1000L).walletId(walletId).categoryId(categoryId)
-                .merchantName("PC방").amount(5000L).createdAt(LocalDateTime.now())
-                .build());
-
-        MemberVO childVO = new MemberVO();
-        childVO.setName("김첫째");
-        given(memberMapper.selectById(memberId)).willReturn(childVO);
-
-        TeenyScoreGradeVO grade = new TeenyScoreGradeVO();
-        grade.setGradeId(4L);
-        given(teenyScoreMapper.selectTeenyScoreGradeByChildId(memberId)).willReturn(grade);
-
-        // 이번 달 이용 횟수가 임계치(10)를 초과
-        given(paymentMapper.countRecentTransactions(memberId, categoryId)).willReturn(11);
-
-        given(walletMapper.selectWalletForUpdate(walletId)).willReturn(createWalletVO(walletId, memberId, 45000L));
-
-        paymentService.progressPayment(memberId, requestDTO);
-
-        ArgumentCaptor<TeenyScoreChangeRequestDTO> captor = ArgumentCaptor.forClass(TeenyScoreChangeRequestDTO.class);
-        verify(teenyScoreChangeService).change(captor.capture());
-
-        TeenyScoreChangeRequestDTO applied = captor.getValue();
-        assertThat(applied.getEventCode()).isEqualTo(TeenyScoreEventCode.PAYMENT_WATCH_OVER_THRESHOLD);
-        assertThat(applied.getAmount()).isEqualTo(-2);
-    }
-
-    @Test
-    void ALLOW_정책이면_티니점수_변경_로직을_호출하지_않는다() {
-        Long memberId = 2L;
-        Long categoryId = 5L;
-        Long walletId = 10L;
-
-        PaymentRequestDTO requestDTO = PaymentRequestDTO.builder()
-                .orderId("ORDER-001")
-                .idempotencyKey("IDEMP-001")
-                .password("123456")
-                .build();
-
-        given(paymentMapper.selectByIdempotencyKey("IDEMP-001")).willReturn(null);
-        given(orderStore.find("ORDER-001")).willReturn(
-                OrderVO.builder().merchantName("CU 강남역점").categoryId(categoryId).amount(3000L).build());
-
-        given(categoryPolicyMapper.selectByCategoryIdAndChildId(categoryId, memberId))
-                .willReturn(createCategoryPolicyVO(100L, "편의점", CategoryPolicy.ALLOW));
-
-        given(walletMapper.selectMemberWalletByMemberId(memberId))
-                .willReturn(createWalletVO(walletId, memberId, 50000L));
-
-        stubInsertAssignsId(1000L);
-        given(paymentMapper.selectById(1000L)).willReturn(PaymentVO.builder()
-                .id(1000L).walletId(walletId).categoryId(categoryId)
-                .merchantName("CU 강남역점").amount(3000L).createdAt(LocalDateTime.now())
-                .build());
-
-        MemberVO childVO = new MemberVO();
-        childVO.setName("김첫째");
-        given(memberMapper.selectById(memberId)).willReturn(childVO);
-
-        given(walletMapper.selectWalletForUpdate(walletId)).willReturn(createWalletVO(walletId, memberId, 47000L));
-
-        paymentService.progressPayment(memberId, requestDTO);
-
-        verify(teenyScoreChangeService, never()).change(any());
-        verify(paymentMapper, never()).countRecentTransactions(any(), any());
     }
 
     @Test

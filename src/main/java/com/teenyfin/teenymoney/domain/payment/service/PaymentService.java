@@ -30,7 +30,10 @@ import com.teenyfin.teenymoney.domain.wallet.vo.ReferenceType;
 import com.teenyfin.teenymoney.domain.wallet.vo.WalletTransactionVO;
 import com.teenyfin.teenymoney.domain.wallet.vo.WalletVO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
+import com.teenyfin.teenymoney.global.sse.SseEvent;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,6 +43,7 @@ import java.time.LocalDateTime;
 import java.util.Objects;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class PaymentService {
 
@@ -55,6 +59,8 @@ public class PaymentService {
     private final TeenyScorePolicyService teenyScorePolicyService;
     private final TeenyScoreChangeService teenyScoreChangeService;
     private final OrderStore orderStore;
+    // 부모가 보는 자녀 지갑 갱신 신호. 부모 알림은 조건부라 이걸 대신하지 못한다.
+    private final ApplicationEventPublisher eventPublisher;
 
     private static final int PAYMENT_WATCH_THRESHOLD_COUNT = 10;
 
@@ -247,6 +253,13 @@ public class PaymentService {
 
         notificationService.createNotification(memberId, title, content, NotificationReferenceType.PAYMENT, paymentVO.getId(), false);
 
+        // 부모 화면에 걸린 자녀 잔액을 갱신시킨다.
+        //
+        // 위 알림으로는 대신할 수 없다. 부모 알림은 '주의 업종 + 3등급 이하'일 때만 나가지만,
+        // 부모 홈은 결제 종류와 무관하게 자녀 지갑을 보고 있어서 매 결제마다 낡는다.
+        // 알림 수신자("누구에게 알릴까")와 동기화 수신자("누구 화면이 낡았나")가 갈리는 자리다.
+        publishParentWalletViewChangedBestEffort(memberId);
+
         // 최신 잔액 조회 (debit 이후 실제 반영된 값)
         walletVO = walletMapper.selectWalletForUpdate(walletVO.getId());
 
@@ -277,5 +290,24 @@ public class PaymentService {
         }
 
         return categoryPolicyVO.getPolicy();
+    }
+
+    /**
+     * 자녀 잔액이 줄었으니 부모 화면을 갱신시킨다.
+     *
+     * 연동된 부모가 없으면 아무 일도 하지 않는다. 발행 실패로 결제가 되돌아가면 안 되므로
+     * best-effort다 - 알림 전송과 같은 원칙이다.
+     */
+    private void publishParentWalletViewChangedBestEffort(Long childId) {
+        try {
+            MemberParentVO parent = memberMapper.selectActiveParentByChildId(childId);
+            if (parent == null || parent.getParentId() == null) {
+                return;
+            }
+            eventPublisher.publishEvent(
+                    new SseEvent(parent.getParentId(), NotificationReferenceType.PAYMENT));
+        } catch (RuntimeException e) {
+            log.error("부모 지갑 화면 갱신 신호 발행 중 오류 - childId={}", childId, e);
+        }
     }
 }

@@ -99,7 +99,7 @@ public class AllowanceServiceTest {
         TransferExecutor transferExecutor = new TransferExecutor(transferMapper, walletLedgerService);
         TransferFailureRecorder transferFailureRecorder = new TransferFailureRecorder(transferMapper);
         notificationService = mock(NotificationService.class);
-        TransferService transferService = new TransferService(transferMapper, transferExecutor, transferFailureRecorder, walletMapper, notificationService);
+        TransferService transferService = new TransferService(transferMapper, transferExecutor, transferFailureRecorder, walletMapper, notificationService, event -> {});
         allowanceService = new AllowanceService(familyAccessService, walletMapper, transferService);
 
         // 부모 1명 + 자녀 1명을 만들고, 가족 연동(T_MBR_CONN_R)까지 ACTIVE로 걸어둡니다.

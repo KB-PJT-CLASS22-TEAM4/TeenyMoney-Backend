@@ -74,7 +74,7 @@ public class TransferServiceTest {
         TransferExecutor transferExecutor = new TransferExecutor(transferMapper, walletLedgerService);
         TransferFailureRecorder transferFailureRecorder = new TransferFailureRecorder(transferMapper);
         notificationService = mock(NotificationService.class);
-        transferService = new TransferService(transferMapper, transferExecutor, transferFailureRecorder, walletMapper, notificationService);
+        transferService = new TransferService(transferMapper, transferExecutor, transferFailureRecorder, walletMapper, notificationService, event -> {});
 
         //테스트 전용 지갑 생성
         fromWalletId = insertWallet(2L, 100000L);

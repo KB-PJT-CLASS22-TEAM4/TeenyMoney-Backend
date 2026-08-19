@@ -1,10 +1,14 @@
 package com.teenyfin.teenymoney.domain.wallet.service;
 
 import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
+import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
 import com.teenyfin.teenymoney.domain.wallet.mapper.TransferMapper;
 import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
 import com.teenyfin.teenymoney.domain.wallet.vo.TransferType;
 import com.teenyfin.teenymoney.domain.wallet.vo.TransferVO;
+import com.teenyfin.teenymoney.domain.wallet.vo.WalletVO;
+import com.teenyfin.teenymoney.global.sse.SseEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,17 +39,30 @@ class TransferServiceAtomicTest {
     // 불리면 안 된다(아래 verifyNoInteractions 참고). 그래도 생성자엔 넘겨야 컴파일된다.
     private NotificationService notificationService;
 
+    private WalletMapper walletMapper;
+    private ApplicationEventPublisher eventPublisher;
+
     @BeforeEach
     void setUp() {
         transferMapper = mock(TransferMapper.class);
         transferExecutor = mock(TransferExecutor.class);
         notificationService = mock(NotificationService.class);
+        walletMapper = mock(WalletMapper.class);
+        eventPublisher = mock(ApplicationEventPublisher.class);
         transferService = new TransferService(
                 transferMapper,
                 transferExecutor,
                 mock(TransferFailureRecorder.class),
-                mock(WalletMapper.class),
-                notificationService);
+                walletMapper,
+                notificationService,
+                eventPublisher);
+    }
+
+    private WalletVO wallet(Long walletId, Long memberId) {
+        WalletVO wallet = new WalletVO();
+        wallet.setId(walletId);
+        wallet.setMemberId(memberId);
+        return wallet;
     }
 
     @Test
@@ -117,6 +134,55 @@ class TransferServiceAtomicTest {
         assertSame(existing, result);
         verify(transferMapper, never()).insertTransfer(any());
         verify(transferExecutor).lockAndMove(88L);
+        verifyNoInteractions(notificationService);
+    }
+
+    @Test
+    @DisplayName("송금이 끝나면 받는 자녀뿐 아니라 보내는 부모의 화면도 갱신시킨다")
+    void 송금은_양쪽_지갑_주인의_화면을_갱신시킨다() {
+        Long parentId = 1L;
+        Long childId = 2L;
+
+        TransferVO completed = new TransferVO();
+        completed.setId(55L);
+        completed.setFromWalletId(10L);
+        completed.setToWalletId(20L);
+        completed.setAmount(30_000L);
+        completed.setType(TransferType.ALLOWANCE.name());
+        completed.setStatus("COMPLETED");
+
+        when(transferMapper.selectById(55L)).thenReturn(null);
+        when(transferExecutor.lockAndMove(55L)).thenReturn(completed);
+        when(walletMapper.selectById(10L)).thenReturn(wallet(10L, parentId));
+        when(walletMapper.selectById(20L)).thenReturn(wallet(20L, childId));
+
+        transferService.executeTransfer(55L);
+
+        // 자녀는 알림으로도 알게 되지만, 부모는 알림을 받지 않는다.
+        // 정기 용돈은 새벽에 자동으로 실행되므로 부모에겐 응답으로 갱신될 기회조차 없다.
+        verify(eventPublisher).publishEvent(
+                new SseEvent(parentId, NotificationReferenceType.TRANSFER));
+        verify(eventPublisher).publishEvent(
+                new SseEvent(childId, NotificationReferenceType.TRANSFER));
+    }
+
+    @Test
+    @DisplayName("이미 완료된 송금을 재확인만 한 경우엔 화면을 갱신시키지 않는다")
+    void 재처리가_아니면_신호를_보내지_않는다() {
+        TransferVO completed = new TransferVO();
+        completed.setId(55L);
+        completed.setFromWalletId(10L);
+        completed.setToWalletId(20L);
+        completed.setType(TransferType.ALLOWANCE.name());
+        completed.setStatus("COMPLETED");
+
+        // 같은 idempotencyKey로 재시도가 들어온 상황. 잔액은 이번 호출로 움직이지 않았다.
+        when(transferMapper.selectById(55L)).thenReturn(completed);
+        when(transferExecutor.lockAndMove(55L)).thenReturn(completed);
+
+        transferService.executeTransfer(55L);
+
+        verifyNoInteractions(eventPublisher);
         verifyNoInteractions(notificationService);
     }
 }
