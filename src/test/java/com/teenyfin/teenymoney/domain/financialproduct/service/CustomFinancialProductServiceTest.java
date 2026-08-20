@@ -150,6 +150,49 @@ class CustomFinancialProductServiceTest {
         verify(mapper, never()).insertCustomLoanProduct(any());
     }
 
+    @Test
+    @DisplayName("본인이 만든 상품에 가입 중인 자녀가 없으면 삭제된다")
+    void deleteDepositProductSucceedsWhenNoOpenEnrollments() {
+        DepositProductVO product = new DepositProductVO();
+        product.setId(15L);
+        when(mapper.selectCustomDepositProductForDelete(1L, 2L, 15L)).thenReturn(product);
+        when(mapper.countOpenDepositEnrollmentsByProductId(15L)).thenReturn(0);
+        when(mapper.deactivateCustomDepositProduct(15L)).thenReturn(1);
+
+        service.deleteDeposit(PARENT, 2L, 15L);
+
+        verify(mapper).deactivateCustomDepositProduct(15L);
+    }
+
+    @Test
+    @DisplayName("승인 대기 또는 가입 중인 자녀가 있으면 상품 삭제를 거절한다")
+    void deleteDepositProductRejectsWhenOpenEnrollmentsExist() {
+        DepositProductVO product = new DepositProductVO();
+        product.setId(15L);
+        when(mapper.selectCustomDepositProductForDelete(1L, 2L, 15L)).thenReturn(product);
+        when(mapper.countOpenDepositEnrollmentsByProductId(15L)).thenReturn(1);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.deleteDeposit(PARENT, 2L, 15L));
+
+        assertEquals(FinancialProductErrorCode.FINANCIAL_PRODUCT_CUSTOM_HAS_ENROLLMENTS,
+                exception.getErrorCode());
+        verify(mapper, never()).deactivateCustomDepositProduct(any());
+    }
+
+    @Test
+    @DisplayName("본인이 만들지 않았거나 존재하지 않는 상품을 삭제하려 하면 404를 반환한다")
+    void deleteDepositProductNotOwnedIsNotFound() {
+        when(mapper.selectCustomDepositProductForDelete(1L, 2L, 15L)).thenReturn(null);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.deleteDeposit(PARENT, 2L, 15L));
+
+        assertEquals(FinancialProductErrorCode.FINANCIAL_PRODUCT_NOT_FOUND,
+                exception.getErrorCode());
+        verify(mapper, never()).countOpenDepositEnrollmentsByProductId(any());
+    }
+
     private List<CustomProductRateRequestDTO> allTermRates() {
         return List.of(
                 new CustomProductRateRequestDTO(1, new BigDecimal("2.00")),

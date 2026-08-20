@@ -94,6 +94,22 @@ public class FinancialProductEnrollmentController {
                 freeSavingPaymentService.pay(principal, enrollmentId, request));
     }
 
+    @PostMapping("/{productType}-enrollments/{enrollmentId}/cancel")
+    @ApiOperation(value = "금융상품 가입 신청 취소",
+            notes = "승인 대기(PENDING) 상태의 본인 신청만 취소할 수 있습니다.")
+    @ApiResponses({
+            @io.swagger.annotations.ApiResponse(code = 200, message = "취소 성공"),
+            @io.swagger.annotations.ApiResponse(code = 403, message = "자녀 회원이 아님"),
+            @io.swagger.annotations.ApiResponse(code = 404, message = "본인의 가입 신청을 찾을 수 없음"),
+            @io.swagger.annotations.ApiResponse(code = 409, message = "이미 승인·거절되어 대기 중이 아님")
+    })
+    public ApiResponse<FinancialProductEnrollmentRequestResponseDTO> cancel(
+            @AuthenticationPrincipal MemberPrincipal principal,
+            @PathVariable String productType,
+            @PathVariable Long enrollmentId) {
+        return ApiResponse.ok(enrollmentService.cancel(principal, productType, enrollmentId));
+    }
+
     @GetMapping("/{productType}-enrollments/{enrollmentId}/termination-quote")
     @ApiOperation(value = "예·적금 중도해지 예상 조회",
             notes = "현재 시점의 진행률, 적용금리, 원금, 이자, 최종 지급액과 점수 변화를 조회합니다.")

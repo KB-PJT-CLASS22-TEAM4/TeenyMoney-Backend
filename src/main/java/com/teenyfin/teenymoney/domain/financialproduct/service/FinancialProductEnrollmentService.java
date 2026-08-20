@@ -146,6 +146,38 @@ public class FinancialProductEnrollmentService {
         return response(command.getId(), FinancialProductType.LOAN, rate);
     }
 
+    /** 자녀가 본인의 승인 대기(PENDING) 신청을 취소한다. */
+    @Transactional
+    public FinancialProductEnrollmentRequestResponseDTO cancel(
+            MemberPrincipal principal, String productType, Long enrollmentId) {
+        Long childId = requireChild(principal);
+        FinancialProductType type = FinancialProductType.from(productType);
+        int updated = switch (type) {
+            case DEPOSIT -> financialProductMapper.cancelDepositEnrollment(childId, enrollmentId);
+            case SAVING -> financialProductMapper.cancelSavingEnrollment(childId, enrollmentId);
+            case LOAN -> financialProductMapper.cancelLoanEnrollment(childId, enrollmentId);
+        };
+        if (updated != 1) throw notCancelable(type, childId, enrollmentId);
+        return FinancialProductEnrollmentRequestResponseDTO.builder()
+                .enrollmentId(enrollmentId).productType(type).status("CANCELED").build();
+    }
+
+    /** 조건에 안 걸린 이유가 "없음"인지 "PENDING이 아님"인지 구분해 알맞은 에러를 던진다. */
+    private BusinessException notCancelable(
+            FinancialProductType type, Long childId, Long enrollmentId) {
+        boolean exists = switch (type) {
+            case DEPOSIT -> financialProductMapper
+                    .selectDepositEnrollmentByChildIdAndId(childId, enrollmentId) != null;
+            case SAVING -> financialProductMapper
+                    .selectSavingEnrollmentByChildIdAndId(childId, enrollmentId) != null;
+            case LOAN -> financialProductMapper
+                    .selectLoanEnrollmentByChildIdAndId(childId, enrollmentId) != null;
+        };
+        return exists
+                ? new BusinessException(FinancialProductErrorCode.FINANCIAL_PRODUCT_ENROLLMENT_NOT_PENDING)
+                : notFound();
+    }
+
     /**
      * 부모에게 가입 요청 알림을 보낸다. NotificationService.createNotification()도 @Transactional이라
      * 이 메서드와 같은 트랜잭션에 합류하므로, 인앱 알림 이력 저장은 가입 요청과 원자적으로 묶인다.

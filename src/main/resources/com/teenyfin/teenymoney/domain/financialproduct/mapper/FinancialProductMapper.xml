@@ -294,6 +294,81 @@
         SELECT COUNT(*) FROM T_TNY_GRADE_A WHERE grade_id = #{gradeId}
     </select>
 
+    <!-- 부모가 만든 상품인지, 대상 자녀가 맞는지까지 한 번에 확인하며 잠근다. -->
+    <select id="selectCustomDepositProductForDelete" resultMap="depositProductResultMap">
+        SELECT * FROM T_DPT_PROD_M
+        WHERE id = #{productId}
+          AND created_by_parent_id = #{parentId}
+          AND target_child_id = #{childId}
+          AND product_source = 'PARENT'
+          AND is_active = TRUE
+        FOR UPDATE
+    </select>
+    <select id="selectCustomSavingProductForDelete" resultMap="savingProductResultMap">
+        SELECT * FROM T_SVG_PROD_M
+        WHERE id = #{productId}
+          AND created_by_parent_id = #{parentId}
+          AND target_child_id = #{childId}
+          AND product_source = 'PARENT'
+          AND is_active = TRUE
+        FOR UPDATE
+    </select>
+    <select id="selectCustomLoanProductForDelete" resultMap="loanProductResultMap">
+        SELECT * FROM T_LON_PROD_M
+        WHERE id = #{productId}
+          AND created_by_parent_id = #{parentId}
+          AND target_child_id = #{childId}
+          AND product_source = 'PARENT'
+          AND is_active = TRUE
+        FOR UPDATE
+    </select>
+
+    <!-- 승인 대기·가입 중인 신청이 하나라도 있으면 상품을 삭제할 수 없다. -->
+    <select id="countOpenDepositEnrollmentsByProductId" resultType="int">
+        SELECT COUNT(*) FROM T_DPT_ENROLL_M
+        WHERE deposit_id = #{productId} AND status IN ('PENDING', 'ACTIVE')
+    </select>
+    <select id="countOpenSavingEnrollmentsByProductId" resultType="int">
+        SELECT COUNT(*) FROM T_SVG_ENROLL_M
+        WHERE saving_id = #{productId} AND status IN ('PENDING', 'ACTIVE')
+    </select>
+    <select id="countOpenLoanEnrollmentsByProductId" resultType="int">
+        SELECT COUNT(*) FROM T_LON_ENROLL_M
+        WHERE loan_id = #{productId}
+          AND status IN ('PENDING', 'ACTIVE', 'OVERDUE', 'DEFAULTED')
+    </select>
+
+    <!-- 다른 가입 이력의 FK를 보존해야 하므로 하드 삭제 대신 비활성화한다. -->
+    <update id="deactivateCustomDepositProduct">
+        UPDATE T_DPT_PROD_M
+        SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{productId} AND is_active = TRUE
+    </update>
+    <update id="deactivateCustomSavingProduct">
+        UPDATE T_SVG_PROD_M
+        SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{productId} AND is_active = TRUE
+    </update>
+    <update id="deactivateCustomLoanProduct">
+        UPDATE T_LON_PROD_M
+        SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{productId} AND is_active = TRUE
+    </update>
+
+    <!-- 승인 대기 상태에서만 취소되며, 자녀 본인 신청이 아니면 조건에 걸리지 않아 0을 반환한다. -->
+    <update id="cancelDepositEnrollment">
+        UPDATE T_DPT_ENROLL_M SET status = 'CANCELED', updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{enrollmentId} AND child_id = #{childId} AND status = 'PENDING'
+    </update>
+    <update id="cancelSavingEnrollment">
+        UPDATE T_SVG_ENROLL_M SET status = 'CANCELED', updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{enrollmentId} AND child_id = #{childId} AND status = 'PENDING'
+    </update>
+    <update id="cancelLoanEnrollment">
+        UPDATE T_LON_ENROLL_M SET status = 'CANCELED', updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{enrollmentId} AND child_id = #{childId} AND status = 'PENDING'
+    </update>
+
     <select id="selectDepositEnrollmentsByChildId"
             resultMap="enrollmentResultMap">
         SELECT enrollment.id AS enrollment_id,

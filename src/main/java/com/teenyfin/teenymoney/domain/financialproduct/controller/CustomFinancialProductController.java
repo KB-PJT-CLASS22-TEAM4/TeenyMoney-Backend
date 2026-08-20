@@ -10,6 +10,7 @@ import com.teenyfin.teenymoney.global.security.MemberPrincipal;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -58,5 +59,38 @@ public class CustomFinancialProductController {
             @Valid @RequestBody CustomLoanProductRequestDTO request) {
         return ApiResponse.ok(customFinancialProductService
                 .createLoan(principal, childId, request));
+    }
+
+    @DeleteMapping("/custom-deposits/{productId}")
+    @ApiOperation(value = "자녀 전용 예금상품 삭제",
+            notes = "본인이 만든 상품만 삭제할 수 있고, 승인 대기 또는 가입 중인 신청이 있으면 거절됩니다.")
+    public ApiResponse<Void> deleteDeposit(
+            @AuthenticationPrincipal MemberPrincipal principal,
+            @PathVariable Long childId,
+            @PathVariable Long productId) {
+        customFinancialProductService.deleteDeposit(principal, childId, productId);
+        return ApiResponse.ok();
+    }
+
+    @DeleteMapping("/custom-savings/{productId}")
+    @ApiOperation(value = "자녀 전용 적금상품 삭제",
+            notes = "본인이 만든 상품만 삭제할 수 있고, 승인 대기 또는 가입 중인 신청이 있으면 거절됩니다.")
+    public ApiResponse<Void> deleteSaving(
+            @AuthenticationPrincipal MemberPrincipal principal,
+            @PathVariable Long childId,
+            @PathVariable Long productId) {
+        customFinancialProductService.deleteSaving(principal, childId, productId);
+        return ApiResponse.ok();
+    }
+
+    @DeleteMapping("/custom-loans/{productId}")
+    @ApiOperation(value = "자녀 전용 대출상품 삭제",
+            notes = "본인이 만든 상품만 삭제할 수 있고, 승인 대기 또는 가입 중인 신청이 있으면 거절됩니다.")
+    public ApiResponse<Void> deleteLoan(
+            @AuthenticationPrincipal MemberPrincipal principal,
+            @PathVariable Long childId,
+            @PathVariable Long productId) {
+        customFinancialProductService.deleteLoan(principal, childId, productId);
+        return ApiResponse.ok();
     }
 }

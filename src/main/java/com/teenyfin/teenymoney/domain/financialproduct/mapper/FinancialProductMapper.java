@@ -43,6 +43,30 @@ public interface FinancialProductMapper {
     int insertCustomDepositProduct(DepositProductVO product);
     int insertCustomSavingProduct(SavingProductVO product);
     int insertCustomLoanProduct(LoanProductVO product);
+    // 삭제 대상 소유권(부모·대상 자녀)까지 함께 확인하며 잠근다.
+    DepositProductVO selectCustomDepositProductForDelete(
+            @Param("parentId") Long parentId, @Param("childId") Long childId,
+            @Param("productId") Long productId);
+    SavingProductVO selectCustomSavingProductForDelete(
+            @Param("parentId") Long parentId, @Param("childId") Long childId,
+            @Param("productId") Long productId);
+    LoanProductVO selectCustomLoanProductForDelete(
+            @Param("parentId") Long parentId, @Param("childId") Long childId,
+            @Param("productId") Long productId);
+    // 승인 대기·가입 중(대출은 연체·미상환 포함) 신청이 남아 있으면 삭제를 막는 데 쓴다.
+    int countOpenDepositEnrollmentsByProductId(@Param("productId") Long productId);
+    int countOpenSavingEnrollmentsByProductId(@Param("productId") Long productId);
+    int countOpenLoanEnrollmentsByProductId(@Param("productId") Long productId);
+    int deactivateCustomDepositProduct(@Param("productId") Long productId);
+    int deactivateCustomSavingProduct(@Param("productId") Long productId);
+    int deactivateCustomLoanProduct(@Param("productId") Long productId);
+    // 자녀가 승인 대기 중인 본인 신청을 취소한다. 조건에 안 걸리면 0을 반환한다.
+    int cancelDepositEnrollment(@Param("childId") Long childId,
+                               @Param("enrollmentId") Long enrollmentId);
+    int cancelSavingEnrollment(@Param("childId") Long childId,
+                              @Param("enrollmentId") Long enrollmentId);
+    int cancelLoanEnrollment(@Param("childId") Long childId,
+                            @Param("enrollmentId") Long enrollmentId);
     int countGradeById(@Param("gradeId") Long gradeId);
     List<FinancialProductEnrollmentVO> selectDepositEnrollmentsByChildId(
             @Param("childId") Long childId);
