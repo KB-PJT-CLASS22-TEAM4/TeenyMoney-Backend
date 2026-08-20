@@ -1,5 +1,6 @@
 package com.teenyfin.teenymoney.domain.teenyscore.mapper;
 
+import com.teenyfin.teenymoney.domain.teenyscore.vo.TeenyScoreGradeChangeVO;
 import com.teenyfin.teenymoney.domain.teenyscore.vo.TeenyScoreGradeVO;
 import com.teenyfin.teenymoney.domain.teenyscore.vo.TeenyScoreHistoryVO;
 import com.teenyfin.teenymoney.domain.teenyscore.vo.TeenyScoreMonthlyHistoryVO;
@@ -34,6 +35,9 @@ public interface TeenyScoreMapper {
     int updateTeenyScore(
             @Param("childId") Long childId,
             @Param("teenyScore") int teenyScore);
+
+    /** 일괄 갱신 직전에 호출해, 이번 확정으로 등급이 실제로 바뀌는 자녀만 조회한다. */
+    List<TeenyScoreGradeChangeVO> selectPendingGradeChanges();
 
     int updateAllActiveChildGrades(
             @Param("appliedAt") LocalDateTime appliedAt);

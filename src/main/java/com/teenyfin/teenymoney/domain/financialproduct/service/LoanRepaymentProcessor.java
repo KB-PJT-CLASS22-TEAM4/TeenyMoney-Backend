@@ -2,6 +2,9 @@ package com.teenyfin.teenymoney.domain.financialproduct.service;
 
 import com.teenyfin.teenymoney.domain.financialproduct.mapper.FinancialProductMapper;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.LoanRepaymentVO;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
+import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
+import com.teenyfin.teenymoney.domain.teenyscore.dto.request.TeenyScoreChangeRequestDTO;
 import com.teenyfin.teenymoney.domain.teenyscore.service.TeenyScoreChangeService;
 import com.teenyfin.teenymoney.domain.teenyscore.service.TeenyScorePolicyService;
 import com.teenyfin.teenymoney.domain.wallet.exception.WalletErrorCode;
@@ -30,19 +33,22 @@ public class LoanRepaymentProcessor {
     private final TeenyScorePolicyService scorePolicyService;
     private final TeenyScoreChangeService scoreChangeService;
     private final LoanRepaymentCalculator calculator;
+    private final NotificationService notificationService;
 
     public LoanRepaymentProcessor(
             FinancialProductMapper mapper, WalletMapper walletMapper,
             TransferService transferService,
             TeenyScorePolicyService scorePolicyService,
             TeenyScoreChangeService scoreChangeService,
-            LoanRepaymentCalculator calculator) {
+            LoanRepaymentCalculator calculator,
+            NotificationService notificationService) {
         this.mapper = mapper;
         this.walletMapper = walletMapper;
         this.transferService = transferService;
         this.scorePolicyService = scorePolicyService;
         this.scoreChangeService = scoreChangeService;
         this.calculator = calculator;
+        this.notificationService = notificationService;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -79,8 +85,16 @@ public class LoanRepaymentProcessor {
             requireLoanUpdated(mapper.updateLoanAfterRepayment(
                     loan.getEnrollmentId(), loan.getOutstandingPrincipal(),
                     loan.getOverdueInterest(), loan.getPaidCount(), "DEFAULTED"));
-            scoreChangeService.change(scorePolicyService.loanDefault(
-                    loan.getChildId(), loan.getEnrollmentId()));
+            TeenyScoreChangeRequestDTO score = scorePolicyService.loanDefault(
+                    loan.getChildId(), loan.getEnrollmentId());
+            scoreChangeService.change(score);
+            // DEFAULTED 확정은 계약당 한 번뿐이므로, 이 분기 안에서만 알린다.
+            notifyChild(loan, FinancialProductNotificationMessages.loanDefaultedTitle(),
+                    FinancialProductNotificationMessages.loanDefaultedContent(
+                            loan.getProductName(),
+                            Math.addExact(loan.getOutstandingPrincipal(),
+                                    loan.getOverdueInterest()),
+                            score.getAmount()));
             loan.setStatus("DEFAULTED");
         }
 
@@ -143,9 +157,23 @@ public class LoanRepaymentProcessor {
                 loan.getEnrollmentId(), newOutstanding, newOverdueInterest,
                 loan.getPaidCount(), enrollmentStatus));
 
+        // 미상환 상태에서 잔액이 생겨 전액 회수된 날에만 완납을 알린다.
+        if (repaid) {
+            notifyChild(loan, FinancialProductNotificationMessages.loanRepaidTitle(),
+                    FinancialProductNotificationMessages.loanRepaidContent(
+                            loan.getProductName()));
+        }
+
         loan.setOutstandingPrincipal(newOutstanding);
         loan.setOverdueInterest(newOverdueInterest);
         loan.setStatus(enrollmentStatus);
+    }
+
+    /** 상환은 자녀 지갑에서 빠져나가는 돈이므로 연체·완납·미상환 확정 모두 자녀에게만 알린다. */
+    private void notifyChild(LoanRepaymentVO loan, String title, String content) {
+        notificationService.createNotification(
+                loan.getChildId(), title, content,
+                NotificationReferenceType.LOAN_REPAYMENT, loan.getEnrollmentId(), true);
     }
 
     private void processInstallment(
@@ -212,13 +240,22 @@ public class LoanRepaymentProcessor {
 
         // 부분납부와 미납은 회차 월 단위 키로 감점되고, 최종 완납은 계약 단위 키로 한 번만 가점된다.
         if (overdue) {
-            scoreChangeService.change(scorePolicyService.loanOverdue(
+            TeenyScoreChangeRequestDTO score = scorePolicyService.loanOverdue(
                     loan.getChildId(), loan.getEnrollmentId(), YearMonth.from(dueDate),
                     previousUnpaidPrincipal + loan.getOverdueInterest() + lateInterest,
-                    scheduled.total(), paidAmount));
+                    scheduled.total(), paidAmount);
+            scoreChangeService.change(score);
+            // 감점을 따로 알리지 않고 연체 알림 문구에 사유로 함께 담는다.
+            notifyChild(loan, FinancialProductNotificationMessages.loanOverdueTitle(),
+                    FinancialProductNotificationMessages.loanOverdueContent(
+                            loan.getProductName(), installmentNo,
+                            totalDue - paidAmount, score.getAmount()));
         } else if (repaid) {
             scoreChangeService.change(scorePolicyService.loanMaturity(
                     loan.getChildId(), loan.getEnrollmentId()));
+            notifyChild(loan, FinancialProductNotificationMessages.loanRepaidTitle(),
+                    FinancialProductNotificationMessages.loanRepaidContent(
+                            loan.getProductName()));
         }
 
         loan.setOutstandingPrincipal(newOutstanding);

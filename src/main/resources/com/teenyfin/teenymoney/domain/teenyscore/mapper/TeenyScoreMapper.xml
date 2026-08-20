@@ -159,6 +159,36 @@
           AND status = 'ACTIVE'
     </update>
 
+    <!--
+        일괄 UPDATE는 어떤 자녀의 등급이 바뀌었는지 알려주지 않으므로,
+        갱신 직전에 같은 조인 조건으로 변경 대상만 미리 읽어 알림 발송에 사용한다.
+        applied_grade_id가 NULL인 자녀는 최초 등급 부여(initializeAppliedGrade) 대상이라 제외한다.
+    -->
+    <select id="selectPendingGradeChanges"
+            resultType="com.teenyfin.teenymoney.domain.teenyscore.vo.TeenyScoreGradeChangeVO">
+        SELECT member.id AS child_id,
+               member.name AS child_name,
+               member.teeny_score,
+               parent.id AS parent_id,
+               current_grade.grade_name AS current_grade_name,
+               current_grade.min_score AS current_grade_min_score,
+               new_grade.grade_name AS new_grade_name,
+               new_grade.min_score AS new_grade_min_score
+        FROM T_MBR_INFO_M member
+        INNER JOIN T_TNY_GRADE_A new_grade
+            ON member.teeny_score BETWEEN new_grade.min_score AND new_grade.max_score
+        INNER JOIN T_TNY_GRADE_A current_grade
+            ON current_grade.grade_id = member.applied_grade_id
+        LEFT JOIN T_MBR_CONN_R conn
+            ON conn.child_id = member.id AND conn.status = 'ACTIVE'
+        LEFT JOIN T_MBR_INFO_M parent
+            ON parent.id = conn.parent_id AND parent.status = 'ACTIVE'
+        WHERE member.role = 'CHILD'
+          AND member.status = 'ACTIVE'
+          AND new_grade.grade_id &lt;&gt; current_grade.grade_id
+        ORDER BY member.id
+    </select>
+
     <update id="updateAllActiveChildGrades">
         UPDATE T_MBR_INFO_M member
         INNER JOIN T_TNY_GRADE_A grade

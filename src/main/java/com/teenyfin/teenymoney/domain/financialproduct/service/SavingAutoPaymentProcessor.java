@@ -2,6 +2,8 @@ package com.teenyfin.teenymoney.domain.financialproduct.service;
 
 import com.teenyfin.teenymoney.domain.financialproduct.mapper.FinancialProductMapper;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.SavingPaymentDueVO;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
+import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
 import com.teenyfin.teenymoney.domain.wallet.exception.WalletErrorCode;
 import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
 import com.teenyfin.teenymoney.domain.wallet.service.TransferService;
@@ -25,18 +27,21 @@ public class SavingAutoPaymentProcessor {
     private final TransferService transferService;
     private final TeenyScorePolicyService scorePolicyService;
     private final TeenyScoreChangeService scoreChangeService;
+    private final NotificationService notificationService;
 
     public SavingAutoPaymentProcessor(
             FinancialProductMapper financialProductMapper,
             WalletMapper walletMapper,
             TransferService transferService,
             TeenyScorePolicyService scorePolicyService,
-            TeenyScoreChangeService scoreChangeService) {
+            TeenyScoreChangeService scoreChangeService,
+            NotificationService notificationService) {
         this.financialProductMapper = financialProductMapper;
         this.walletMapper = walletMapper;
         this.transferService = transferService;
         this.scorePolicyService = scorePolicyService;
         this.scoreChangeService = scoreChangeService;
+        this.notificationService = notificationService;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -75,6 +80,12 @@ public class SavingAutoPaymentProcessor {
             scoreChangeService.change(scorePolicyService.fixedSavingInstallment(
                     payment.getChildId(), enrollmentId,
                     payment.getInstallmentNo(), false));
+            // 실패 원인이 자녀 지갑 잔액이므로 부모가 아니라 자녀에게만 알린다.
+            notify(payment, enrollmentId,
+                    FinancialProductNotificationMessages.savingMissedTitle(),
+                    FinancialProductNotificationMessages.savingMissedContent(
+                            payment.getProductName(), payment.getInstallmentNo(),
+                            payment.getMonthlyAmount()));
             return;
         }
 
@@ -91,5 +102,18 @@ public class SavingAutoPaymentProcessor {
         scoreChangeService.change(scorePolicyService.fixedSavingInstallment(
                 payment.getChildId(), enrollmentId,
                 payment.getInstallmentNo(), true));
+        notify(payment, enrollmentId,
+                FinancialProductNotificationMessages.savingPaidTitle(),
+                FinancialProductNotificationMessages.savingPaidContent(
+                        payment.getProductName(), payment.getInstallmentNo(),
+                        payment.getMonthlyAmount()));
+    }
+
+    /** 회차 이력 저장과 같은 트랜잭션이라, 같은 회차를 재실행해도 알림이 다시 쌓이지 않는다. */
+    private void notify(SavingPaymentDueVO payment, Long enrollmentId,
+                        String title, String content) {
+        notificationService.createNotification(
+                payment.getChildId(), title, content,
+                NotificationReferenceType.SAVING_PAYMENT, enrollmentId, true);
     }
 }

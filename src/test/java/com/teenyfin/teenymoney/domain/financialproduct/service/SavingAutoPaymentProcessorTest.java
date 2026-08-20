@@ -2,6 +2,8 @@ package com.teenyfin.teenymoney.domain.financialproduct.service;
 
 import com.teenyfin.teenymoney.domain.financialproduct.mapper.FinancialProductMapper;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.SavingPaymentDueVO;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
+import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
 import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
 import com.teenyfin.teenymoney.domain.wallet.service.TransferService;
 import com.teenyfin.teenymoney.domain.wallet.vo.TransferVO;
@@ -23,6 +25,7 @@ class SavingAutoPaymentProcessorTest {
     private FinancialProductMapper mapper;
     private WalletMapper walletMapper;
     private TransferService transferService;
+    private NotificationService notificationService;
     private SavingAutoPaymentProcessor processor;
 
     @BeforeEach
@@ -30,10 +33,12 @@ class SavingAutoPaymentProcessorTest {
         mapper = mock(FinancialProductMapper.class);
         walletMapper = mock(WalletMapper.class);
         transferService = mock(TransferService.class);
+        notificationService = mock(NotificationService.class);
         processor = new SavingAutoPaymentProcessor(
                 mapper, walletMapper, transferService,
                 mock(TeenyScorePolicyService.class),
-                mock(TeenyScoreChangeService.class));
+                mock(TeenyScoreChangeService.class),
+                notificationService);
     }
 
     @Test
@@ -58,6 +63,9 @@ class SavingAutoPaymentProcessorTest {
         verify(transferService).executeTransferAtomically(30L);
         verify(mapper).insertSavingPaymentHistory(
                 7L, 30L, 1, 30_000L, 30_000L, "PAID");
+        verify(notificationService).createNotification(
+                eq(2L), eq("적금이 납입됐어요"), anyString(),
+                eq(NotificationReferenceType.SAVING_PAYMENT), eq(7L), eq(true));
     }
 
     @Test
@@ -77,6 +85,11 @@ class SavingAutoPaymentProcessorTest {
         verifyNoInteractions(transferService);
         verify(mapper).insertSavingPaymentHistory(
                 7L, null, 1, 30_000L, 0L, "MISSED");
+        // 실패 원인이 자녀 지갑 잔액이므로 부모가 아닌 자녀에게만 한 건 발송한다.
+        verify(notificationService).createNotification(
+                eq(2L), eq("적금 자동납입에 실패했어요"), anyString(),
+                eq(NotificationReferenceType.SAVING_PAYMENT), eq(7L), eq(true));
+        verifyNoMoreInteractions(notificationService);
     }
 
     @Test

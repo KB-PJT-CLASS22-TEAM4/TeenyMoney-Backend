@@ -26,6 +26,9 @@ public class FinancialProductMaturityService {
             try {
                 processor.processDeposit(id, processingDate);
                 processed++;
+            } catch (FinancialProductInterestPaymentFailedException failure) {
+                log.error("예금 만기 정산 실패(부모 잔액 부족): enrollmentId={}", id, failure);
+                processor.notifyInterestPaymentFailed(failure);
             } catch (RuntimeException exception) {
                 log.error("예금 만기 정산 실패: enrollmentId={}", id, exception);
             }
@@ -34,6 +37,9 @@ public class FinancialProductMaturityService {
             try {
                 processor.processSaving(id, processingDate);
                 processed++;
+            } catch (FinancialProductInterestPaymentFailedException failure) {
+                log.error("적금 만기 정산 실패(부모 잔액 부족): enrollmentId={}", id, failure);
+                processor.notifyInterestPaymentFailed(failure);
             } catch (RuntimeException exception) {
                 log.error("적금 만기 정산 실패: enrollmentId={}", id, exception);
             }

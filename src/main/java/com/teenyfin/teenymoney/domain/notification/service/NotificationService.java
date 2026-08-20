@@ -89,14 +89,22 @@ public class NotificationService {
         }
 
         // 금융 상품 관련 알림을 끈 경우
-        if ((notificationReferenceType == NotificationReferenceType.SAVING_ENROLLMENT
-                || notificationReferenceType == NotificationReferenceType.DEPOSIT_ENROLLMENT
-                || notificationReferenceType == NotificationReferenceType.LOAN_ENROLLMENT)
-                && !memberNotificationVO.getNotiFinance()) {
+        if (isFinanceType(notificationReferenceType) && !memberNotificationVO.getNotiFinance()) {
             return;
         }
 
         sendNotification(memberNotificationVO.getFcmToken(), notificationVO);
+    }
+
+    // 가입 요청/승인뿐 아니라 만기·납입·상환·중도해지까지 하나의 "금융 상품 알림" 설정으로 묶는다.
+    // 새 금융 이벤트를 추가할 때 여기 빠뜨리면 알림을 끈 사용자에게도 푸시가 나간다.
+    private boolean isFinanceType(NotificationReferenceType referenceType) {
+        return switch (referenceType) {
+            case DEPOSIT_ENROLLMENT, SAVING_ENROLLMENT, LOAN_ENROLLMENT,
+                 DEPOSIT_MATURITY, SAVING_MATURITY, SAVING_PAYMENT, LOAN_REPAYMENT,
+                 DEPOSIT_TERMINATION, SAVING_TERMINATION -> true;
+            default -> false;
+        };
     }
 
     public void sendNotification(String fcmToken, NotificationVO notificationVO) {

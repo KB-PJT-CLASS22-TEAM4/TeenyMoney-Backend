@@ -15,6 +15,7 @@ public class LoanRepaymentVO {
     private Long enrollmentId;
     private Long parentId;
     private Long childId;
+    private String productName;
     private Long principalAmount;
     private Long outstandingPrincipal;
     private Long overdueInterest;

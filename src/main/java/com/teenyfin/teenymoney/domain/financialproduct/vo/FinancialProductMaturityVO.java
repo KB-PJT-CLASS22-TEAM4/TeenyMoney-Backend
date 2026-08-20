@@ -15,6 +15,7 @@ public class FinancialProductMaturityVO {
     private Long childId;
     private Long parentId;
     private Long productWalletId;
+    private String productName;
     private BigDecimal appliedRate;
     private Integer termMonths;
     private Long monthlyAmount;

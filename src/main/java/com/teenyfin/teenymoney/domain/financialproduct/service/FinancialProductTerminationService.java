@@ -6,6 +6,8 @@ import com.teenyfin.teenymoney.domain.financialproduct.mapper.FinancialProductMa
 import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductTerminationVO;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductType;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.SavingContributionVO;
+import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
 import com.teenyfin.teenymoney.domain.teenyscore.dto.request.TeenyScoreChangeRequestDTO;
 import com.teenyfin.teenymoney.domain.teenyscore.service.TeenyScoreChangeService;
 import com.teenyfin.teenymoney.domain.teenyscore.service.TeenyScorePolicyService;
@@ -39,6 +41,8 @@ public class FinancialProductTerminationService {
     private final EarlyTerminationRatePolicy ratePolicy;
     private final FinancialProductInterestCalculator interestCalculator;
     private final Clock clock;
+    private final NotificationService notificationService;
+    private final MemberMapper memberMapper;
 
     public FinancialProductTerminationService(
             FinancialProductMapper financialProductMapper,
@@ -48,7 +52,9 @@ public class FinancialProductTerminationService {
             TeenyScoreChangeService scoreChangeService,
             EarlyTerminationRatePolicy ratePolicy,
             FinancialProductInterestCalculator interestCalculator,
-            Clock clock) {
+            Clock clock,
+            NotificationService notificationService,
+            MemberMapper memberMapper) {
         this.financialProductMapper = financialProductMapper;
         this.walletMapper = walletMapper;
         this.transferService = transferService;
@@ -57,6 +63,8 @@ public class FinancialProductTerminationService {
         this.ratePolicy = ratePolicy;
         this.interestCalculator = interestCalculator;
         this.clock = clock;
+        this.notificationService = notificationService;
+        this.memberMapper = memberMapper;
     }
 
     /** 조회 시점의 원금·이자·점수를 계산하지만 지갑과 가입 상태는 변경하지 않는다. */
@@ -95,7 +103,26 @@ public class FinancialProductTerminationService {
         if (updated != 1) {
             throw new IllegalStateException("중도해지 상태 변경에 실패했습니다.");
         }
+        notifyTerminated(type, enrollment, calculation);
         return calculation.terminatedResponse();
+    }
+
+    /**
+     * 중도해지는 자녀가 직접 실행해 결과 화면에서 바로 확인하므로 알림은 부모에게만 보낸다.
+     * 감점은 별도 알림으로 나누지 않고 이 알림 문구에 사유로 함께 담는다.
+     */
+    private void notifyTerminated(
+            FinancialProductType type, FinancialProductTerminationVO enrollment,
+            Calculation calculation) {
+        String childName = memberMapper.selectById(enrollment.getChildId()).getName();
+        notificationService.createNotification(
+                enrollment.getParentId(),
+                FinancialProductNotificationMessages.terminationParentTitle(type, childName),
+                FinancialProductNotificationMessages.terminationParentContent(
+                        enrollment.getProductName(), calculation.principal,
+                        calculation.interest, calculation.scoreRequest.getAmount()),
+                FinancialProductNotificationMessages.terminationReferenceType(type),
+                enrollment.getEnrollmentId(), true);
     }
 
     private Calculation calculate(

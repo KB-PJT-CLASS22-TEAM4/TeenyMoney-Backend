@@ -5,6 +5,8 @@ import com.teenyfin.teenymoney.domain.financialproduct.exception.FinancialProduc
 import com.teenyfin.teenymoney.domain.financialproduct.mapper.FinancialProductMapper;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductTerminationVO;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.SavingContributionVO;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
+import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
 import com.teenyfin.teenymoney.domain.teenyscore.service.TeenyScoreChangeService;
 import com.teenyfin.teenymoney.domain.teenyscore.service.TeenyScorePolicyService;
 import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
@@ -35,6 +37,7 @@ class FinancialProductTerminationServiceTest {
     private WalletMapper walletMapper;
     private TransferService transferService;
     private TeenyScoreChangeService scoreChangeService;
+    private NotificationService notificationService;
     private FinancialProductTerminationService service;
 
     @BeforeEach
@@ -43,13 +46,15 @@ class FinancialProductTerminationServiceTest {
         walletMapper = mock(WalletMapper.class);
         transferService = mock(TransferService.class);
         scoreChangeService = mock(TeenyScoreChangeService.class);
+        notificationService = mock(NotificationService.class);
         Clock clock = Clock.fixed(
                 Instant.parse("2026-07-01T00:00:00Z"), ZoneId.of("Asia/Seoul"));
         service = new FinancialProductTerminationService(
                 mapper, walletMapper, transferService,
                 new TeenyScorePolicyService(), scoreChangeService,
                 new EarlyTerminationRatePolicy(),
-                new FinancialProductInterestCalculator(), clock);
+                new FinancialProductInterestCalculator(), clock,
+                notificationService, memberMapper());
     }
 
     @Test
@@ -91,6 +96,11 @@ class FinancialProductTerminationServiceTest {
                 eq(TransferType.DEPOSIT), eq("DPT_TERM:7:I"));
         verify(scoreChangeService).change(any());
         verify(mapper).markDepositTerminated(7L);
+        // 자녀는 해지 결과 화면에서 바로 확인하므로 알림은 부모(1L)에게만 한 건 간다.
+        verify(notificationService).createNotification(
+                eq(1L), eq("테스트자녀님이 예금을 중도해지했어요"), anyString(),
+                eq(NotificationReferenceType.DEPOSIT_TERMINATION), eq(7L), eq(true));
+        verifyNoMoreInteractions(notificationService);
     }
 
     @Test
@@ -242,6 +252,17 @@ class FinancialProductTerminationServiceTest {
         when(walletMapper.selectMemberWalletByMemberId(2L)).thenReturn(wallet(10L, 0L));
         when(walletMapper.selectMemberWalletByMemberId(1L)).thenReturn(wallet(11L, 1_000_000L));
         when(mapper.markSavingTerminated(8L)).thenReturn(1);
+    }
+
+    /** 중도해지 알림이 부모에게 보낼 자녀 이름을 조회하므로 회원 조회만 대신한다. */
+    private com.teenyfin.teenymoney.domain.member.mapper.MemberMapper memberMapper() {
+        com.teenyfin.teenymoney.domain.member.mapper.MemberMapper memberMapper =
+                mock(com.teenyfin.teenymoney.domain.member.mapper.MemberMapper.class);
+        com.teenyfin.teenymoney.domain.member.vo.MemberVO child =
+                new com.teenyfin.teenymoney.domain.member.vo.MemberVO();
+        child.setName("테스트자녀");
+        when(memberMapper.selectById(2L)).thenReturn(child);
+        return memberMapper;
     }
 
     private WalletVO wallet(Long id, long balance) {

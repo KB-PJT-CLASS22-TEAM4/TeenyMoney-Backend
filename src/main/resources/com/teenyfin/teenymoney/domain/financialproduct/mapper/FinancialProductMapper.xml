@@ -827,6 +827,7 @@
                enrollment.child_id,
                enrollment.wallet_id AS product_wallet_id,
                enrollment.monthly_amount,
+               product.name AS product_name,
                product.savings_type,
                TIMESTAMPDIFF(
                    MONTH, (<include refid="firstSavingPaymentDate"/>),
@@ -956,6 +957,7 @@
                enrollment.payment_day,
                enrollment.start_date,
                enrollment.maturity_date,
+               product.name AS product_name,
                product.savings_type,
                product.max_month_amount
         FROM T_SVG_ENROLL_M enrollment
@@ -1017,7 +1019,7 @@
                enrollment.parent_id, enrollment.wallet_id AS product_wallet_id,
                enrollment.applied_rate, enrollment.term_months,
                enrollment.start_date, enrollment.maturity_date, enrollment.status,
-               product.interest_calculation_type
+               product.name AS product_name, product.interest_calculation_type
         FROM T_DPT_ENROLL_M enrollment
         INNER JOIN T_DPT_PROD_M product ON product.id = enrollment.deposit_id
         WHERE enrollment.id = #{enrollmentId}
@@ -1033,6 +1035,7 @@
                enrollment.applied_rate, enrollment.term_months,
                enrollment.monthly_amount, enrollment.start_date,
                enrollment.maturity_date, enrollment.status,
+               product.name AS product_name,
                product.savings_type, product.interest_calculation_type
         FROM T_SVG_ENROLL_M enrollment
         INNER JOIN T_SVG_PROD_M product ON product.id = enrollment.saving_id
@@ -1117,7 +1120,7 @@
                enrollment.applied_early_termination_rate,
                enrollment.term_months, enrollment.start_date,
                enrollment.maturity_date, enrollment.status,
-               product.interest_calculation_type
+               product.name AS product_name, product.interest_calculation_type
         FROM T_DPT_ENROLL_M enrollment
         INNER JOIN T_DPT_PROD_M product ON product.id = enrollment.deposit_id
         INNER JOIN T_WLT_BASE_M wallet ON wallet.id = enrollment.wallet_id
@@ -1132,6 +1135,7 @@
                enrollment.applied_early_termination_rate,
                enrollment.term_months, enrollment.start_date,
                enrollment.maturity_date, enrollment.status,
+               product.name AS product_name,
                product.savings_type, product.interest_calculation_type
         FROM T_SVG_ENROLL_M enrollment
         INNER JOIN T_SVG_PROD_M product ON product.id = enrollment.saving_id
@@ -1192,7 +1196,7 @@
                enrollment.payment_day, enrollment.paid_count,
                enrollment.term_months, enrollment.start_date,
                enrollment.maturity_date, enrollment.status,
-               product.repayment_type
+               product.name AS product_name, product.repayment_type
         FROM T_LON_ENROLL_M enrollment
         INNER JOIN T_LON_PROD_M product ON product.id = enrollment.loan_id
         WHERE enrollment.id = #{enrollmentId}

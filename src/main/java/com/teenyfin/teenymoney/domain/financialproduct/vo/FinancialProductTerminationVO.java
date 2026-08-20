@@ -18,6 +18,7 @@ public class FinancialProductTerminationVO {
     private Long productWalletId;
     /** 예상 조회 SQL에서 함께 읽어 불필요한 지갑 FOR UPDATE를 피하기 위한 잔액 스냅샷이다. */
     private Long productWalletBalance;
+    private String productName;
     private BigDecimal appliedEarlyTerminationRate;
     private Integer termMonths;
     private String savingsType;
