@@ -2,6 +2,8 @@ package com.teenyfin.teenymoney.domain.financialproduct.service;
 
 import com.teenyfin.teenymoney.domain.financialproduct.mapper.FinancialProductMapper;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.LoanRepaymentVO;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
+import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
 import com.teenyfin.teenymoney.domain.teenyscore.service.TeenyScoreChangeService;
 import com.teenyfin.teenymoney.domain.teenyscore.service.TeenyScorePolicyService;
 import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
@@ -24,6 +26,7 @@ class LoanRepaymentProcessorTest {
     private WalletMapper walletMapper;
     private TransferService transferService;
     private TeenyScoreChangeService scoreChangeService;
+    private NotificationService notificationService;
     private LoanRepaymentProcessor processor;
 
     @BeforeEach
@@ -32,10 +35,11 @@ class LoanRepaymentProcessorTest {
         walletMapper = mock(WalletMapper.class);
         transferService = mock(TransferService.class);
         scoreChangeService = mock(TeenyScoreChangeService.class);
+        notificationService = mock(NotificationService.class);
         processor = new LoanRepaymentProcessor(
                 mapper, walletMapper, transferService,
                 new TeenyScorePolicyService(), scoreChangeService,
-                new LoanRepaymentCalculator());
+                new LoanRepaymentCalculator(), notificationService);
     }
 
     @Test
@@ -83,6 +87,11 @@ class LoanRepaymentProcessorTest {
                 700L, 0L, "OVERDUE", LocalDate.of(2026, 1, 15));
         verify(mapper).updateLoanAfterRepayment(7L, 120_000L, 700L, 0, "OVERDUE");
         verify(scoreChangeService).change(any());
+        // 상환은 자녀 지갑에서 나가는 돈이므로 부모가 아닌 자녀에게만 알린다.
+        verify(notificationService).createNotification(
+                eq(2L), eq("대출 상환이 연체됐어요"), anyString(),
+                eq(NotificationReferenceType.LOAN_REPAYMENT), eq(7L), eq(true));
+        verifyNoMoreInteractions(notificationService);
     }
 
     @Test
@@ -97,6 +106,9 @@ class LoanRepaymentProcessorTest {
         verify(mapper).updateLoanAfterRepayment(7L, 0L, 0L, 1, "REPAID");
         verify(scoreChangeService).change(argThat(request ->
                 "LOAN_REPAID:7".equals(request.getEventKey())));
+        verify(notificationService).createNotification(
+                eq(2L), eq("대출을 모두 갚았어요"), anyString(),
+                eq(NotificationReferenceType.LOAN_REPAYMENT), eq(7L), eq(true));
     }
 
     @Test
@@ -256,6 +268,7 @@ class LoanRepaymentProcessorTest {
         loan.setEnrollmentId(7L);
         loan.setParentId(1L);
         loan.setChildId(2L);
+        loan.setProductName("테스트 대출");
         loan.setPrincipalAmount(120_000L);
         loan.setOutstandingPrincipal(outstanding);
         loan.setOverdueInterest(0L);

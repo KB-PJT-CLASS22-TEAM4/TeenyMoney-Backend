@@ -2,7 +2,10 @@ package com.teenyfin.teenymoney.domain.financialproduct.service;
 
 import com.teenyfin.teenymoney.domain.financialproduct.mapper.FinancialProductMapper;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductMaturityVO;
+import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductType;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.SavingContributionVO;
+import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
 import com.teenyfin.teenymoney.domain.teenyscore.service.TeenyScoreChangeService;
 import com.teenyfin.teenymoney.domain.teenyscore.service.TeenyScorePolicyService;
 import com.teenyfin.teenymoney.domain.wallet.exception.WalletErrorCode;
@@ -31,6 +34,8 @@ public class FinancialProductMaturityProcessor {
     private final TeenyScorePolicyService scorePolicyService;
     private final TeenyScoreChangeService scoreChangeService;
     private final FinancialProductInterestCalculator interestCalculator;
+    private final NotificationService notificationService;
+    private final MemberMapper memberMapper;
 
     public FinancialProductMaturityProcessor(
             FinancialProductMapper financialProductMapper,
@@ -38,13 +43,17 @@ public class FinancialProductMaturityProcessor {
             TransferService transferService,
             TeenyScorePolicyService scorePolicyService,
             TeenyScoreChangeService scoreChangeService,
-            FinancialProductInterestCalculator interestCalculator) {
+            FinancialProductInterestCalculator interestCalculator,
+            NotificationService notificationService,
+            MemberMapper memberMapper) {
         this.financialProductMapper = financialProductMapper;
         this.walletMapper = walletMapper;
         this.transferService = transferService;
         this.scorePolicyService = scorePolicyService;
         this.scoreChangeService = scoreChangeService;
         this.interestCalculator = interestCalculator;
+        this.notificationService = notificationService;
+        this.memberMapper = memberMapper;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -67,12 +76,13 @@ public class FinancialProductMaturityProcessor {
         transferIfPositive(productWallet.getId(), childWallet.getId(), principal,
                 TransferType.DEPOSIT,
                 "DPT_MAT:" + enrollmentId + ":P");
-        transferIfPositive(parentWallet.getId(), childWallet.getId(), interest,
-                TransferType.DEPOSIT,
-                "DPT_MAT:" + enrollmentId + ":I");
+        transferInterestOrFail(parentWallet.getId(), childWallet.getId(), interest,
+                TransferType.DEPOSIT, "DPT_MAT:" + enrollmentId + ":I",
+                FinancialProductType.DEPOSIT, maturity);
         scoreChangeService.change(scorePolicyService.depositMaturity(
                 maturity.getChildId(), enrollmentId, maturity.getTermMonths()));
         requireUpdated(financialProductMapper.markDepositMatured(enrollmentId));
+        notifyMaturity(FinancialProductType.DEPOSIT, maturity, principal, interest);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -102,11 +112,42 @@ public class FinancialProductMaturityProcessor {
         transferIfPositive(productWallet.getId(), childWallet.getId(), recordedPrincipal,
                 TransferType.SAVING,
                 "SVG_MAT:" + enrollmentId + ":P");
-        transferIfPositive(parentWallet.getId(), childWallet.getId(), interest,
-                TransferType.SAVING,
-                "SVG_MAT:" + enrollmentId + ":I");
+        transferInterestOrFail(parentWallet.getId(), childWallet.getId(), interest,
+                TransferType.SAVING, "SVG_MAT:" + enrollmentId + ":I",
+                FinancialProductType.SAVING, maturity);
         applySavingMaturityScore(maturity, contributions);
         requireUpdated(financialProductMapper.markSavingMatured(enrollmentId));
+        notifyMaturity(FinancialProductType.SAVING, maturity, recordedPrincipal, interest);
+    }
+
+    /**
+     * 자녀에게는 받은 금액을, 부모에게는 지갑에서 빠져나간 이자를 알린다.
+     * 정산과 같은 트랜잭션에 합류하므로 만기 처리가 롤백되면 알림 이력도 함께 사라진다.
+     */
+    private void notifyMaturity(
+            FinancialProductType type, FinancialProductMaturityVO maturity,
+            long principal, long interest) {
+        Long enrollmentId = maturity.getEnrollmentId();
+        notificationService.createNotification(
+                maturity.getChildId(),
+                FinancialProductNotificationMessages.maturityChildTitle(type),
+                FinancialProductNotificationMessages.maturityChildContent(
+                        maturity.getProductName(), principal, interest),
+                FinancialProductNotificationMessages.maturityReferenceType(type),
+                enrollmentId, true);
+
+        // 이자가 0원이면 부모 지갑에서 나간 돈이 없으므로 부모에게는 알리지 않는다.
+        if (interest <= 0) {
+            return;
+        }
+        String childName = memberMapper.selectById(maturity.getChildId()).getName();
+        notificationService.createNotification(
+                maturity.getParentId(),
+                FinancialProductNotificationMessages.maturityParentTitle(type, childName),
+                FinancialProductNotificationMessages.maturityParentContent(
+                        maturity.getProductName(), interest),
+                FinancialProductNotificationMessages.maturityReferenceType(type),
+                enrollmentId, true);
     }
 
     private void applySavingMaturityScore(
@@ -158,6 +199,41 @@ public class FinancialProductMaturityProcessor {
         if (amount <= 0) return;
         // 가입 ID 기반 키를 재사용하므로 스케줄러 재실행에도 같은 송금은 한 번만 완료된다.
         transferService.transferInExistingTransaction(from, to, amount, type, key);
+    }
+
+    /**
+     * 부모 지갑 잔액이 부족해 이자를 못 보내면, 원인을 담은 전용 예외로 바꿔 던진다.
+     * 이 메서드가 속한 트랜잭션은 그대로 롤백되고, 알림은 호출부가 롤백 밖에서 별도로 보낸다.
+     */
+    private void transferInterestOrFail(
+            Long from, Long to, long interest, TransferType transferType, String key,
+            FinancialProductType productType, FinancialProductMaturityVO maturity) {
+        if (interest <= 0) return;
+        try {
+            transferService.transferInExistingTransaction(from, to, interest, transferType, key);
+        } catch (BusinessException exception) {
+            if (exception.getErrorCode() != WalletErrorCode.INSUFFICIENT_BALANCE) {
+                throw exception;
+            }
+            throw new FinancialProductInterestPaymentFailedException(
+                    maturity.getEnrollmentId(), maturity.getChildId(), maturity.getParentId(),
+                    maturity.getProductName(), productType, interest, exception);
+        }
+    }
+
+    /**
+     * 실패한 정산 트랜잭션과 별개로 새 트랜잭션에서 부모에게만 알린다.
+     * 자녀는 원금·이자 둘 다 못 받은 상태라 "지급됐다"는 알림을 보낼 수 없으므로 보내지 않는다.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void notifyInterestPaymentFailed(FinancialProductInterestPaymentFailedException failure) {
+        notificationService.createNotification(
+                failure.getParentId(),
+                FinancialProductNotificationMessages.maturityInterestFailedTitle(failure.getType()),
+                FinancialProductNotificationMessages.maturityInterestFailedContent(
+                        failure.getProductName(), failure.getInterest()),
+                FinancialProductNotificationMessages.maturityReferenceType(failure.getType()),
+                failure.getEnrollmentId(), true);
     }
 
     private WalletVO requireLockedWallet(Long walletId) {

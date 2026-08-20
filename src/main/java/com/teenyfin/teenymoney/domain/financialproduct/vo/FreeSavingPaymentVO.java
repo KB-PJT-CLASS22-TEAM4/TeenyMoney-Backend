@@ -14,6 +14,7 @@ public class FreeSavingPaymentVO {
     private Long enrollmentId;
     private Long childId;
     private Long productWalletId;
+    private String productName;
     private String savingsType;
     private String status;
     private Long maxMonthAmount;

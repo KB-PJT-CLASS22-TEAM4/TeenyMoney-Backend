@@ -5,6 +5,8 @@ import com.teenyfin.teenymoney.domain.financialproduct.dto.response.SavingPaymen
 import com.teenyfin.teenymoney.domain.financialproduct.exception.FinancialProductErrorCode;
 import com.teenyfin.teenymoney.domain.financialproduct.mapper.FinancialProductMapper;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.FreeSavingPaymentVO;
+import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
+import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
 import com.teenyfin.teenymoney.domain.wallet.exception.WalletErrorCode;
 import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
 import com.teenyfin.teenymoney.domain.wallet.service.TransferService;
@@ -26,16 +28,19 @@ public class FreeSavingPaymentService {
     private final WalletMapper walletMapper;
     private final TransferService transferService;
     private final Clock clock;
+    private final NotificationService notificationService;
 
     public FreeSavingPaymentService(
             FinancialProductMapper financialProductMapper,
             WalletMapper walletMapper,
             TransferService transferService,
-            Clock clock) {
+            Clock clock,
+            NotificationService notificationService) {
         this.financialProductMapper = financialProductMapper;
         this.walletMapper = walletMapper;
         this.transferService = transferService;
         this.clock = clock;
+        this.notificationService = notificationService;
     }
 
     /**
@@ -84,6 +89,13 @@ public class FreeSavingPaymentService {
         financialProductMapper.insertFreeSavingPayment(
                 enrollmentId, transfer.getId(), installmentNo(saving, paymentDate),
                 request.getAmount());
+        // 멱등 재요청은 위에서 이미 반환되므로 알림은 실제 납입이 일어난 최초 요청에만 발송된다.
+        notificationService.createNotification(
+                childId,
+                FinancialProductNotificationMessages.savingPaidTitle(),
+                FinancialProductNotificationMessages.freeSavingPaidContent(
+                        saving.getProductName(), request.getAmount()),
+                NotificationReferenceType.SAVING_PAYMENT, enrollmentId, true);
 
         return response(transfer.getId(), request.getAmount(),
                 saving.getProductWalletId());

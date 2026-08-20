@@ -40,7 +40,8 @@ class FreeSavingPaymentServiceTest {
         Clock clock = Clock.fixed(
                 Instant.parse("2026-08-14T00:00:00Z"), ZoneId.of("Asia/Seoul"));
         service = new FreeSavingPaymentService(
-                mapper, walletMapper, transferService, clock);
+                mapper, walletMapper, transferService, clock,
+                mock(com.teenyfin.teenymoney.domain.notification.service.NotificationService.class));
     }
 
     @Test
