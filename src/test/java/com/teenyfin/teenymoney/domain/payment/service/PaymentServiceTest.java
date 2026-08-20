@@ -614,7 +614,7 @@ class PaymentServiceTest {
 
         // then: 자녀에게만 알림이 가고(WATCH 아님) 조용히(isPushed=false) 남는다
         verify(notificationService).createNotification(
-                eq(memberId), eq("결제가 완료됐어요"), eq("CU 강남역점 · 3000원"),
+                eq(memberId), eq("결제가 완료됐어요"), eq("CU 강남역점 · 3,000원"),
                 eq(NotificationReferenceType.PAYMENT), eq(1000L), eq(false));
         verify(notificationService, Mockito.times(1))
                 .createNotification(any(), any(), any(), any(), any(), any());
