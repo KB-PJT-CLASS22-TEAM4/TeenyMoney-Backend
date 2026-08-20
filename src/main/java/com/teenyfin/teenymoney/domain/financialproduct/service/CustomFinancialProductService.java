@@ -118,6 +118,58 @@ public class CustomFinancialProductService {
                 product.getName(), childId);
     }
 
+    /**
+     * 부모가 만든 상품을 삭제한다. 가입 이력의 FK를 보존해야 하므로 하드 삭제 대신
+     * is_active를 끄며, 승인 대기·가입 중인 자녀가 있으면 거절한다.
+     */
+    @Transactional
+    public void deleteDeposit(MemberPrincipal principal, Long childId, Long productId) {
+        Long parentId = requireParentAndChildAccess(principal, childId);
+        DepositProductVO product = financialProductMapper
+                .selectCustomDepositProductForDelete(parentId, childId, productId);
+        if (product == null) throw notFound();
+        ensureNoOpenEnrollments(
+                financialProductMapper.countOpenDepositEnrollmentsByProductId(productId));
+        requireUpdated(financialProductMapper.deactivateCustomDepositProduct(productId));
+    }
+
+    @Transactional
+    public void deleteSaving(MemberPrincipal principal, Long childId, Long productId) {
+        Long parentId = requireParentAndChildAccess(principal, childId);
+        SavingProductVO product = financialProductMapper
+                .selectCustomSavingProductForDelete(parentId, childId, productId);
+        if (product == null) throw notFound();
+        ensureNoOpenEnrollments(
+                financialProductMapper.countOpenSavingEnrollmentsByProductId(productId));
+        requireUpdated(financialProductMapper.deactivateCustomSavingProduct(productId));
+    }
+
+    @Transactional
+    public void deleteLoan(MemberPrincipal principal, Long childId, Long productId) {
+        Long parentId = requireParentAndChildAccess(principal, childId);
+        LoanProductVO product = financialProductMapper
+                .selectCustomLoanProductForDelete(parentId, childId, productId);
+        if (product == null) throw notFound();
+        ensureNoOpenEnrollments(
+                financialProductMapper.countOpenLoanEnrollmentsByProductId(productId));
+        requireUpdated(financialProductMapper.deactivateCustomLoanProduct(productId));
+    }
+
+    private void ensureNoOpenEnrollments(int count) {
+        if (count > 0) {
+            throw new BusinessException(
+                    FinancialProductErrorCode.FINANCIAL_PRODUCT_CUSTOM_HAS_ENROLLMENTS);
+        }
+    }
+
+    private void requireUpdated(int updated) {
+        if (updated != 1) throw new IllegalStateException("상품 삭제에 실패했습니다.");
+    }
+
+    private BusinessException notFound() {
+        return new BusinessException(FinancialProductErrorCode.FINANCIAL_PRODUCT_NOT_FOUND);
+    }
+
     /** 다른 가족의 자녀를 대상으로 부모 상품을 생성하지 못하도록 관계를 검증한다. */
     private Long requireParentAndChildAccess(MemberPrincipal principal, Long childId) {
         if (principal == null || !"PARENT".equals(principal.role())) {

@@ -38,6 +38,8 @@ public enum FinancialProductErrorCode implements ErrorCode {
             HttpStatus.CONFLICT, "가입 요청에 연결된 대기 송금을 찾을 수 없습니다."),
     FINANCIAL_PRODUCT_CUSTOM_INVALID_CONDITION(
             HttpStatus.BAD_REQUEST, "부모 생성 금융상품의 입력 조건이 올바르지 않습니다."),
+    FINANCIAL_PRODUCT_CUSTOM_HAS_ENROLLMENTS(
+            HttpStatus.CONFLICT, "가입 또는 승인 대기 중인 자녀가 있어 상품을 삭제할 수 없습니다."),
     FINANCIAL_PRODUCT_SAVING_NOT_FREE(
             HttpStatus.BAD_REQUEST, "자유적금만 직접 납입할 수 있습니다."),
     FINANCIAL_PRODUCT_ENROLLMENT_NOT_ACTIVE(

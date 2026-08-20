@@ -304,4 +304,43 @@ class FinancialProductEnrollmentServiceTest {
         assertEquals(FinancialProductErrorCode.FINANCIAL_PRODUCT_INSUFFICIENT_GRADE,
                 exception.getErrorCode());
     }
+
+    @Test
+    @DisplayName("승인 대기 중인 본인 신청을 취소하면 상태가 CANCELED로 바뀐다")
+    void cancelPendingEnrollmentSucceeds() {
+        when(mapper.cancelDepositEnrollment(2L, 100L)).thenReturn(1);
+
+        FinancialProductEnrollmentRequestResponseDTO response =
+                service.cancel(CHILD, "deposit", 100L);
+
+        assertEquals(100L, response.getEnrollmentId());
+        assertEquals("CANCELED", response.getStatus());
+    }
+
+    @Test
+    @DisplayName("존재하지 않거나 본인 것이 아닌 신청을 취소하면 404를 반환한다")
+    void cancelMissingEnrollmentIsNotFound() {
+        when(mapper.cancelDepositEnrollment(2L, 999L)).thenReturn(0);
+        when(mapper.selectDepositEnrollmentByChildIdAndId(2L, 999L)).thenReturn(null);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.cancel(CHILD, "deposit", 999L));
+
+        assertEquals(FinancialProductErrorCode.FINANCIAL_PRODUCT_NOT_FOUND,
+                exception.getErrorCode());
+    }
+
+    @Test
+    @DisplayName("이미 승인·거절된 신청을 취소하면 PENDING 아님 오류를 반환한다")
+    void cancelNonPendingEnrollmentIsRejected() {
+        when(mapper.cancelDepositEnrollment(2L, 100L)).thenReturn(0);
+        when(mapper.selectDepositEnrollmentByChildIdAndId(2L, 100L))
+                .thenReturn(new FinancialProductEnrollmentVO());
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.cancel(CHILD, "deposit", 100L));
+
+        assertEquals(FinancialProductErrorCode.FINANCIAL_PRODUCT_ENROLLMENT_NOT_PENDING,
+                exception.getErrorCode());
+    }
 }
