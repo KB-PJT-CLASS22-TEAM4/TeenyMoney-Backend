@@ -720,8 +720,13 @@ class PaymentServiceTest {
 
         paymentService.progressPayment(memberId, requestDTO);
 
-        verify(memberMapper, never()).selectActiveParentByChildId(any());
+        // 부모 조회 자체를 금지하지 않는다. selectActiveParentByChildId는 이제 두 가지 일에
+        // 쓰인다 - 부모에게 알림을 보낼지 정할 때(조건부), 그리고 부모 화면의 자녀 잔액을
+        // 갱신시킬 때(매 결제). 후자는 알림 조건과 무관하게 항상 부모를 찾으므로,
+        // 이 메서드가 불렸는지로 "알림이 갔는지"를 판단할 수 없다.
+        //
+        // 이 테스트가 실제로 주장하는 것은 '알림이 자녀에게만 간다'이므로 그것을 직접 검증한다.
         verify(notificationService, Mockito.times(1))
-                .createNotification(any(), any(), any(), any(), any(), any());
+                .createNotification(eq(memberId), any(), any(), any(), any(), any());
     }
 }
