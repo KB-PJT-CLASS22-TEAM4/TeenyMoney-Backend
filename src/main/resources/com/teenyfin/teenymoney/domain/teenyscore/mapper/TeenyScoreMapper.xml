@@ -40,6 +40,13 @@
         <result property="color" column="color"/>
     </resultMap>
 
+    <resultMap id="teenyScoreEventRecordResultMap"
+               type="com.teenyfin.teenymoney.domain.teenyscore.vo.TeenyScoreEventRecordVO">
+        <result property="eventCode" column="event_code"/>
+        <result property="referenceType" column="reference_type"/>
+        <result property="referenceId" column="reference_id"/>
+    </resultMap>
+
     <resultMap id="teenyScoreMonthlyHistoryResultMap"
                type="com.teenyfin.teenymoney.domain.teenyscore.vo.TeenyScoreMonthlyHistoryVO">
         <id property="yearMonth" column="score_month"/>
@@ -92,7 +99,7 @@
                 ) AS rn
             FROM T_TNY_SCOREHIST_H
             WHERE child_id = #{childId}
-        )
+          )
         SELECT
             score_month,
             score_after AS teeny_score
@@ -212,6 +219,23 @@
           AND member.status = 'ACTIVE'
           AND member.applied_grade_id IS NULL
     </update>
+
+    <!--
+        연속 만기 보너스·반복 중도해지 감점 판정용. 이 이벤트 자체가 아직 이력에 쌓이기
+        전에 호출해야 "직전 N건"이 자기 자신을 포함하지 않는다. 기간 제한은 없다.
+    -->
+    <select id="selectRecentFinalSavingEvents" resultMap="teenyScoreEventRecordResultMap">
+        SELECT event_code, reference_type, reference_id
+        FROM T_TNY_SCOREHIST_H
+        WHERE child_id = #{childId}
+          AND event_code IN (
+              'DEPOSIT_MATURED', 'SAVING_FIXED_MATURED', 'SAVING_FREE_MATURED',
+              'DEPOSIT_EARLY_TERMINATED', 'SAVING_EARLY_TERMINATED'
+        )
+        ORDER BY created_at DESC, id DESC
+        LIMIT #{limit}
+        FOR UPDATE
+    </select>
 
     <insert id="insertScoreHistory">
         INSERT INTO T_TNY_SCOREHIST_H (

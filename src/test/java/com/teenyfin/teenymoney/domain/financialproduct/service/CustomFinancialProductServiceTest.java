@@ -6,11 +6,15 @@ import com.teenyfin.teenymoney.domain.financialproduct.dto.request.CustomLoanPro
 import com.teenyfin.teenymoney.domain.financialproduct.dto.request.CustomProductRateRequestDTO;
 import com.teenyfin.teenymoney.domain.financialproduct.dto.request.CustomSavingProductRequestDTO;
 import com.teenyfin.teenymoney.domain.financialproduct.dto.response.CustomFinancialProductResponseDTO;
+import com.teenyfin.teenymoney.domain.financialproduct.dto.response.FinancialProductListResponseDTO;
 import com.teenyfin.teenymoney.domain.financialproduct.exception.FinancialProductErrorCode;
 import com.teenyfin.teenymoney.domain.financialproduct.mapper.FinancialProductMapper;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.DepositProductVO;
+import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductBenefitVO;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductSource;
+import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductType;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.LoanProductVO;
+import com.teenyfin.teenymoney.domain.financialproduct.vo.SavingProductVO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import com.teenyfin.teenymoney.global.security.MemberPrincipal;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,6 +28,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -36,13 +41,18 @@ class CustomFinancialProductServiceTest {
             new MemberPrincipal(1L, "PARENT");
     private FinancialProductMapper mapper;
     private FamilyAccessService familyAccessService;
+    private FinancialProductService financialProductService;
     private CustomFinancialProductService service;
 
     @BeforeEach
     void setUp() {
         mapper = mock(FinancialProductMapper.class);
         familyAccessService = mock(FamilyAccessService.class);
-        service = new CustomFinancialProductService(mapper, familyAccessService);
+        financialProductService = mock(FinancialProductService.class);
+        service = new CustomFinancialProductService(mapper, familyAccessService, financialProductService);
+        FinancialProductBenefitVO benefit = new FinancialProductBenefitVO();
+        benefit.setChildId(2L);
+        when(mapper.selectBenefitByChildId(2L)).thenReturn(benefit);
     }
 
     @Test
@@ -191,6 +201,75 @@ class CustomFinancialProductServiceTest {
         assertEquals(FinancialProductErrorCode.FINANCIAL_PRODUCT_NOT_FOUND,
                 exception.getErrorCode());
         verify(mapper, never()).countOpenDepositEnrollmentsByProductId(any());
+    }
+
+    @Test
+    @DisplayName("부모가 이 자녀에게 만든 예/적금/대출 커스텀 상품만 모아서, 자녀가 보는 형식으로 반환한다")
+    void getCustomProductsReturnsOnlyThisParentsProductsForThisChild() {
+        DepositProductVO deposit = new DepositProductVO();
+        deposit.setId(15L);
+        deposit.setName("목표 예금");
+        SavingProductVO saving = new SavingProductVO();
+        saving.setId(16L);
+        saving.setName("목표 적금");
+        when(mapper.selectCustomDepositProductsByParentAndChild(1L, 2L))
+                .thenReturn(List.of(deposit));
+        when(mapper.selectCustomSavingProductsByParentAndChild(1L, 2L))
+                .thenReturn(List.of(saving));
+        when(mapper.selectCustomLoanProductsByParentAndChild(1L, 2L))
+                .thenReturn(List.of());
+        // 실제 항목 조립(금리·가입가능 여부 등)은 FinancialProductService가 담당하므로,
+        // 여기서는 자녀 혜택 기준으로 그 메서드에 위임했는지만 확인한다.
+        when(financialProductService.depositListItem(eq(deposit), any())).thenReturn(
+                FinancialProductListResponseDTO.builder()
+                        .productId(15L).productType(FinancialProductType.DEPOSIT)
+                        .productName("목표 예금").build());
+        when(financialProductService.savingListItem(eq(saving), any())).thenReturn(
+                FinancialProductListResponseDTO.builder()
+                        .productId(16L).productType(FinancialProductType.SAVING)
+                        .productName("목표 적금").build());
+
+        List<FinancialProductListResponseDTO> products =
+                service.getCustomProducts(PARENT, 2L);
+
+        assertEquals(2, products.size());
+        assertEquals(15L, products.get(0).getProductId());
+        assertEquals("목표 예금", products.get(0).getProductName());
+        assertEquals(16L, products.get(1).getProductId());
+        verify(familyAccessService).requireChildAccess(PARENT, 2L);
+    }
+
+    @Test
+    @DisplayName("자녀 계정으로 커스텀 상품 목록을 조회하면 거절한다")
+    void getCustomProductsRejectsChildRole() {
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.getCustomProducts(new MemberPrincipal(2L, "CHILD"), 2L));
+
+        assertEquals(FinancialProductErrorCode.FINANCIAL_PRODUCT_PARENT_ONLY,
+                exception.getErrorCode());
+        verifyNoInteractions(familyAccessService);
+    }
+
+    @Test
+    @DisplayName("타입별 조회는 그 타입 상품만 반환한다")
+    void getCustomDepositsReturnsOnlyDepositType() {
+        DepositProductVO deposit = new DepositProductVO();
+        deposit.setId(15L);
+        deposit.setName("목표 예금");
+        when(mapper.selectCustomDepositProductsByParentAndChild(1L, 2L))
+                .thenReturn(List.of(deposit));
+        when(financialProductService.depositListItem(eq(deposit), any())).thenReturn(
+                FinancialProductListResponseDTO.builder()
+                        .productId(15L).productType(FinancialProductType.DEPOSIT)
+                        .productName("목표 예금").build());
+
+        List<FinancialProductListResponseDTO> products =
+                service.getCustomDeposits(PARENT, 2L);
+
+        assertEquals(1, products.size());
+        assertEquals(FinancialProductType.DEPOSIT, products.get(0).getProductType());
+        verify(mapper, never()).selectCustomSavingProductsByParentAndChild(any(), any());
+        verify(mapper, never()).selectCustomLoanProductsByParentAndChild(any(), any());
     }
 
     private List<CustomProductRateRequestDTO> allTermRates() {

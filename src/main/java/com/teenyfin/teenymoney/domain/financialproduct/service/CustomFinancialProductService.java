@@ -3,15 +3,18 @@ package com.teenyfin.teenymoney.domain.financialproduct.service;
 import com.teenyfin.teenymoney.domain.family.service.FamilyAccessService;
 import com.teenyfin.teenymoney.domain.financialproduct.dto.request.*;
 import com.teenyfin.teenymoney.domain.financialproduct.dto.response.CustomFinancialProductResponseDTO;
+import com.teenyfin.teenymoney.domain.financialproduct.dto.response.FinancialProductListResponseDTO;
 import com.teenyfin.teenymoney.domain.financialproduct.exception.FinancialProductErrorCode;
 import com.teenyfin.teenymoney.domain.financialproduct.mapper.FinancialProductMapper;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.*;
+import com.teenyfin.teenymoney.domain.teenyscore.exception.TeenyScoreErrorCode;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import com.teenyfin.teenymoney.global.security.MemberPrincipal;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -31,12 +34,15 @@ public class CustomFinancialProductService {
 
     private final FinancialProductMapper financialProductMapper;
     private final FamilyAccessService familyAccessService;
+    private final FinancialProductService financialProductService;
 
     public CustomFinancialProductService(
             FinancialProductMapper financialProductMapper,
-            FamilyAccessService familyAccessService) {
+            FamilyAccessService familyAccessService,
+            FinancialProductService financialProductService) {
         this.financialProductMapper = financialProductMapper;
         this.familyAccessService = familyAccessService;
+        this.financialProductService = financialProductService;
     }
 
     @Transactional
@@ -116,6 +122,76 @@ public class CustomFinancialProductService {
         financialProductMapper.insertCustomLoanProduct(product);
         return response(product.getId(), FinancialProductType.LOAN,
                 product.getName(), childId);
+    }
+
+    /**
+     * 부모가 이 자녀에게 만들어준 커스텀 상품만 모아서, 자녀가 보는 것과 같은 형식(금리·가입조건·
+     * 가입가능 여부 포함)으로 보여준다. 기본 제공 상품은 포함하지 않는다.
+     */
+    @Transactional(readOnly = true)
+    public List<FinancialProductListResponseDTO> getCustomProducts(
+            MemberPrincipal principal, Long childId) {
+        Long parentId = requireParentAndChildAccess(principal, childId);
+        FinancialProductBenefitVO benefit = requireBenefit(childId);
+        List<FinancialProductListResponseDTO> products = new ArrayList<>();
+        products.addAll(fetchCustomDeposits(parentId, childId, benefit));
+        products.addAll(fetchCustomSavings(parentId, childId, benefit));
+        products.addAll(fetchCustomLoans(parentId, childId, benefit));
+        return products;
+    }
+
+    @Transactional(readOnly = true)
+    public List<FinancialProductListResponseDTO> getCustomDeposits(
+            MemberPrincipal principal, Long childId) {
+        Long parentId = requireParentAndChildAccess(principal, childId);
+        return fetchCustomDeposits(parentId, childId, requireBenefit(childId));
+    }
+
+    @Transactional(readOnly = true)
+    public List<FinancialProductListResponseDTO> getCustomSavings(
+            MemberPrincipal principal, Long childId) {
+        Long parentId = requireParentAndChildAccess(principal, childId);
+        return fetchCustomSavings(parentId, childId, requireBenefit(childId));
+    }
+
+    @Transactional(readOnly = true)
+    public List<FinancialProductListResponseDTO> getCustomLoans(
+            MemberPrincipal principal, Long childId) {
+        Long parentId = requireParentAndChildAccess(principal, childId);
+        return fetchCustomLoans(parentId, childId, requireBenefit(childId));
+    }
+
+    private List<FinancialProductListResponseDTO> fetchCustomDeposits(
+            Long parentId, Long childId, FinancialProductBenefitVO benefit) {
+        return financialProductMapper
+                .selectCustomDepositProductsByParentAndChild(parentId, childId).stream()
+                .map(product -> financialProductService.depositListItem(product, benefit))
+                .toList();
+    }
+
+    private List<FinancialProductListResponseDTO> fetchCustomSavings(
+            Long parentId, Long childId, FinancialProductBenefitVO benefit) {
+        return financialProductMapper
+                .selectCustomSavingProductsByParentAndChild(parentId, childId).stream()
+                .map(product -> financialProductService.savingListItem(product, benefit))
+                .toList();
+    }
+
+    private List<FinancialProductListResponseDTO> fetchCustomLoans(
+            Long parentId, Long childId, FinancialProductBenefitVO benefit) {
+        return financialProductMapper
+                .selectCustomLoanProductsByParentAndChild(parentId, childId).stream()
+                .map(product -> financialProductService.loanListItem(product, benefit))
+                .toList();
+    }
+
+    /** 자녀 본인의 등급·우대금리 기준으로 보여줘야 하므로, 호출한 부모가 아니라 대상 자녀의 혜택을 조회한다. */
+    private FinancialProductBenefitVO requireBenefit(Long childId) {
+        FinancialProductBenefitVO benefit = financialProductMapper.selectBenefitByChildId(childId);
+        if (benefit == null) {
+            throw new BusinessException(TeenyScoreErrorCode.TEENY_SCORE_CHILD_NOT_FOUND);
+        }
+        return benefit;
     }
 
     /**

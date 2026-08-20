@@ -43,6 +43,13 @@ public interface FinancialProductMapper {
     int insertCustomDepositProduct(DepositProductVO product);
     int insertCustomSavingProduct(SavingProductVO product);
     int insertCustomLoanProduct(LoanProductVO product);
+    // 부모가 이 자녀에게 만든 커스텀 상품만 모아 조회한다(기본 제공 상품 제외).
+    List<DepositProductVO> selectCustomDepositProductsByParentAndChild(
+            @Param("parentId") Long parentId, @Param("childId") Long childId);
+    List<SavingProductVO> selectCustomSavingProductsByParentAndChild(
+            @Param("parentId") Long parentId, @Param("childId") Long childId);
+    List<LoanProductVO> selectCustomLoanProductsByParentAndChild(
+            @Param("parentId") Long parentId, @Param("childId") Long childId);
     // 삭제 대상 소유권(부모·대상 자녀)까지 함께 확인하며 잠근다.
     DepositProductVO selectCustomDepositProductForDelete(
             @Param("parentId") Long parentId, @Param("childId") Long childId,
