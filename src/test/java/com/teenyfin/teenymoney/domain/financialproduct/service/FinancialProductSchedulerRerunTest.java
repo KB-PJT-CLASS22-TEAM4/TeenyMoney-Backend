@@ -54,7 +54,8 @@ class FinancialProductSchedulerRerunTest {
                 mapper, walletMapper, transferService,
                 new TeenyScorePolicyService(), scoreService,
                 new FinancialProductInterestCalculator(),
-                mock(NotificationService.class), memberMapper());
+                mock(NotificationService.class), memberMapper(),
+                mock(TeenyScoreMapper.class));
 
         processor.processDeposit(7L, date);
         processor.processDeposit(7L, date);
@@ -91,7 +92,8 @@ class FinancialProductSchedulerRerunTest {
                 mapper, walletMapper, transferService,
                 new TeenyScorePolicyService(), scoreService,
                 new FinancialProductInterestCalculator(),
-                mock(NotificationService.class), memberMapper());
+                mock(NotificationService.class), memberMapper(),
+                mock(TeenyScoreMapper.class));
 
         processor.processSaving(8L, date);
         processor.processSaving(8L, date);
@@ -128,7 +130,8 @@ class FinancialProductSchedulerRerunTest {
                 mapper, walletMapper, transferService,
                 new TeenyScorePolicyService(), scoreService,
                 new FinancialProductInterestCalculator(),
-                notificationService, memberMapper());
+                notificationService, memberMapper(),
+                mock(TeenyScoreMapper.class));
 
         FinancialProductInterestPaymentFailedException failure = assertThrows(
                 FinancialProductInterestPaymentFailedException.class,
@@ -151,7 +154,8 @@ class FinancialProductSchedulerRerunTest {
                 mock(FinancialProductMapper.class), mock(WalletMapper.class),
                 mock(TransferService.class), new TeenyScorePolicyService(),
                 mock(TeenyScoreChangeService.class), new FinancialProductInterestCalculator(),
-                notificationService, mock(MemberMapper.class));
+                notificationService, mock(MemberMapper.class),
+                mock(TeenyScoreMapper.class));
         FinancialProductInterestPaymentFailedException failure =
                 new FinancialProductInterestPaymentFailedException(
                         7L, 2L, 1L, "테스트 예금", FinancialProductType.DEPOSIT, 3_000L,

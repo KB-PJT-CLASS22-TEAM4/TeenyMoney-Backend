@@ -6,8 +6,11 @@ import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductType;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.SavingContributionVO;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
+import com.teenyfin.teenymoney.domain.teenyscore.dto.request.TeenyScoreChangeRequestDTO;
+import com.teenyfin.teenymoney.domain.teenyscore.mapper.TeenyScoreMapper;
 import com.teenyfin.teenymoney.domain.teenyscore.service.TeenyScoreChangeService;
 import com.teenyfin.teenymoney.domain.teenyscore.service.TeenyScorePolicyService;
+import com.teenyfin.teenymoney.domain.teenyscore.vo.TeenyScoreEventRecordVO;
 import com.teenyfin.teenymoney.domain.wallet.exception.WalletErrorCode;
 import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
 import com.teenyfin.teenymoney.domain.wallet.service.TransferService;
@@ -21,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 한 가입 건의 원금·이자 송금, 점수, 상태 변경을 하나의 신규 트랜잭션에서 처리한다.
@@ -28,6 +32,11 @@ import java.util.List;
  */
 @Service
 public class FinancialProductMaturityProcessor {
+    // 만기 6개월 미만 상품은 연속만기 스트릭 판정 대상에서 제외한다.
+    private static final int CONSECUTIVE_MATURITY_MIN_TERM_MONTHS = 6;
+    private static final Set<String> MATURED_EVENT_CODES = Set.of(
+            "DEPOSIT_MATURED", "SAVING_FIXED_MATURED", "SAVING_FREE_MATURED");
+
     private final FinancialProductMapper financialProductMapper;
     private final WalletMapper walletMapper;
     private final TransferService transferService;
@@ -36,6 +45,7 @@ public class FinancialProductMaturityProcessor {
     private final FinancialProductInterestCalculator interestCalculator;
     private final NotificationService notificationService;
     private final MemberMapper memberMapper;
+    private final TeenyScoreMapper teenyScoreMapper;
 
     public FinancialProductMaturityProcessor(
             FinancialProductMapper financialProductMapper,
@@ -45,7 +55,8 @@ public class FinancialProductMaturityProcessor {
             TeenyScoreChangeService scoreChangeService,
             FinancialProductInterestCalculator interestCalculator,
             NotificationService notificationService,
-            MemberMapper memberMapper) {
+            MemberMapper memberMapper,
+            TeenyScoreMapper teenyScoreMapper) {
         this.financialProductMapper = financialProductMapper;
         this.walletMapper = walletMapper;
         this.transferService = transferService;
@@ -54,6 +65,7 @@ public class FinancialProductMaturityProcessor {
         this.interestCalculator = interestCalculator;
         this.notificationService = notificationService;
         this.memberMapper = memberMapper;
+        this.teenyScoreMapper = teenyScoreMapper;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -79,6 +91,9 @@ public class FinancialProductMaturityProcessor {
         transferInterestOrFail(parentWallet.getId(), childWallet.getId(), interest,
                 TransferType.DEPOSIT, "DPT_MAT:" + enrollmentId + ":I",
                 FinancialProductType.DEPOSIT, maturity);
+        // 이번 만기가 이력에 쌓이기 전에 먼저 "직전" 이벤트를 확인해야 자기 자신과 비교하지 않는다.
+        applyConsecutiveMaturityBonusIfEligible(
+                maturity.getChildId(), enrollmentId, maturity.getTermMonths());
         scoreChangeService.change(scorePolicyService.depositMaturity(
                 maturity.getChildId(), enrollmentId, maturity.getTermMonths()));
         requireUpdated(financialProductMapper.markDepositMatured(enrollmentId));
@@ -157,20 +172,63 @@ public class FinancialProductMaturityProcessor {
         int paymentRate = percentage(
                 contributions.stream().mapToLong(SavingContributionVO::getPaidAmount).sum(),
                 Math.multiplyExact(maturity.getMonthlyAmount(), (long) termMonths));
+        TeenyScoreChangeRequestDTO scoreRequest;
         if ("FIXED".equals(maturity.getSavingsType())) {
             Integer firstMissed = financialProductMapper
                     .selectFirstMissedSavingInstallment(maturity.getEnrollmentId());
             int progress = firstMissed == null ? 0
                     : Math.min(99, (firstMissed - 1) * 100 / termMonths);
-            scoreChangeService.change(scorePolicyService.fixedSavingMaturity(
+            scoreRequest = scorePolicyService.fixedSavingMaturity(
                     maturity.getChildId(), maturity.getEnrollmentId(), termMonths,
-                    paymentRate, progress));
-            return;
+                    paymentRate, progress);
+        } else {
+            int firstShortfallProgress = firstFreeShortfallProgress(maturity, contributions);
+            scoreRequest = scorePolicyService.freeSavingMaturity(
+                    maturity.getChildId(), maturity.getEnrollmentId(), termMonths,
+                    paymentRate, firstShortfallProgress);
         }
-        int firstShortfallProgress = firstFreeShortfallProgress(maturity, contributions);
-        scoreChangeService.change(scorePolicyService.freeSavingMaturity(
-                maturity.getChildId(), maturity.getEnrollmentId(), termMonths,
-                paymentRate, firstShortfallProgress));
+        // 납입률 미달로 실제로는 중도해지 취급된 경우는 연속만기 스트릭 대상이 아니다.
+        // 이 이벤트가 이력에 쌓이기 전에 먼저 "직전" 이벤트를 확인해야 자기 자신과 비교하지 않는다.
+        if (MATURED_EVENT_CODES.contains(scoreRequest.getEventCode().name())) {
+            applyConsecutiveMaturityBonusIfEligible(
+                    maturity.getChildId(), maturity.getEnrollmentId(), termMonths);
+        }
+        scoreChangeService.change(scoreRequest);
+    }
+
+    /**
+     * 이번 만기가 6개월 이상이고, 직전 만기/해지 이벤트도 6개월 이상 상품의 정상 만기였으면
+     * 연속만기 보너스를 반영한다. 직전 이벤트의 가입 기간은 이력에 저장돼 있지 않으므로
+     * reference로 원 가입 건을 다시 조회해서 확인한다.
+     */
+    private void applyConsecutiveMaturityBonusIfEligible(
+            Long childId, Long enrollmentId, int termMonths) {
+        if (termMonths < CONSECUTIVE_MATURITY_MIN_TERM_MONTHS) return;
+        List<TeenyScoreEventRecordVO> recent =
+                teenyScoreMapper.selectRecentFinalSavingEvents(childId, 1);
+        if (recent.isEmpty()) return;
+        TeenyScoreEventRecordVO last = recent.get(0);
+        if (!MATURED_EVENT_CODES.contains(last.getEventCode())) return;
+        if (!isLongTermEnrollment(childId, last)) return;
+        scoreChangeService.change(
+                scorePolicyService.consecutiveMaturityBonus(childId, enrollmentId));
+    }
+
+    private boolean isLongTermEnrollment(Long childId, TeenyScoreEventRecordVO event) {
+        Integer termMonths = switch (event.getReferenceType()) {
+            case "DEPOSIT_ENROLLMENT" -> {
+                var enrollment = financialProductMapper
+                        .selectDepositEnrollmentByChildIdAndId(childId, event.getReferenceId());
+                yield enrollment == null ? null : enrollment.getTermMonths();
+            }
+            case "SAVING_ENROLLMENT" -> {
+                var enrollment = financialProductMapper
+                        .selectSavingEnrollmentByChildIdAndId(childId, event.getReferenceId());
+                yield enrollment == null ? null : enrollment.getTermMonths();
+            }
+            default -> null;
+        };
+        return termMonths != null && termMonths >= CONSECUTIVE_MATURITY_MIN_TERM_MONTHS;
     }
 
     private int firstFreeShortfallProgress(

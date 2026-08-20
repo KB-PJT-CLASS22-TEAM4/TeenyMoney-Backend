@@ -7,7 +7,9 @@ import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductTermin
 import com.teenyfin.teenymoney.domain.financialproduct.vo.SavingContributionVO;
 import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
 import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
+import com.teenyfin.teenymoney.domain.teenyscore.mapper.TeenyScoreMapper;
 import com.teenyfin.teenymoney.domain.teenyscore.service.TeenyScoreChangeService;
+import com.teenyfin.teenymoney.domain.teenyscore.vo.TeenyScoreEventRecordVO;
 import com.teenyfin.teenymoney.domain.teenyscore.service.TeenyScorePolicyService;
 import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
 import com.teenyfin.teenymoney.domain.wallet.service.TransferService;
@@ -38,6 +40,7 @@ class FinancialProductTerminationServiceTest {
     private TransferService transferService;
     private TeenyScoreChangeService scoreChangeService;
     private NotificationService notificationService;
+    private TeenyScoreMapper teenyScoreMapper;
     private FinancialProductTerminationService service;
 
     @BeforeEach
@@ -47,6 +50,7 @@ class FinancialProductTerminationServiceTest {
         transferService = mock(TransferService.class);
         scoreChangeService = mock(TeenyScoreChangeService.class);
         notificationService = mock(NotificationService.class);
+        teenyScoreMapper = mock(TeenyScoreMapper.class);
         Clock clock = Clock.fixed(
                 Instant.parse("2026-07-01T00:00:00Z"), ZoneId.of("Asia/Seoul"));
         service = new FinancialProductTerminationService(
@@ -54,7 +58,7 @@ class FinancialProductTerminationServiceTest {
                 new TeenyScorePolicyService(), scoreChangeService,
                 new EarlyTerminationRatePolicy(),
                 new FinancialProductInterestCalculator(), clock,
-                notificationService, memberMapper());
+                notificationService, memberMapper(), teenyScoreMapper);
     }
 
     @Test
@@ -101,6 +105,63 @@ class FinancialProductTerminationServiceTest {
                 eq(1L), eq("테스트자녀님이 예금을 중도해지했어요"), anyString(),
                 eq(NotificationReferenceType.DEPOSIT_TERMINATION), eq(7L), eq(true));
         verifyNoMoreInteractions(notificationService);
+    }
+
+    @Test
+    @DisplayName("직전 2건도 연속 중도해지였으면 이번 건까지 3연속으로 반복해지 감점도 함께 반영한다")
+    void depositTerminationAppliesRepeatedPenaltyOnThirdConsecutiveTermination() {
+        when(mapper.selectDepositTerminationForUpdate(2L, 7L))
+                .thenReturn(activeDeposit());
+        when(walletMapper.selectWalletForUpdate(20L)).thenReturn(wallet(20L, 100_000L));
+        when(walletMapper.selectMemberWalletByMemberId(2L)).thenReturn(wallet(10L, 0L));
+        when(walletMapper.selectMemberWalletByMemberId(1L)).thenReturn(wallet(11L, 1_000_000L));
+        when(mapper.markDepositTerminated(7L)).thenReturn(1);
+        // 직전 2건만 있고(더 이전 이력 없음) 모두 중도해지였다면, 이번 건까지 합쳐 정확히 3연속이 된다.
+        when(teenyScoreMapper.selectRecentFinalSavingEvents(2L, 3)).thenReturn(List.of(
+                terminationEvent(), terminationEvent()));
+
+        service.terminate(new MemberPrincipal(2L, "CHILD"), "deposit", 7L);
+
+        verify(scoreChangeService).change(argThat(request ->
+                "REPEATED_EARLY_TERMINATION:7".equals(request.getEventKey())));
+    }
+
+    @Test
+    @DisplayName("직전 이력 중 만기가 하나라도 섞여 있으면 연속 중도해지가 아니므로 감점을 반영하지 않는다")
+    void depositTerminationSkipsRepeatedPenaltyWhenStreakBrokenByMaturity() {
+        when(mapper.selectDepositTerminationForUpdate(2L, 7L))
+                .thenReturn(activeDeposit());
+        when(walletMapper.selectWalletForUpdate(20L)).thenReturn(wallet(20L, 100_000L));
+        when(walletMapper.selectMemberWalletByMemberId(2L)).thenReturn(wallet(10L, 0L));
+        when(walletMapper.selectMemberWalletByMemberId(1L)).thenReturn(wallet(11L, 1_000_000L));
+        when(mapper.markDepositTerminated(7L)).thenReturn(1);
+        // 직전 2건 중 하나가 정상 만기라 연속이 끊긴다.
+        when(teenyScoreMapper.selectRecentFinalSavingEvents(2L, 3)).thenReturn(List.of(
+                terminationEvent(), maturedEvent()));
+
+        service.terminate(new MemberPrincipal(2L, "CHILD"), "deposit", 7L);
+
+        verify(scoreChangeService, never()).change(argThat(request ->
+                request.getEventKey().startsWith("REPEATED_EARLY_TERMINATION")));
+    }
+
+    @Test
+    @DisplayName("이미 3연속을 넘어선 4번째 연속 중도해지에는 감점을 다시 반영하지 않는다")
+    void depositTerminationSkipsRepeatedPenaltyWhenStreakAlreadyExceededThree() {
+        when(mapper.selectDepositTerminationForUpdate(2L, 7L))
+                .thenReturn(activeDeposit());
+        when(walletMapper.selectWalletForUpdate(20L)).thenReturn(wallet(20L, 100_000L));
+        when(walletMapper.selectMemberWalletByMemberId(2L)).thenReturn(wallet(10L, 0L));
+        when(walletMapper.selectMemberWalletByMemberId(1L)).thenReturn(wallet(11L, 1_000_000L));
+        when(mapper.markDepositTerminated(7L)).thenReturn(1);
+        // 직전 3건이 전부 중도해지였다면, 3연속 시점(3번째)에서 이미 감점됐으므로 이번(4번째)엔 안 건다.
+        when(teenyScoreMapper.selectRecentFinalSavingEvents(2L, 3)).thenReturn(List.of(
+                terminationEvent(), terminationEvent(), terminationEvent()));
+
+        service.terminate(new MemberPrincipal(2L, "CHILD"), "deposit", 7L);
+
+        verify(scoreChangeService, never()).change(argThat(request ->
+                request.getEventKey().startsWith("REPEATED_EARLY_TERMINATION")));
     }
 
     @Test
@@ -263,6 +324,22 @@ class FinancialProductTerminationServiceTest {
         child.setName("테스트자녀");
         when(memberMapper.selectById(2L)).thenReturn(child);
         return memberMapper;
+    }
+
+    private TeenyScoreEventRecordVO terminationEvent() {
+        TeenyScoreEventRecordVO event = new TeenyScoreEventRecordVO();
+        event.setEventCode("DEPOSIT_EARLY_TERMINATED");
+        event.setReferenceType("DEPOSIT_ENROLLMENT");
+        event.setReferenceId(1L);
+        return event;
+    }
+
+    private TeenyScoreEventRecordVO maturedEvent() {
+        TeenyScoreEventRecordVO event = new TeenyScoreEventRecordVO();
+        event.setEventCode("DEPOSIT_MATURED");
+        event.setReferenceType("DEPOSIT_ENROLLMENT");
+        event.setReferenceId(1L);
+        return event;
     }
 
     private WalletVO wallet(Long id, long balance) {

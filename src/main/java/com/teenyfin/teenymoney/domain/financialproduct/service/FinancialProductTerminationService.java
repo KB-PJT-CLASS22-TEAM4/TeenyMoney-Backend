@@ -9,8 +9,10 @@ import com.teenyfin.teenymoney.domain.financialproduct.vo.SavingContributionVO;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
 import com.teenyfin.teenymoney.domain.teenyscore.dto.request.TeenyScoreChangeRequestDTO;
+import com.teenyfin.teenymoney.domain.teenyscore.mapper.TeenyScoreMapper;
 import com.teenyfin.teenymoney.domain.teenyscore.service.TeenyScoreChangeService;
 import com.teenyfin.teenymoney.domain.teenyscore.service.TeenyScorePolicyService;
+import com.teenyfin.teenymoney.domain.teenyscore.vo.TeenyScoreEventRecordVO;
 import com.teenyfin.teenymoney.domain.wallet.exception.WalletErrorCode;
 import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
 import com.teenyfin.teenymoney.domain.wallet.service.TransferService;
@@ -26,6 +28,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 자녀가 직접 실행하는 예·적금 중도해지 유스케이스다.
@@ -33,6 +36,11 @@ import java.util.List;
  */
 @Service
 public class FinancialProductTerminationService {
+    // 만기 없이 중도해지가 이만큼 연속되면 반복해지 감점을 추가한다. 기간 제한은 없다.
+    private static final int REPEATED_EARLY_TERMINATION_STREAK = 3;
+    private static final Set<String> EARLY_TERMINATED_EVENT_CODES = Set.of(
+            "DEPOSIT_EARLY_TERMINATED", "SAVING_EARLY_TERMINATED");
+
     private final FinancialProductMapper financialProductMapper;
     private final WalletMapper walletMapper;
     private final TransferService transferService;
@@ -43,6 +51,7 @@ public class FinancialProductTerminationService {
     private final Clock clock;
     private final NotificationService notificationService;
     private final MemberMapper memberMapper;
+    private final TeenyScoreMapper teenyScoreMapper;
 
     public FinancialProductTerminationService(
             FinancialProductMapper financialProductMapper,
@@ -54,7 +63,8 @@ public class FinancialProductTerminationService {
             FinancialProductInterestCalculator interestCalculator,
             Clock clock,
             NotificationService notificationService,
-            MemberMapper memberMapper) {
+            MemberMapper memberMapper,
+            TeenyScoreMapper teenyScoreMapper) {
         this.financialProductMapper = financialProductMapper;
         this.walletMapper = walletMapper;
         this.transferService = transferService;
@@ -65,6 +75,7 @@ public class FinancialProductTerminationService {
         this.clock = clock;
         this.notificationService = notificationService;
         this.memberMapper = memberMapper;
+        this.teenyScoreMapper = teenyScoreMapper;
     }
 
     /** 조회 시점의 원금·이자·점수를 계산하지만 지갑과 가입 상태는 변경하지 않는다. */
@@ -95,6 +106,8 @@ public class FinancialProductTerminationService {
                 calculation.principal, transferType(type), key(type, enrollmentId, "P"));
         transferIfPositive(parentWallet.getId(), childWallet.getId(),
                 calculation.interest, transferType(type), key(type, enrollmentId, "I"));
+        // 이번 해지가 이력에 쌓이기 전에 먼저 세야 이번 건이 스스로를 포함해 중복 집계되지 않는다.
+        applyRepeatedEarlyTerminationPenaltyIfEligible(enrollment.getChildId(), enrollmentId);
         scoreChangeService.change(calculation.scoreRequest);
 
         int updated = type == FinancialProductType.DEPOSIT
@@ -270,6 +283,31 @@ public class FinancialProductTerminationService {
     private TransferType transferType(FinancialProductType type) {
         return type == FinancialProductType.DEPOSIT
                 ? TransferType.DEPOSIT : TransferType.SAVING;
+    }
+
+    /**
+     * 이번 건을 포함해 정확히 STREAK회 연속 중도해지가 된 "그 순간"에만 한 번 감점한다.
+     * STREAK회를 이미 넘어선 4번째, 5번째 연속 해지에는 다시 걸리지 않는다 — 직전 STREAK건을
+     * 조회해서, 가장 오래된 한 건(STREAK번째 이전)까지 중도해지였다면 이미 이전 건에서
+     * 감점이 적용된 것으로 보고 건너뛴다.
+     */
+    private void applyRepeatedEarlyTerminationPenaltyIfEligible(
+            Long childId, Long enrollmentId) {
+        List<TeenyScoreEventRecordVO> recent = teenyScoreMapper
+                .selectRecentFinalSavingEvents(childId, REPEATED_EARLY_TERMINATION_STREAK);
+        int requiredPriorStreak = REPEATED_EARLY_TERMINATION_STREAK - 1;
+        if (recent.size() < requiredPriorStreak) return;
+        boolean immediatePriorsAreTerminations = recent.subList(0, requiredPriorStreak).stream()
+                .allMatch(event -> EARLY_TERMINATED_EVENT_CODES.contains(event.getEventCode()));
+        if (!immediatePriorsAreTerminations) return;
+        // 직전 STREAK번째 건까지도 중도해지였다면 스트릭이 이미 STREAK를 넘어섰던 것이라
+        // 그 시점(직전 건)에서 이미 감점됐다 — 이번엔 다시 걸지 않는다.
+        boolean streakAlreadyPenalizedBefore = recent.size() >= REPEATED_EARLY_TERMINATION_STREAK
+                && EARLY_TERMINATED_EVENT_CODES.contains(
+                        recent.get(REPEATED_EARLY_TERMINATION_STREAK - 1).getEventCode());
+        if (streakAlreadyPenalizedBefore) return;
+        scoreChangeService.change(
+                scorePolicyService.repeatedEarlyTermination(childId, enrollmentId));
     }
 
     /** 외부 DTO와 실제 송금·점수 입력값을 같은 계산 결과로 묶는 내부 값 객체다. */

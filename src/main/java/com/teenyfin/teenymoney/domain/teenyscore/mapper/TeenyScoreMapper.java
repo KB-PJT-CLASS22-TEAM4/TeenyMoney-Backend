@@ -1,5 +1,6 @@
 package com.teenyfin.teenymoney.domain.teenyscore.mapper;
 
+import com.teenyfin.teenymoney.domain.teenyscore.vo.TeenyScoreEventRecordVO;
 import com.teenyfin.teenymoney.domain.teenyscore.vo.TeenyScoreGradeChangeVO;
 import com.teenyfin.teenymoney.domain.teenyscore.vo.TeenyScoreGradeVO;
 import com.teenyfin.teenymoney.domain.teenyscore.vo.TeenyScoreHistoryVO;
@@ -57,4 +58,12 @@ public interface TeenyScoreMapper {
             @Param("referenceId") Long referenceId);
 
     TeenyScoreGradeVO selectTeenyScoreGradeByChildId(@Param("childId") Long childId);
+
+    /**
+     * 연속 만기 보너스·반복 중도해지 감점 판정용. 만기·해지 이벤트 중 가장 최근 것부터
+     * limit건을 최신순으로 조회한다. 기간 제한은 없다 — 몇 개월이 걸렸든 "연속"이면 대상이다.
+     */
+    List<TeenyScoreEventRecordVO> selectRecentFinalSavingEvents(
+            @Param("childId") Long childId,
+            @Param("limit") int limit);
 }
