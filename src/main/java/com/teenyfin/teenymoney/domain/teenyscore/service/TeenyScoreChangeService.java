@@ -21,6 +21,19 @@ public class TeenyScoreChangeService {
     }
 
     /**
+     * 같은 자녀에게 동시에 발생한 여러 금융 이벤트의 이력 판정을 직렬화한다.
+     * 호출한 트랜잭션이 끝날 때까지 자녀 점수 행 잠금을 유지한다.
+     */
+    @Transactional
+    public void lockChildScore(Long childId) {
+        Integer score = teenyScoreMapper.selectScoreForUpdate(childId);
+        if (score == null) {
+            throw new BusinessException(
+                    TeenyScoreErrorCode.TEENY_SCORE_CHILD_NOT_FOUND);
+        }
+    }
+
+    /**
      * 자녀 행을 잠근 뒤 중복 확인, 점수 변경, 이력 저장을 한 트랜잭션으로 처리한다.
      * 이력 amount에는 요청량이 아니라 0~1000 보정 후 실제 반영량을 저장한다.
      */

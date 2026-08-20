@@ -204,6 +204,8 @@ public class FinancialProductMaturityProcessor {
     private void applyConsecutiveMaturityBonusIfEligible(
             Long childId, Long enrollmentId, int termMonths) {
         if (termMonths < CONSECUTIVE_MATURITY_MIN_TERM_MONTHS) return;
+        // 서로 다른 계약이 동시에 만기돼도 같은 자녀의 직전 이력을 한 요청씩 판정한다.
+        scoreChangeService.lockChildScore(childId);
         List<TeenyScoreEventRecordVO> recent =
                 teenyScoreMapper.selectRecentFinalSavingEvents(childId, 1);
         if (recent.isEmpty()) return;

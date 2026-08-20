@@ -293,6 +293,8 @@ public class FinancialProductTerminationService {
      */
     private void applyRepeatedEarlyTerminationPenaltyIfEligible(
             Long childId, Long enrollmentId) {
+        // 서로 다른 계약이 동시에 해지돼도 같은 자녀의 직전 이력을 한 요청씩 판정한다.
+        scoreChangeService.lockChildScore(childId);
         List<TeenyScoreEventRecordVO> recent = teenyScoreMapper
                 .selectRecentFinalSavingEvents(childId, REPEATED_EARLY_TERMINATION_STREAK);
         int requiredPriorStreak = REPEATED_EARLY_TERMINATION_STREAK - 1;

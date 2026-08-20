@@ -99,7 +99,7 @@
                 ) AS rn
             FROM T_TNY_SCOREHIST_H
             WHERE child_id = #{childId}
-        )
+          )
         SELECT
             score_month,
             score_after AS teeny_score
@@ -231,9 +231,10 @@
           AND event_code IN (
               'DEPOSIT_MATURED', 'SAVING_FIXED_MATURED', 'SAVING_FREE_MATURED',
               'DEPOSIT_EARLY_TERMINATED', 'SAVING_EARLY_TERMINATED'
-          )
+        )
         ORDER BY created_at DESC, id DESC
         LIMIT #{limit}
+        FOR UPDATE
     </select>
 
     <insert id="insertScoreHistory">
