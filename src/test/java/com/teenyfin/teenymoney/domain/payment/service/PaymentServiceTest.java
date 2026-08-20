@@ -65,10 +65,8 @@ class PaymentServiceTest {
             Mockito.mock(ApplicationEventPublisher.class);
     private final PaymentService paymentService = new PaymentService(
             paymentMapper, categoryPolicyMapper, walletMapper, teenyScoreMapper, memberMapper,
-            walletLedgerService, paymentPasswordService, notificationService, orderStore,
-            eventPublisher);
             walletLedgerService, paymentPasswordService, notificationService, teenyScorePolicyService,
-            teenyScoreChangeService, orderStore);
+            teenyScoreChangeService, orderStore, eventPublisher);
 
     private WalletVO createWalletVO(Long id, Long memberId, Long balance) {
         WalletVO vo = new WalletVO();
