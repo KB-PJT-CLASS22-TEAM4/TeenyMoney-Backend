@@ -249,7 +249,7 @@ public class PaymentService {
 
         // 자녀에게 일반 알림 발송
         String title = "결제가 완료됐어요";
-        String content = orderVO.getMerchantName() + " · " + orderVO.getAmount() + "원";
+        String content = orderVO.getMerchantName() + " · " + String.format("%,d원", orderVO.getAmount());
 
         notificationService.createNotification(memberId, title, content, NotificationReferenceType.PAYMENT, paymentVO.getId(), false);
 
