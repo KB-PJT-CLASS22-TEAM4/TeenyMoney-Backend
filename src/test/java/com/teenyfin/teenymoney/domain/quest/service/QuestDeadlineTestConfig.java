@@ -12,6 +12,7 @@ import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.PropertySource;
@@ -105,8 +106,11 @@ public class QuestDeadlineTestConfig {
     @Bean
     public NotificationService notificationService(NotificationMapper notificationMapper,
                                                    MemberNotificationMapper memberNotificationMapper,
-                                                   FcmService fcmService) {
-        return new NotificationService(notificationMapper, memberNotificationMapper, fcmService);
+                                                   FcmService fcmService,
+                                                   ApplicationEventPublisher eventPublisher) {
+        // eventPublisher는 컨텍스트 자신이다. 스프링이 기본 제공하므로 따로 등록하지 않는다.
+        return new NotificationService(
+                notificationMapper, memberNotificationMapper, fcmService, eventPublisher);
     }
 
     @Bean

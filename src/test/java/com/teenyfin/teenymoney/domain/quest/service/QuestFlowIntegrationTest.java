@@ -27,6 +27,7 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -387,8 +388,11 @@ class QuestFlowIntegrationTest {
         @Bean
         NotificationService notificationService(NotificationMapper notificationMapper,
                                                 MemberNotificationMapper memberNotificationMapper,
-                                                FcmService fcmService) {
-            return new NotificationService(notificationMapper, memberNotificationMapper, fcmService);
+                                                FcmService fcmService,
+                                                ApplicationEventPublisher eventPublisher) {
+            // eventPublisher는 컨텍스트 자신이다. 스프링이 기본 제공하므로 따로 등록하지 않는다.
+            return new NotificationService(
+                    notificationMapper, memberNotificationMapper, fcmService, eventPublisher);
         }
     }
 }

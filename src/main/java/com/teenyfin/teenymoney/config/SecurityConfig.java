@@ -67,6 +67,13 @@ public class SecurityConfig {
             "/api/v1/terms",          // 약관 조회 — 가입 전에도 봐야 하는 문서다
             "/api/v1/terms/**",
 
+            // SSE 구독 — EventSource가 Authorization 헤더를 붙일 수 없어 1회용 티켓으로 인증한다.
+            // 여기 넣는 이유는 JwtAuthenticationFilter가 막아서가 아니다. 그 필터는 헤더가 없으면
+            // 아무 것도 하지 않고 통과시킨다. 걸리는 것은 아래 anyRequest().authenticated() 다.
+            // 신원 확인은 SseController가 티켓을 소비하며 직접 하고, 실패하면 401을 던진다.
+            // 티켓 발급(POST /api/v1/sse/ticket)은 넣지 않는다 — 그쪽은 정상 Bearer 인증을 받는다.
+            "/api/v1/sse/subscribe",
+
             // Swagger (springfox 2.9.2) — UI 자체 + UI가 로드하는 정적 리소스 + 스펙 JSON
             "/swagger-ui.html",
             "/webjars/**",

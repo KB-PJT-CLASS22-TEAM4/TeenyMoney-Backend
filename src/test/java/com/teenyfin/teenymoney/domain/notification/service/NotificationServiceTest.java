@@ -8,9 +8,11 @@ import com.teenyfin.teenymoney.domain.notification.vo.MemberNotificationVO;
 import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
 import com.teenyfin.teenymoney.domain.notification.vo.NotificationVO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
+import com.teenyfin.teenymoney.global.sse.SseEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -40,6 +42,7 @@ class NotificationServiceTest {
     private NotificationMapper notificationMapper;
     private MemberNotificationMapper memberNotificationMapper;
     private FcmService fcmService;
+    private ApplicationEventPublisher eventPublisher;
     private NotificationService notificationService;
 
     @BeforeEach
@@ -47,7 +50,9 @@ class NotificationServiceTest {
         notificationMapper = mock(NotificationMapper.class);
         memberNotificationMapper = mock(MemberNotificationMapper.class);
         fcmService = mock(FcmService.class);
-        notificationService = new NotificationService(notificationMapper, memberNotificationMapper, fcmService);
+        eventPublisher = mock(ApplicationEventPublisher.class);
+        notificationService = new NotificationService(
+                notificationMapper, memberNotificationMapper, fcmService, eventPublisher);
     }
 
     private MemberNotificationVO memberInfo(String fcmToken, boolean notiPayment, boolean notiQuest, boolean notiFinance, boolean notiAllowance) {
@@ -75,6 +80,43 @@ class NotificationServiceTest {
         assertEquals("GS25 강남점 · 3,200원", stored.getContent());
         assertEquals(NotificationReferenceType.PAYMENT, stored.getReferenceType());
         assertEquals(10L, stored.getReferenceId());
+    }
+
+    // ─────────── 화면 동기화 회귀 테스트 ───────────
+    // SSE 발행 한 줄이 알림 설정 검사 "아래"로 내려가는 순간 아래 두 테스트가 깨진다.
+    // 그게 이 기능의 존재 이유를 지키는 유일한 자동 검증이다.
+
+    @Test
+    void 알림_설정이_꺼져_있어도_화면_동기화_신호는_발행된다() {
+        // given: 퀘스트 푸시를 끈 회원
+        when(memberNotificationMapper.selectNotificationInfo(1L))
+                .thenReturn(memberInfo("dummy-fcm-token", true, false, true, true));
+
+        notificationService.createNotification(
+                1L, "새 퀘스트가 도착했어요", "방 청소",
+                NotificationReferenceType.QUEST, 10L, true);
+
+        // then: FCM은 나가지 않는다 (사용자가 껐으니 당연하다)
+        verify(fcmService, never()).send(any());
+
+        // then: 그래도 화면은 갱신돼야 한다. 알림 끄기는 "그만 찔러라"이지
+        //       "화면을 낡은 상태로 두라"가 아니다.
+        ArgumentCaptor<Object> captor = ArgumentCaptor.forClass(Object.class);
+        verify(eventPublisher, times(1)).publishEvent(captor.capture());
+
+        assertThat(captor.getValue())
+                .isEqualTo(new SseEvent(1L, NotificationReferenceType.QUEST));
+    }
+
+    @Test
+    void 푸시를_보내지_않는_알림도_화면_동기화_신호는_발행된다() {
+        // isPushed=false는 "이력만 남긴다"는 뜻이지 "상태가 안 바뀌었다"가 아니다.
+        notificationService.createNotification(
+                1L, "결제가 완료됐어요", "GS25 강남점 · 3,200원",
+                NotificationReferenceType.PAYMENT, 10L, false);
+
+        verify(eventPublisher, times(1))
+                .publishEvent(new SseEvent(1L, NotificationReferenceType.PAYMENT));
     }
 
     @Test

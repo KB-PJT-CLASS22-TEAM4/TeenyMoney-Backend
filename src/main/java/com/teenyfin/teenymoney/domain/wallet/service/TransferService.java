@@ -5,6 +5,8 @@ import com.teenyfin.teenymoney.domain.wallet.mapper.TransferMapper;
 import com.teenyfin.teenymoney.domain.wallet.vo.TransferType;
 import com.teenyfin.teenymoney.domain.wallet.vo.TransferVO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
+import com.teenyfin.teenymoney.global.sse.SseEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -33,13 +35,16 @@ public class TransferService {
     private final TransferFailureRecorder transferFailureRecorder;
     private final WalletMapper walletMapper;
     private final NotificationService notificationService;
+    // 양쪽 지갑 주인의 화면 갱신 신호. 알림이 닿지 않는 쪽(보내는 부모)을 메운다.
+    private final ApplicationEventPublisher eventPublisher;
 
-    public TransferService(TransferMapper transferMapper, TransferExecutor transferExecutor, TransferFailureRecorder transferFailureRecorder, WalletMapper walletMapper, NotificationService notificationService) {
+    public TransferService(TransferMapper transferMapper, TransferExecutor transferExecutor, TransferFailureRecorder transferFailureRecorder, WalletMapper walletMapper, NotificationService notificationService, ApplicationEventPublisher eventPublisher) {
         this.transferMapper = transferMapper;
         this.transferExecutor = transferExecutor;
         this.transferFailureRecorder = transferFailureRecorder;
         this.walletMapper = walletMapper;
         this.notificationService = notificationService;
+        this.eventPublisher = eventPublisher;
     }
 
     // 같은 idempotencyKey로 이미 존재하는 행(existing)이, 지금 들어온 요청의 내용과
@@ -171,6 +176,7 @@ public class TransferService {
         try {
             TransferVO result = transferExecutor.lockAndMove(transferId);
             if (!alreadyCompleted) {
+                publishWalletChangedBestEffort(result);
                 notifyAllowanceRecipientBestEffort(result);
             }
             return result;
@@ -220,6 +226,41 @@ public class TransferService {
     // 잘못 나가지 않도록 명시적으로 막아둔다.
     // referenceId를 null로 고정하는 이유: 실패한 송금은 T_WLT_HIST_H(거래내역 원장)에
     // 애초에 안 남기 때문에 특정 거래를 가리킬 수도 없고 어차피 홈 화면으로 이동시킬 예정
+    /**
+     * 잔액이 움직였으니 양쪽 지갑 주인의 화면을 갱신시킨다.
+     *
+     * 알림으로는 이걸 대신할 수 없다. 알림 수신자는 "누구에게 알릴까"의 답이고 여기 필요한 건
+     * "누구 화면이 낡았나"의 답인데, 이 자리에서 둘이 갈린다 - 아래 알림은 받는 자녀에게만 가지만
+     * 보내는 부모의 지갑도 함께 줄어든다. 특히 정기 용돈(AllowanceScheduleProcessor)은 새벽에
+     * 자동으로 실행되므로 부모는 아무 행동도 하지 않았고, 응답으로 화면이 갱신될 기회가 없다.
+     *
+     * TransferType으로 거르지 않는다. 잔액이 움직였다는 사실은 송금 종류와 무관하다.
+     * 용돈일 때 자녀에게 신호가 두 번 가지만(여기 한 번, createNotification에서 한 번)
+     * 조회 한 번이 더 나갈 뿐이라, 그걸 피하려고 조건을 다는 쪽이 더 비싸다.
+     *
+     * 발행만 하고 전송은 하지 않는다. 실제 전송은 트랜잭션이 끝난 뒤 SseEmitterRegistry가 한다.
+     * 이 메서드는 트랜잭션 밖에서 호출되는데(executeTransfer가 NOT_SUPPORTED),
+     * 그 경우에도 리스너가 실행되도록 fallbackExecution = true로 열어뒀다.
+     */
+    private void publishWalletChangedBestEffort(TransferVO transfer) {
+        try {
+            publishWalletOwnerChanged(transfer.getFromWalletId());
+            publishWalletOwnerChanged(transfer.getToWalletId());
+        } catch (RuntimeException e) {
+            // 알림과 같은 원칙이다. 화면 갱신 신호를 못 보낸 것 때문에 송금이 실패하면 안 된다.
+            log.error("지갑 변경 신호 발행 중 오류 - transferId={}", transfer.getId(), e);
+        }
+    }
+
+    private void publishWalletOwnerChanged(Long walletId) {
+        WalletVO wallet = walletMapper.selectById(walletId);
+        if (wallet == null) {
+            return;
+        }
+        eventPublisher.publishEvent(
+                new SseEvent(wallet.getMemberId(), NotificationReferenceType.TRANSFER));
+    }
+
     private void notifyAllowanceRecipientBestEffort(TransferVO transfer) {
         if (!TransferType.ALLOWANCE.name().equals(transfer.getType())) {
             return;

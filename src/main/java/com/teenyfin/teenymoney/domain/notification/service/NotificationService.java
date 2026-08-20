@@ -14,7 +14,9 @@ import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
 import com.teenyfin.teenymoney.domain.notification.vo.NotificationVO;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import com.teenyfin.teenymoney.global.exception.CommonErrorCode;
+import com.teenyfin.teenymoney.global.sse.SseEvent;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +39,9 @@ public class NotificationService {
 
     private final FcmService fcmService;
 
+    // 화면 동기화 신호를 흘려보내는 통로. 받는 쪽은 SseEmitterRegistry.onStateChanged()다.
+    private final ApplicationEventPublisher eventPublisher;
+
     // 알림 내역을 DB에 저장하고 푸시 알림 요청
     @Transactional
     public void createNotification(Long memberId, String title, String content, NotificationReferenceType notificationReferenceType, Long referenceId, Boolean isPushed) {
@@ -51,6 +56,21 @@ public class NotificationService {
 
         notificationMapper.insert(notificationVO);
 
+        // ─────────────────────── 화면 동기화 ───────────────────────
+        // 알림 설정과 무관하게 항상 발행한다. 이 줄이 아래 return들보다 "위"에 있다는 것이
+        // 이 설계의 전부다. 아래로 내리면 알림을 끈 사용자의 화면이 낡은 채로 남는다.
+        //
+        // 알림 끄기는 "그만 찔러라"이지 "화면을 낡은 상태로 두라"가 아니다. 자녀가 퀘스트
+        // 푸시를 껐어도 앱에서 퀘스트 목록을 보고 있다면 방금 생긴 퀘스트는 떠야 하고,
+        // 부모가 알림을 껐어도 자녀의 승인 요청은 요청함에 즉시 쌓여야 한다.
+        //
+        // 여기 한 곳에 두는 이유: 상태가 바뀌는 지점 20곳이 전부 이 메서드를 지난다.
+        // 호출부마다 발행하면 21번째가 생길 때 조용히 빠진다.
+        // 알림 이력을 남기지 않는 상태 변경은 이걸로 못 잡는다. 그런 곳은 직접 발행한다
+        // (TransferService의 부모 지갑, PaymentService의 부모가 보는 자녀 지갑 두 군데).
+        eventPublisher.publishEvent(new SseEvent(memberId, notificationReferenceType));
+
+        // ─────────────────────── 여기부터 알림 ───────────────────────
         // 푸시 알림이 필요하지 않은 경우 내역만 남기고 종료
         if (isPushed == null || !isPushed) {
             return;
