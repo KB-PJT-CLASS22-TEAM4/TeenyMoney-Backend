@@ -294,6 +294,32 @@
         SELECT COUNT(*) FROM T_TNY_GRADE_A WHERE grade_id = #{gradeId}
     </select>
 
+    <!-- 부모가 이 자녀에게 만든 커스텀 상품만 조회한다. 잠그지 않는 단순 목록 조회다. -->
+    <select id="selectCustomDepositProductsByParentAndChild" resultMap="depositProductResultMap">
+        SELECT * FROM T_DPT_PROD_M
+        WHERE created_by_parent_id = #{parentId}
+          AND target_child_id = #{childId}
+          AND product_source = 'PARENT'
+          AND is_active = TRUE
+        ORDER BY id DESC
+    </select>
+    <select id="selectCustomSavingProductsByParentAndChild" resultMap="savingProductResultMap">
+        SELECT * FROM T_SVG_PROD_M
+        WHERE created_by_parent_id = #{parentId}
+          AND target_child_id = #{childId}
+          AND product_source = 'PARENT'
+          AND is_active = TRUE
+        ORDER BY id DESC
+    </select>
+    <select id="selectCustomLoanProductsByParentAndChild" resultMap="loanProductResultMap">
+        SELECT * FROM T_LON_PROD_M
+        WHERE created_by_parent_id = #{parentId}
+          AND target_child_id = #{childId}
+          AND product_source = 'PARENT'
+          AND is_active = TRUE
+        ORDER BY id DESC
+    </select>
+
     <!-- 부모가 만든 상품인지, 대상 자녀가 맞는지까지 한 번에 확인하며 잠근다. -->
     <select id="selectCustomDepositProductForDelete" resultMap="depositProductResultMap">
         SELECT * FROM T_DPT_PROD_M

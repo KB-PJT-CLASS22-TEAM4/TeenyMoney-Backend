@@ -346,7 +346,8 @@ public class FinancialProductService {
         return source == null ? FinancialProductSource.TEENY.name() : source.name();
     }
 
-    private FinancialProductListResponseDTO depositListItem(
+    /** 부모의 커스텀 상품 조회(CustomFinancialProductService)에서도 같은 문구로 재사용한다. */
+    FinancialProductListResponseDTO depositListItem(
             DepositProductVO product,
             FinancialProductBenefitVO benefit) {
         boolean eligible = !isParentView(benefit);
@@ -373,7 +374,7 @@ public class FinancialProductService {
                 .build();
     }
 
-    private FinancialProductListResponseDTO savingListItem(
+    FinancialProductListResponseDTO savingListItem(
             SavingProductVO product,
             FinancialProductBenefitVO benefit) {
         boolean eligible = !isParentView(benefit);
@@ -401,7 +402,7 @@ public class FinancialProductService {
                 .build();
     }
 
-    private FinancialProductListResponseDTO loanListItem(
+    FinancialProductListResponseDTO loanListItem(
             LoanProductVO product,
             FinancialProductBenefitVO benefit) {
         boolean eligible = loanEligible(product, benefit);
