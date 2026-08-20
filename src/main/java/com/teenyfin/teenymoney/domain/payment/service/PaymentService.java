@@ -20,6 +20,8 @@ import com.teenyfin.teenymoney.domain.payment.vo.OrderVO;
 import com.teenyfin.teenymoney.domain.payment.vo.PaymentVO;
 import com.teenyfin.teenymoney.domain.paymentPassword.service.PaymentPasswordService;
 import com.teenyfin.teenymoney.domain.teenyscore.mapper.TeenyScoreMapper;
+import com.teenyfin.teenymoney.domain.teenyscore.service.TeenyScoreChangeService;
+import com.teenyfin.teenymoney.domain.teenyscore.service.TeenyScorePolicyService;
 import com.teenyfin.teenymoney.domain.teenyscore.vo.TeenyScoreGradeVO;
 import com.teenyfin.teenymoney.domain.wallet.exception.WalletErrorCode;
 import com.teenyfin.teenymoney.domain.wallet.mapper.WalletMapper;
@@ -50,7 +52,11 @@ public class PaymentService {
     private final WalletLedgerService walletLedgerService;
     private final PaymentPasswordService paymentPasswordService;
     private final NotificationService notificationService;
+    private final TeenyScorePolicyService teenyScorePolicyService;
+    private final TeenyScoreChangeService teenyScoreChangeService;
     private final OrderStore orderStore;
+
+    private static final int PAYMENT_WATCH_THRESHOLD_COUNT = 10;
 
     // QR 코드로 주문 정보를 Redis에 저장 후 반환
     @Transactional(readOnly = true)
@@ -216,14 +222,23 @@ public class PaymentService {
         MemberVO memberVO = memberMapper.selectById(memberId);
         TeenyScoreGradeVO teenyScoreGradeVO = teenyScoreMapper.selectTeenyScoreGradeByChildId(memberId);
 
-        // 주의 등급일 때 티니 등급이 3등급 이하면 부모에게 푸시 알림 발송
-        if (categoryPolicy == CategoryPolicy.WATCH && teenyScoreGradeVO.getGradeId() <= 3) {
+        // 주의 등급일 때
+        if (categoryPolicy == CategoryPolicy.WATCH) {
 
-            String title = "자녀가 주의 업종에서 결제했어요";
-            String content = memberVO.getName() + " · " + orderVO.getMerchantName();
-            MemberParentVO memberParentVO = memberMapper.selectActiveParentByChildId(memberId);
+            // 티니점수 감소 (월 결제 횟수가 PAYMENT_WATCH_THRESHOLD_COUNT 이상이면 추가 감소)
+            int monthlyCount = paymentMapper.countRecentTransactions(memberId, orderVO.getCategoryId());
+            teenyScoreChangeService.change(
+                    teenyScorePolicyService.watchPayment(memberId, paymentVO.getId(), monthlyCount, PAYMENT_WATCH_THRESHOLD_COUNT));
 
-            notificationService.createNotification(memberParentVO.getParentId(), title, content, NotificationReferenceType.PAYMENT, paymentVO.getId(), true);
+            // 티니 등급이 3등급 이하면 부모에게 푸시 알림 발송
+            if (teenyScoreGradeVO.getGradeId() <= 3) {
+
+                String title = "자녀가 주의 업종에서 결제했어요";
+                String content = memberVO.getName() + " · " + orderVO.getMerchantName();
+                MemberParentVO memberParentVO = memberMapper.selectActiveParentByChildId(memberId);
+
+                notificationService.createNotification(memberParentVO.getParentId(), title, content, NotificationReferenceType.PAYMENT, paymentVO.getId(), true);
+            }
         }
 
         // 자녀에게 일반 알림 발송
