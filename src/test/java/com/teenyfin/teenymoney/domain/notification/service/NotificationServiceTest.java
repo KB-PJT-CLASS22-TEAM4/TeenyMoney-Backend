@@ -225,6 +225,23 @@ class NotificationServiceTest {
     }
 
     @Test
+    void createNotificationPushesCategoryPolicyChangeWithoutReferenceId() {
+        // CATEGORY_POLICY는 결제/퀘스트/금융상품 어떤 채널에도 속하지 않으므로
+        // isFinanceType() 등 switch 분기를 반드시 거치면서도 예외 없이 통과해야 한다.
+        when(memberNotificationMapper.selectNotificationInfo(1L))
+                .thenReturn(memberInfo("dummy-fcm-token", true, true, true, true));
+        Message dummyMessage = Message.builder().setToken("dummy-fcm-token").build();
+        when(fcmService.createMessage(eq("dummy-fcm-token"), any(), any(NotificationVO.class)))
+                .thenReturn(dummyMessage);
+
+        notificationService.createNotification(
+                1L, "카테고리 제한 설정이 바뀌었어요", "편의점",
+                NotificationReferenceType.CATEGORY_POLICY, null, true);
+
+        verify(fcmService, times(1)).send(dummyMessage);
+    }
+
+    @Test
     void createNotificationBuildsMessageFromStoredNotificationBeforeSending() {
         when(memberNotificationMapper.selectNotificationInfo(1L))
                 .thenReturn(memberInfo("dummy-fcm-token", true, true, true, true));

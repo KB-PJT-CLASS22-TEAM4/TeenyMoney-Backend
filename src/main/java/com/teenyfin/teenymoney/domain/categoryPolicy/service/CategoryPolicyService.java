@@ -153,7 +153,7 @@ public class CategoryPolicyService {
                 ? firstChangedCategoryName + " 외 " + (changedPolicyList.size() - 1) + "건"
                 : firstChangedCategoryName;
 
-        notificationService.createNotification(childId, title, content, null, null, true);
+        notificationService.createNotification(childId, title, content, NotificationReferenceType.CATEGORY_POLICY, null, true);
 
         return getCategoryPolicyParentGroup(memberId, role, childId);
     }
