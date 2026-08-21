@@ -107,7 +107,8 @@ public class FinancialProductTerminationService {
         transferIfPositive(parentWallet.getId(), childWallet.getId(),
                 calculation.interest, transferType(type), key(type, enrollmentId, "I"));
         // 이번 해지가 이력에 쌓이기 전에 먼저 세야 이번 건이 스스로를 포함해 중복 집계되지 않는다.
-        applyRepeatedEarlyTerminationPenaltyIfEligible(enrollment.getChildId(), enrollmentId);
+        boolean repeatedPenaltyApplied = applyRepeatedEarlyTerminationPenaltyIfEligible(
+                enrollment.getChildId(), enrollmentId);
         scoreChangeService.change(calculation.scoreRequest);
 
         int updated = type == FinancialProductType.DEPOSIT
@@ -117,6 +118,8 @@ public class FinancialProductTerminationService {
             throw new IllegalStateException("중도해지 상태 변경에 실패했습니다.");
         }
         notifyTerminated(type, enrollment, calculation);
+        notifyRepeatedEarlyTerminationPenaltyIfApplied(
+                type, enrollment, repeatedPenaltyApplied);
         return calculation.terminatedResponse();
     }
 
@@ -291,25 +294,38 @@ public class FinancialProductTerminationService {
      * 조회해서, 가장 오래된 한 건(STREAK번째 이전)까지 중도해지였다면 이미 이전 건에서
      * 감점이 적용된 것으로 보고 건너뛴다.
      */
-    private void applyRepeatedEarlyTerminationPenaltyIfEligible(
+    private boolean applyRepeatedEarlyTerminationPenaltyIfEligible(
             Long childId, Long enrollmentId) {
         // 서로 다른 계약이 동시에 해지돼도 같은 자녀의 직전 이력을 한 요청씩 판정한다.
         scoreChangeService.lockChildScore(childId);
         List<TeenyScoreEventRecordVO> recent = teenyScoreMapper
                 .selectRecentFinalSavingEvents(childId, REPEATED_EARLY_TERMINATION_STREAK);
         int requiredPriorStreak = REPEATED_EARLY_TERMINATION_STREAK - 1;
-        if (recent.size() < requiredPriorStreak) return;
+        if (recent.size() < requiredPriorStreak) return false;
         boolean immediatePriorsAreTerminations = recent.subList(0, requiredPriorStreak).stream()
                 .allMatch(event -> EARLY_TERMINATED_EVENT_CODES.contains(event.getEventCode()));
-        if (!immediatePriorsAreTerminations) return;
+        if (!immediatePriorsAreTerminations) return false;
         // 직전 STREAK번째 건까지도 중도해지였다면 스트릭이 이미 STREAK를 넘어섰던 것이라
         // 그 시점(직전 건)에서 이미 감점됐다 — 이번엔 다시 걸지 않는다.
         boolean streakAlreadyPenalizedBefore = recent.size() >= REPEATED_EARLY_TERMINATION_STREAK
                 && EARLY_TERMINATED_EVENT_CODES.contains(
                         recent.get(REPEATED_EARLY_TERMINATION_STREAK - 1).getEventCode());
-        if (streakAlreadyPenalizedBefore) return;
+        if (streakAlreadyPenalizedBefore) return false;
         scoreChangeService.change(
                 scorePolicyService.repeatedEarlyTermination(childId, enrollmentId));
+        return true;
+    }
+
+    private void notifyRepeatedEarlyTerminationPenaltyIfApplied(
+            FinancialProductType type, FinancialProductTerminationVO enrollment,
+            boolean repeatedPenaltyApplied) {
+        if (!repeatedPenaltyApplied) return;
+        notificationService.createNotification(
+                enrollment.getChildId(),
+                FinancialProductNotificationMessages.repeatedEarlyTerminationTitle(),
+                FinancialProductNotificationMessages.repeatedEarlyTerminationContent(),
+                FinancialProductNotificationMessages.terminationReferenceType(type),
+                enrollment.getEnrollmentId(), true);
     }
 
     /** 외부 DTO와 실제 송금·점수 입력값을 같은 계산 결과로 묶는 내부 값 객체다. */

@@ -87,6 +87,14 @@ final class FinancialProductNotificationMessages {
         return productName + " · 이자 " + money(interest) + " · 지갑 잔액이 부족해요. 채워주시면 다음 정산에서 자동으로 지급돼요";
     }
 
+    static String consecutiveMaturityTitle() {
+        return "연속 만기 보너스를 받았어요";
+    }
+
+    static String consecutiveMaturityContent() {
+        return "6개월 이상 예·적금 상품을 2회 연속 만기해 티니점수 10점을 받았어요.";
+    }
+
     // ─────────────────────── 적금 납입 ───────────────────────
 
     static String savingPaidTitle() {
@@ -149,6 +157,14 @@ final class FinancialProductNotificationMessages {
             String productName, long principal, long interest, int scoreChange) {
         return productName + " · 원금 " + money(principal) + " + 이자 " + money(interest)
                 + scoreSuffix(scoreChange);
+    }
+
+    static String repeatedEarlyTerminationTitle() {
+        return "연속 중도해지로 점수가 차감됐어요";
+    }
+
+    static String repeatedEarlyTerminationContent() {
+        return "예·적금 상품을 3회 연속 중도해지해 티니점수 8점이 차감됐어요.";
     }
 
     /** 감점을 별도 알림으로 나누지 않고 원인이 된 알림의 뒤에 붙여 이유와 결과를 한 줄로 읽게 한다. */

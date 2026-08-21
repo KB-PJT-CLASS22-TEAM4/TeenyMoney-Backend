@@ -45,5 +45,13 @@ class FinancialProductNotificationMessagesTest {
         assertEquals("예금상품 · 원금 100,000원 + 이자 500원 · 티니점수 3점 감점",
                 FinancialProductNotificationMessages.terminationParentContent(
                         "예금상품", 100_000L, 500L, -3));
+        assertEquals("연속 만기 보너스를 받았어요",
+                FinancialProductNotificationMessages.consecutiveMaturityTitle());
+        assertEquals("6개월 이상 예·적금 상품을 2회 연속 만기해 티니점수 10점을 받았어요.",
+                FinancialProductNotificationMessages.consecutiveMaturityContent());
+        assertEquals("연속 중도해지로 점수가 차감됐어요",
+                FinancialProductNotificationMessages.repeatedEarlyTerminationTitle());
+        assertEquals("예·적금 상품을 3회 연속 중도해지해 티니점수 8점이 차감됐어요.",
+                FinancialProductNotificationMessages.repeatedEarlyTerminationContent());
     }
 }
