@@ -144,6 +144,7 @@ class MemberControllerTest {
         assertTrue(body.contains("\"email\":\"child1@test.com\""), body);
         assertTrue(body.contains("\"teenyScore\":610"), body);
         assertTrue(body.contains("\"balance\":96500"), body);
+        assertTrue(body.contains("\"birthDate\":\"2012-03-04\""), body);
         assertTrue(body.contains(
                 "\"profileImageUrl\":\"https://s3.example.com/signed\""), body);
         // parentId를 요청으로 받으면 남의 자녀를 조회할 수 있다. 토큰에서만 나와야 한다.
@@ -213,6 +214,7 @@ class MemberControllerTest {
         child.setProfileImageKey("profile/2/a.png");
         child.setTeenyScore(610);
         child.setBalance(96500L);
+        child.setBirthDate(LocalDate.of(2012, 3, 4));
         // 서비스가 서명한 URL을 넘긴다. key가 그대로 나가면 안 된다.
         return MemberChildResponseDTO.of(child, "https://s3.example.com/signed");
     }

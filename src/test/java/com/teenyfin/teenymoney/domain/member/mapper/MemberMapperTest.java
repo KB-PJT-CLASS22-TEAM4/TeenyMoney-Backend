@@ -187,6 +187,7 @@ class MemberMapperTest {
         assertEquals(96500L, funded.getBalance());
         assertEquals(600, funded.getTeenyScore());   // CHILD는 DB 기본값 600
         assertEquals(withWallet.getEmail(), funded.getEmail());
+        assertEquals(withWallet.getBirthDate(), funded.getBirthDate());
 
         // 지갑이 아직 없는 자녀도 목록에 남아야 한다. INNER JOIN이면 여기서 통째로 사라진다.
         assertEquals(0L, byId(children, withoutWallet.getId()).getBalance());
