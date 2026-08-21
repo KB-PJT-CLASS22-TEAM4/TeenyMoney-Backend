@@ -14,6 +14,9 @@ import com.teenyfin.teenymoney.domain.financialproduct.vo.SavingContributionVO;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductTerminationVO;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.LoanRepaymentVO;
 import com.teenyfin.teenymoney.domain.financialproduct.vo.LoanEarlyRepaymentHistoryVO;
+import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductSettlementVO;
+import com.teenyfin.teenymoney.domain.financialproduct.vo.SavingPaymentHistoryVO;
+import com.teenyfin.teenymoney.domain.financialproduct.vo.LoanRepaymentHistoryVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -242,4 +245,11 @@ public interface FinancialProductMapper {
             @Param("overdueInterest") Long overdueInterest,
             @Param("paidCount") Integer paidCount,
             @Param("status") String status);
+
+    FinancialProductSettlementVO selectCompletedSettlement(
+            @Param("maturityPrefix") String maturityPrefix);
+    List<SavingPaymentHistoryVO> selectSavingPaymentHistories(
+            @Param("enrollmentId") Long enrollmentId);
+    List<LoanRepaymentHistoryVO> selectLoanRepaymentHistories(
+            @Param("enrollmentId") Long enrollmentId);
 }
