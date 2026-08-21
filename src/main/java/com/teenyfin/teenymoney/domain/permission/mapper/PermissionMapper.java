@@ -1,6 +1,7 @@
 package com.teenyfin.teenymoney.domain.permission.mapper;
 
 import com.teenyfin.teenymoney.domain.permission.vo.PermissionInsertVO;
+import com.teenyfin.teenymoney.domain.permission.vo.PermissionLimitVO;
 import com.teenyfin.teenymoney.domain.permission.vo.PermissionStatus;
 import com.teenyfin.teenymoney.domain.permission.vo.PermissionVO;
 import org.apache.ibatis.annotations.Mapper;
@@ -19,6 +20,12 @@ public interface PermissionMapper {
 
     // 이번 달에 오늘만 허용을 신청한 일수 계산
     int countCreatedAtThisMonth(@Param("childId") Long childId);
+
+    PermissionLimitVO selectParentMonthlyLimit(@Param("childId") Long childId);
+
+    int updateParentMonthlyLimit(@Param("parentId") Long parentId,
+                                 @Param("childId") Long childId,
+                                 @Param("monthlyAllowedDays") Integer monthlyAllowedDays);
 
     // 오늘만 허용 요청 생성
     void insertPermission(PermissionInsertVO permission);

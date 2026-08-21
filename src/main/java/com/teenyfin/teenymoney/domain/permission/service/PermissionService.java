@@ -8,13 +8,16 @@ import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
 import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
 import com.teenyfin.teenymoney.domain.categoryPolicy.vo.CategoryPolicyVO;
 import com.teenyfin.teenymoney.domain.permission.dto.request.PermissionRequestDTO;
+import com.teenyfin.teenymoney.domain.permission.dto.request.PermissionLimitUpdateRequestDTO;
 import com.teenyfin.teenymoney.domain.permission.dto.request.PermissionUpdateRequestDTO;
 import com.teenyfin.teenymoney.domain.permission.dto.response.PermissionCategoryStatusResponseDTO;
 import com.teenyfin.teenymoney.domain.permission.dto.response.PermissionResponseDTO;
+import com.teenyfin.teenymoney.domain.permission.dto.response.PermissionLimitResponseDTO;
 import com.teenyfin.teenymoney.domain.permission.dto.response.PermissionStatusResponseDTO;
 import com.teenyfin.teenymoney.domain.permission.exception.PermissionErrorCode;
 import com.teenyfin.teenymoney.domain.permission.mapper.PermissionMapper;
 import com.teenyfin.teenymoney.domain.permission.vo.PermissionInsertVO;
+import com.teenyfin.teenymoney.domain.permission.vo.PermissionLimitVO;
 import com.teenyfin.teenymoney.domain.permission.vo.PermissionStatus;
 import com.teenyfin.teenymoney.domain.permission.vo.PermissionVO;
 import com.teenyfin.teenymoney.domain.teenyscore.mapper.TeenyScoreMapper;
@@ -79,7 +82,7 @@ public class PermissionService {
         }
 
         int usedCount = permissionMapper.countCreatedAtThisMonth(childId); // 이번 달에 오늘만 허용을 요청한 일수 (오늘 포함)
-        int monthlyLimit = teenyScoreMapper.selectTeenyScoreGradeByChildId(childId).getMonthlyOverrideLimit(); // 이번 달에 요청할 수 있는 일수
+        int monthlyLimit = effectiveMonthlyLimit(childId); // 부모 설정값이 있으면 우선하고, 없으면 등급 기본값 사용
         int remainingCount = Math.max(monthlyLimit - usedCount, 0);
 
         // 오늘 카테고리별로 이미 생성된 요청의 상태 (없으면 AVAILABLE)
@@ -103,6 +106,26 @@ public class PermissionService {
                 .build();
     }
 
+    @Transactional(readOnly = true)
+    public PermissionLimitResponseDTO getMonthlyLimit(
+            Long parentId, String role, Long childId) {
+        requireParentChildAccess(parentId, role, childId);
+        return monthlyLimitResponse(childId);
+    }
+
+    @Transactional
+    public PermissionLimitResponseDTO updateMonthlyLimit(
+            Long parentId, String role, Long childId,
+            PermissionLimitUpdateRequestDTO request) {
+        requireParentChildAccess(parentId, role, childId);
+        int updated = permissionMapper.updateParentMonthlyLimit(
+                parentId, childId, request.getMonthlyAllowedDays());
+        if (updated != 1) {
+            throw new BusinessException(CategoryPolicyErrorCode.FORBIDDEN_TO_CHILD);
+        }
+        return monthlyLimitResponse(childId);
+    }
+
     // 새로운 오늘만 허용 요청 생성
     @Transactional
     public List<PermissionResponseDTO> createPermission(Long memberId, String role, PermissionRequestDTO permissionRequestDTO) {
@@ -113,7 +136,7 @@ public class PermissionService {
         }
 
         int count = permissionMapper.countCreatedAtThisMonth(memberId); // 이번 달에 오늘만 허용을 요청한 일수 (오늘 포함)
-        int monthlyLimit = teenyScoreMapper.selectTeenyScoreGradeByChildId(memberId).getMonthlyOverrideLimit();  // 이번 달에 요청할 수 있는 일수
+        int monthlyLimit = effectiveMonthlyLimit(memberId); // 날짜 단위 집계 정책은 유지하고 한도의 출처만 확장
 
         // 오늘 이미 요청한 적이 있으면 이번 요청은 새로운 날짜를 소모하지 않으므로 월간 한도 검사에서 제외한다
         boolean requestedToday = !permissionMapper.selectCreatedTodayByChildId(memberId).isEmpty();
@@ -266,6 +289,51 @@ public class PermissionService {
         // 대기 상태의 오늘만 허용 요청만 처리 가능
         if (permissionVO.getStatus() != PermissionStatus.PENDING) {
             throw new BusinessException(PermissionErrorCode.ONLY_CAN_PROCESS_PENDING_PERMISSION);
+        }
+    }
+
+    /** 부모 설정값이 아직 없을 때만 기존 티니등급 한도를 사용한다. */
+    private int effectiveMonthlyLimit(Long childId) {
+        PermissionLimitVO limit = permissionMapper.selectParentMonthlyLimit(childId);
+        if (limit != null && limit.getMonthlyPermissionDayLimit() != null) {
+            return limit.getMonthlyPermissionDayLimit();
+        }
+        return gradeMonthlyLimit(childId);
+    }
+
+    private PermissionLimitResponseDTO monthlyLimitResponse(Long childId) {
+        PermissionLimitVO limit = permissionMapper.selectParentMonthlyLimit(childId);
+        Integer configured = limit == null ? null : limit.getMonthlyPermissionDayLimit();
+        int gradeDefault = gradeMonthlyLimit(childId);
+        int effective = configured == null ? gradeDefault : configured;
+        int usedDays = permissionMapper.countCreatedAtThisMonth(childId);
+        return PermissionLimitResponseDTO.builder()
+                .childId(childId)
+                .gradeDefaultLimit(gradeDefault)
+                .parentConfiguredLimit(configured)
+                .effectiveLimit(effective)
+                .usedDays(usedDays)
+                .remainingDays(Math.max(effective - usedDays, 0))
+                .customizedByParent(configured != null)
+                .build();
+    }
+
+    private int gradeMonthlyLimit(Long childId) {
+        return teenyScoreMapper.selectTeenyScoreGradeByChildId(childId)
+                .getMonthlyOverrideLimit();
+    }
+
+    private void requireParentChildAccess(Long parentId, String role, Long childId) {
+        if (!"PARENT".equals(role)) {
+            throw new BusinessException(
+                    PermissionErrorCode.ONLY_PARENT_CAN_MANAGE_PERMISSION_LIMIT);
+        }
+        if (childId == null) {
+            throw new BusinessException(CategoryPolicyErrorCode.CHILD_ID_REQUIRED);
+        }
+        var linkedParent = memberMapper.selectActiveParentByChildId(childId);
+        if (linkedParent == null || !Objects.equals(linkedParent.getParentId(), parentId)) {
+            throw new BusinessException(CategoryPolicyErrorCode.FORBIDDEN_TO_CHILD);
         }
     }
 }

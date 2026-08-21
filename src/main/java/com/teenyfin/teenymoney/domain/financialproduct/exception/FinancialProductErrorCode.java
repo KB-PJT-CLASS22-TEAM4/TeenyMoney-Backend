@@ -44,6 +44,8 @@ public enum FinancialProductErrorCode implements ErrorCode {
             HttpStatus.BAD_REQUEST, "자유적금만 직접 납입할 수 있습니다."),
     FINANCIAL_PRODUCT_ENROLLMENT_NOT_ACTIVE(
             HttpStatus.CONFLICT, "진행 중인 금융상품 가입이 아닙니다."),
+    FINANCIAL_PRODUCT_COMPLETION_DETAIL_NOT_AVAILABLE(
+            HttpStatus.CONFLICT, "만기된 예·적금 또는 완납된 대출만 상세 이력을 조회할 수 있습니다."),
     FINANCIAL_PRODUCT_TERMINATION_NOT_AVAILABLE(
             HttpStatus.CONFLICT, "만기 전 진행 중인 예금·적금만 중도해지할 수 있습니다."),
     FINANCIAL_PRODUCT_SAVING_MONTHLY_LIMIT_EXCEEDED(
