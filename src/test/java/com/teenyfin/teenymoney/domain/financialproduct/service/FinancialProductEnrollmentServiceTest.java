@@ -114,7 +114,7 @@ class FinancialProductEnrollmentServiceTest {
         service.requestDeposit(CHILD, new DepositEnrollmentRequestDTO(1L, 50_000L, 12));
 
         verify(notificationService).createNotification(
-                1L, "김첫째님이 예금 가입을 요청했어요", "티니 자유예금 · 50000원",
+                1L, "김첫째님이 예금 가입을 요청했어요", "티니 자유예금 · 50,000원",
                 NotificationReferenceType.DEPOSIT_ENROLLMENT, 100L, true);
     }
 

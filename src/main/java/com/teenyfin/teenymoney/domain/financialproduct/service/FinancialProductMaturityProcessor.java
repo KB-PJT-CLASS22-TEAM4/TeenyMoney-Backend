@@ -92,12 +92,14 @@ public class FinancialProductMaturityProcessor {
                 TransferType.DEPOSIT, "DPT_MAT:" + enrollmentId + ":I",
                 FinancialProductType.DEPOSIT, maturity);
         // 이번 만기가 이력에 쌓이기 전에 먼저 "직전" 이벤트를 확인해야 자기 자신과 비교하지 않는다.
-        applyConsecutiveMaturityBonusIfEligible(
+        boolean consecutiveBonusApplied = applyConsecutiveMaturityBonusIfEligible(
                 maturity.getChildId(), enrollmentId, maturity.getTermMonths());
         scoreChangeService.change(scorePolicyService.depositMaturity(
                 maturity.getChildId(), enrollmentId, maturity.getTermMonths()));
         requireUpdated(financialProductMapper.markDepositMatured(enrollmentId));
         notifyMaturity(FinancialProductType.DEPOSIT, maturity, principal, interest);
+        notifyConsecutiveMaturityBonusIfApplied(
+                FinancialProductType.DEPOSIT, maturity, consecutiveBonusApplied);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -130,9 +132,11 @@ public class FinancialProductMaturityProcessor {
         transferInterestOrFail(parentWallet.getId(), childWallet.getId(), interest,
                 TransferType.SAVING, "SVG_MAT:" + enrollmentId + ":I",
                 FinancialProductType.SAVING, maturity);
-        applySavingMaturityScore(maturity, contributions);
+        boolean consecutiveBonusApplied = applySavingMaturityScore(maturity, contributions);
         requireUpdated(financialProductMapper.markSavingMatured(enrollmentId));
         notifyMaturity(FinancialProductType.SAVING, maturity, recordedPrincipal, interest);
+        notifyConsecutiveMaturityBonusIfApplied(
+                FinancialProductType.SAVING, maturity, consecutiveBonusApplied);
     }
 
     /**
@@ -165,7 +169,7 @@ public class FinancialProductMaturityProcessor {
                 enrollmentId, true);
     }
 
-    private void applySavingMaturityScore(
+    private boolean applySavingMaturityScore(
             FinancialProductMaturityVO maturity,
             List<SavingContributionVO> contributions) {
         int termMonths = maturity.getTermMonths();
@@ -189,11 +193,13 @@ public class FinancialProductMaturityProcessor {
         }
         // 납입률 미달로 실제로는 중도해지 취급된 경우는 연속만기 스트릭 대상이 아니다.
         // 이 이벤트가 이력에 쌓이기 전에 먼저 "직전" 이벤트를 확인해야 자기 자신과 비교하지 않는다.
+        boolean consecutiveBonusApplied = false;
         if (MATURED_EVENT_CODES.contains(scoreRequest.getEventCode().name())) {
-            applyConsecutiveMaturityBonusIfEligible(
+            consecutiveBonusApplied = applyConsecutiveMaturityBonusIfEligible(
                     maturity.getChildId(), maturity.getEnrollmentId(), termMonths);
         }
         scoreChangeService.change(scoreRequest);
+        return consecutiveBonusApplied;
     }
 
     /**
@@ -201,19 +207,36 @@ public class FinancialProductMaturityProcessor {
      * 연속만기 보너스를 반영한다. 직전 이벤트의 가입 기간은 이력에 저장돼 있지 않으므로
      * reference로 원 가입 건을 다시 조회해서 확인한다.
      */
-    private void applyConsecutiveMaturityBonusIfEligible(
+    private boolean applyConsecutiveMaturityBonusIfEligible(
             Long childId, Long enrollmentId, int termMonths) {
-        if (termMonths < CONSECUTIVE_MATURITY_MIN_TERM_MONTHS) return;
+        if (termMonths < CONSECUTIVE_MATURITY_MIN_TERM_MONTHS) return false;
         // 서로 다른 계약이 동시에 만기돼도 같은 자녀의 직전 이력을 한 요청씩 판정한다.
         scoreChangeService.lockChildScore(childId);
         List<TeenyScoreEventRecordVO> recent =
                 teenyScoreMapper.selectRecentFinalSavingEvents(childId, 1);
-        if (recent.isEmpty()) return;
+        if (recent.isEmpty()) return false;
         TeenyScoreEventRecordVO last = recent.get(0);
-        if (!MATURED_EVENT_CODES.contains(last.getEventCode())) return;
-        if (!isLongTermEnrollment(childId, last)) return;
+        if (!MATURED_EVENT_CODES.contains(last.getEventCode())) return false;
+        if (!isLongTermEnrollment(childId, last)) return false;
+        // 직전 만기가 이미 두 번째 만기로서 보너스를 받았다면 연속 횟수는 그 시점에
+        // 초기화된다. 이번 만기는 새 주기의 첫 번째이므로 보너스를 지급하지 않는다.
+        if (teenyScoreMapper.existsHistoryByEventKey(
+                childId, "SAVING_CONSECUTIVE_MATURITY:" + last.getReferenceId())) return false;
         scoreChangeService.change(
                 scorePolicyService.consecutiveMaturityBonus(childId, enrollmentId));
+        return true;
+    }
+
+    private void notifyConsecutiveMaturityBonusIfApplied(
+            FinancialProductType type, FinancialProductMaturityVO maturity,
+            boolean consecutiveBonusApplied) {
+        if (!consecutiveBonusApplied) return;
+        notificationService.createNotification(
+                maturity.getChildId(),
+                FinancialProductNotificationMessages.consecutiveMaturityTitle(),
+                FinancialProductNotificationMessages.consecutiveMaturityContent(),
+                FinancialProductNotificationMessages.maturityReferenceType(type),
+                maturity.getEnrollmentId(), true);
     }
 
     private boolean isLongTermEnrollment(Long childId, TeenyScoreEventRecordVO event) {

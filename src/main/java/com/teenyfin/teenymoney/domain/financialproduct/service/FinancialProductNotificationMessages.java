@@ -68,7 +68,7 @@ final class FinancialProductNotificationMessages {
     }
 
     static String maturityChildContent(String productName, long principal, long interest) {
-        return productName + " · 원금 " + principal + "원 + 이자 " + interest + "원";
+        return productName + " · 원금 " + money(principal) + " + 이자 " + money(interest);
     }
 
     static String maturityParentTitle(FinancialProductType type, String childName) {
@@ -76,7 +76,7 @@ final class FinancialProductNotificationMessages {
     }
 
     static String maturityParentContent(String productName, long interest) {
-        return productName + " · 이자 " + interest + "원이 지갑에서 빠져나갔어요";
+        return productName + " · 이자 " + money(interest) + "이 지갑에서 빠져나갔어요";
     }
 
     static String maturityInterestFailedTitle(FinancialProductType type) {
@@ -84,7 +84,15 @@ final class FinancialProductNotificationMessages {
     }
 
     static String maturityInterestFailedContent(String productName, long interest) {
-        return productName + " · 이자 " + interest + "원 · 지갑 잔액이 부족해요. 채워주시면 다음 정산에서 자동으로 지급돼요";
+        return productName + " · 이자 " + money(interest) + " · 지갑 잔액이 부족해요. 채워주시면 다음 정산에서 자동으로 지급돼요";
+    }
+
+    static String consecutiveMaturityTitle() {
+        return "연속 만기 보너스를 받았어요";
+    }
+
+    static String consecutiveMaturityContent() {
+        return "6개월 이상 예·적금 상품을 2회 연속 만기해 티니점수 10점을 받았어요.";
     }
 
     // ─────────────────────── 적금 납입 ───────────────────────
@@ -94,12 +102,12 @@ final class FinancialProductNotificationMessages {
     }
 
     static String savingPaidContent(String productName, int installmentNo, long amount) {
-        return productName + " · " + installmentNo + "회차 · " + amount + "원";
+        return productName + " · " + installmentNo + "회차 · " + money(amount);
     }
 
     /** 자유적금은 회차 개념보다 "내가 방금 넣은 금액"이 중요하므로 회차를 붙이지 않는다. */
     static String freeSavingPaidContent(String productName, long amount) {
-        return productName + " · " + amount + "원";
+        return productName + " · " + money(amount);
     }
 
     static String savingMissedTitle() {
@@ -107,7 +115,7 @@ final class FinancialProductNotificationMessages {
     }
 
     static String savingMissedContent(String productName, int installmentNo, long amount) {
-        return productName + " · " + installmentNo + "회차 · 잔액이 부족해요 (" + amount + "원)";
+        return productName + " · " + installmentNo + "회차 · 잔액이 부족해요 (" + money(amount) + ")";
     }
 
     // ─────────────────────── 대출 상환 ───────────────────────
@@ -118,7 +126,7 @@ final class FinancialProductNotificationMessages {
 
     static String loanOverdueContent(
             String productName, int installmentNo, long unpaidAmount, int scoreChange) {
-        return productName + " · " + installmentNo + "회차 · 미납 " + unpaidAmount + "원"
+        return productName + " · " + installmentNo + "회차 · 미납 " + money(unpaidAmount)
                 + scoreSuffix(scoreChange);
     }
 
@@ -136,7 +144,7 @@ final class FinancialProductNotificationMessages {
 
     static String loanDefaultedContent(
             String productName, long outstandingAmount, int scoreChange) {
-        return productName + " · 남은 금액 " + outstandingAmount + "원" + scoreSuffix(scoreChange);
+        return productName + " · 남은 금액 " + money(outstandingAmount) + scoreSuffix(scoreChange);
     }
 
     // ─────────────────────── 중도해지 ───────────────────────
@@ -147,8 +155,16 @@ final class FinancialProductNotificationMessages {
 
     static String terminationParentContent(
             String productName, long principal, long interest, int scoreChange) {
-        return productName + " · 원금 " + principal + "원 + 이자 " + interest + "원"
+        return productName + " · 원금 " + money(principal) + " + 이자 " + money(interest)
                 + scoreSuffix(scoreChange);
+    }
+
+    static String repeatedEarlyTerminationTitle() {
+        return "연속 중도해지로 점수가 차감됐어요";
+    }
+
+    static String repeatedEarlyTerminationContent() {
+        return "예·적금 상품을 3회 연속 중도해지해 티니점수 8점이 차감됐어요.";
     }
 
     /** 감점을 별도 알림으로 나누지 않고 원인이 된 알림의 뒤에 붙여 이유와 결과를 한 줄로 읽게 한다. */
@@ -164,8 +180,13 @@ final class FinancialProductNotificationMessages {
     // 적금만 월 단위 금액이라 "월"을 붙인다.
     private static String amountLine(FinancialProductType type, String productName, long amount) {
         return type == FinancialProductType.SAVING
-                ? productName + " · 월 " + amount + "원"
-                : productName + " · " + amount + "원";
+                ? productName + " · 월 " + money(amount)
+                : productName + " · " + money(amount);
+    }
+
+    /** 알림 문구에서 모든 금액을 천 단위 콤마가 포함된 원화 형식으로 표시한다. */
+    private static String money(long amount) {
+        return String.format("%,d원", amount);
     }
 
     private static String label(FinancialProductType type) {

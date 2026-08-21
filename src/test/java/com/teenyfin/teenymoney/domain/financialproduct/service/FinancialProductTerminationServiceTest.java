@@ -124,6 +124,12 @@ class FinancialProductTerminationServiceTest {
 
         verify(scoreChangeService).change(argThat(request ->
                 "REPEATED_EARLY_TERMINATION:7".equals(request.getEventKey())));
+        verify(notificationService).createNotification(
+                2L,
+                "연속 중도해지로 점수가 차감됐어요",
+                "예·적금 상품을 3회 연속 중도해지해 티니점수 8점이 차감됐어요.",
+                NotificationReferenceType.DEPOSIT_TERMINATION,
+                7L, true);
     }
 
     @Test

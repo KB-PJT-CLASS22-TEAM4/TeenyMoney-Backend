@@ -6,6 +6,7 @@ import com.teenyfin.teenymoney.domain.financialproduct.vo.FinancialProductMaturi
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.domain.member.vo.MemberVO;
 import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
+import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
 import com.teenyfin.teenymoney.domain.teenyscore.mapper.TeenyScoreMapper;
 import com.teenyfin.teenymoney.domain.teenyscore.service.TeenyScoreChangeService;
 import com.teenyfin.teenymoney.domain.teenyscore.service.TeenyScorePolicyService;
@@ -36,6 +37,7 @@ class FinancialProductConsecutiveScoreTest {
     private TransferService transferService;
     private TeenyScoreChangeService scoreChangeService;
     private TeenyScoreMapper teenyScoreMapper;
+    private NotificationService notificationService;
     private FinancialProductMaturityProcessor processor;
 
     @BeforeEach
@@ -45,6 +47,7 @@ class FinancialProductConsecutiveScoreTest {
         transferService = mock(TransferService.class);
         scoreChangeService = mock(TeenyScoreChangeService.class);
         teenyScoreMapper = mock(TeenyScoreMapper.class);
+        notificationService = mock(NotificationService.class);
         MemberMapper memberMapper = mock(MemberMapper.class);
         MemberVO child = new MemberVO();
         child.setName("테스트자녀");
@@ -53,7 +56,7 @@ class FinancialProductConsecutiveScoreTest {
                 mapper, walletMapper, transferService,
                 new TeenyScorePolicyService(), scoreChangeService,
                 new FinancialProductInterestCalculator(),
-                mock(NotificationService.class), memberMapper, teenyScoreMapper);
+                notificationService, memberMapper, teenyScoreMapper);
 
         LocalDate date = LocalDate.of(2027, 1, 1);
         FinancialProductMaturityVO maturity = deposit12mMaturity();
@@ -77,6 +80,35 @@ class FinancialProductConsecutiveScoreTest {
 
         verify(scoreChangeService).change(argThat(request ->
                 "SAVING_CONSECUTIVE_MATURITY:7".equals(request.getEventKey())));
+        verify(notificationService).createNotification(
+                2L,
+                "연속 만기 보너스를 받았어요",
+                "6개월 이상 예·적금 상품을 2회 연속 만기해 티니점수 10점을 받았어요.",
+                NotificationReferenceType.DEPOSIT_MATURITY,
+                7L, true);
+    }
+
+    @Test
+    @DisplayName("직전 만기에서 연속만기 보너스를 받았으면 카운트를 초기화하고 이번 만기에는 보너스를 반영하지 않는다")
+    void resetsCountAfterPreviousMaturityReceivedBonus() {
+        when(teenyScoreMapper.selectRecentFinalSavingEvents(2L, 1))
+                .thenReturn(List.of(finalEvent("DEPOSIT_MATURED", "DEPOSIT_ENROLLMENT", 6L)));
+        FinancialProductEnrollmentVO previous = new FinancialProductEnrollmentVO();
+        previous.setTermMonths(6);
+        when(mapper.selectDepositEnrollmentByChildIdAndId(2L, 6L)).thenReturn(previous);
+        when(teenyScoreMapper.existsHistoryByEventKey(
+                2L, "SAVING_CONSECUTIVE_MATURITY:6")).thenReturn(true);
+
+        processor.processDeposit(7L, LocalDate.of(2027, 1, 1));
+
+        verify(scoreChangeService, never()).change(argThat(request ->
+                request.getEventKey().startsWith("SAVING_CONSECUTIVE_MATURITY")));
+        verify(notificationService, never()).createNotification(
+                2L,
+                "연속 만기 보너스를 받았어요",
+                "6개월 이상 예·적금 상품을 2회 연속 만기해 티니점수 10점을 받았어요.",
+                NotificationReferenceType.DEPOSIT_MATURITY,
+                7L, true);
     }
 
     @Test
