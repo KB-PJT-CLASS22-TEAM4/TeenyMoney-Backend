@@ -34,10 +34,14 @@
 --     등급 판정이 T_TNY_GRADE_A 를 BETWEEN 으로 조회하므로 600이면 부모가
 --     '스타터'(450~649)로 매칭되어 우대금리 1.00%와 오늘만허용 3회를 받는다.
 --     스키마 주석도 "(자녀만 사용)"이고 CHECK 가 IS NULL 을 허용한다.
-INSERT INTO `T_MBR_INFO_M` (`id`, `role`, `name`, `birth_date`, `phone_number`, `email`, `password`, `teeny_score`, `customer_key`, `status`)
+--
+--  4) profile_image_key 를 PARENT 에만 명시한다. 컬럼 DEFAULT 는 자녀 이미지라
+--     (role 을 볼 수 없다, V030) 생략하면 부모가 자녀 기본 이미지를 갖는다.
+--     자녀는 DEFAULT 그대로가 맞으므로 생략한다.
+INSERT INTO `T_MBR_INFO_M` (`id`, `role`, `name`, `birth_date`, `phone_number`, `email`, `password`, `teeny_score`, `customer_key`, `profile_image_key`, `status`)
 VALUES (1, 'PARENT', '김부모', '1985-03-11', '01011111111', 'parent1@naver.com',
         '$2a$10$Ii6qH9kVC2z.mkEdiVas9.dN9yr/wZXPoSUgExNjp7N9Dra8avcSy',
-        NULL, 'toss-customer-uuid-1', 'ACTIVE');
+        NULL, 'toss-customer-uuid-1', 'teenymoney_parent.png', 'ACTIVE');
 
 -- payment_password 는 아직 자리표시자다. 결제 비밀번호는 결제 도메인 이슈 범위이고
 -- 인증 API가 읽지 않으므로 그대로 둔다. 결제 도메인 작업 시 실제 해시로 교체한다.

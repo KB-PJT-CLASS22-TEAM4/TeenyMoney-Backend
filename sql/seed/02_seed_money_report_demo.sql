@@ -35,13 +35,15 @@ START TRANSACTION;
 -- ---------------------------------------------------------------------
 SET @seed_password := '$2a$10$Ii6qH9kVC2z.mkEdiVas9.dN9yr/wZXPoSUgExNjp7N9Dra8avcSy';
 
+-- profile_image_key 는 PARENT 에만 명시한다. 컬럼 DEFAULT 는 role 을 볼 수 없어
+-- 자녀 이미지로 고정돼 있다(V030). 자녀 행은 DEFAULT 그대로가 맞다.
 INSERT INTO T_MBR_INFO_M
     (`role`, name, birth_date, phone_number, email, password,
-     teeny_score, customer_key, status, created_at)
+     teeny_score, customer_key, profile_image_key, status, created_at)
 VALUES
     ('PARENT', '리포트부모', DATE_SUB(CURDATE(), INTERVAL 40 YEAR),
      '01090000001', 'report-parent@naver.com', @seed_password,
-     NULL, 'report-demo-parent', 'ACTIVE', @month2);
+     NULL, 'report-demo-parent', 'teenymoney_parent.png', 'ACTIVE', @month2);
 SET @parent_id := LAST_INSERT_ID();
 
 INSERT INTO T_MBR_INFO_M
