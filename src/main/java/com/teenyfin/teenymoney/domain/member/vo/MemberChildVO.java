@@ -4,6 +4,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDate;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -17,4 +19,5 @@ public class MemberChildVO {
     private Integer teenyScore;
     // 지갑이 없는 자녀는 0. LEFT JOIN + COALESCE 결과
     private Long balance;
+    private LocalDate birthDate;
 }

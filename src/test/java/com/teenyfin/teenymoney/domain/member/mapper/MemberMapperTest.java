@@ -89,7 +89,7 @@ class MemberMapperTest {
     void updateProfileImageKeyWritesToRealColumn() {
         // 컬럼명을 profile_image_url -> profile_image_key로 바꿨다(V002).
         // 매퍼 XML과 실제 DB 컬럼이 어긋나면 여기서 SQL 오류나 null로 드러난다.
-        // insert는 이 컬럼을 넣지 않으므로(V007, DEFAULT를 살리기 위해) update가 유일한 쓰기 경로다.
+        // insert는 role별 기본 key만 넣으므로(V030) 회원이 고른 이미지를 쓰는 경로는 update뿐이다.
         MemberVO member = newMember("CHILD");
         memberMapper.insert(member);
 
@@ -112,20 +112,24 @@ class MemberMapperTest {
     }
 
     @Test
-    @DisplayName("프로필 이미지 없이 가입 -> 기본 프로필 이미지 key가 들어간다 (V007)")
-    void memberWithoutProfileImageGetsDefaultKey() {
-        // insert가 profile_image_key 컬럼을 넣지 않아야 DB DEFAULT가 적용된다.
-        // 매퍼가 #{profileImageKey}로 명시적 NULL을 보내면 NOT NULL 제약에 걸려 여기서 터진다.
-        MemberVO member = newMember("CHILD");
-        memberMapper.insert(member);
+    @DisplayName("프로필 이미지 없이 가입 -> role에 맞는 기본 이미지 key가 들어간다 (V030)")
+    void memberWithoutProfileImageGetsDefaultKeyByRole() {
+        // 버킷에 있는 key는 teen/parent 두 개다. role을 잘못 매핑하면 존재하지 않는
+        // 오브젝트에 서명 URL이 나가고 화면에서 404로만 드러난다.
+        MemberVO child = newMember("CHILD");
+        MemberVO parent = newMember("PARENT");
+        memberMapper.insert(child);
+        memberMapper.insert(parent);
 
-        MemberVO loaded = memberMapper.selectById(member.getId());
+        String childKey = memberMapper.selectById(child.getId()).getProfileImageKey();
+        String parentKey = memberMapper.selectById(parent.getId()).getProfileImageKey();
 
-        System.out.printf("    입력: profileImageKey 없이 insert (대다수 회원)%n"
-                        + "    기대: teenymoney_profile.png%n    실제: %s%n%n",
-                loaded.getProfileImageKey());
+        System.out.printf("    입력: profileImageKey 없이 CHILD/PARENT insert%n"
+                        + "    기대: teenymoney_teen.png / teenymoney_parent.png%n"
+                        + "    실제: %s / %s%n%n", childKey, parentKey);
 
-        assertEquals("teenymoney_profile.png", loaded.getProfileImageKey());
+        assertEquals("teenymoney_teen.png", childKey);
+        assertEquals("teenymoney_parent.png", parentKey);
     }
 
     private MemberVO newMember(String role) {
@@ -187,6 +191,7 @@ class MemberMapperTest {
         assertEquals(96500L, funded.getBalance());
         assertEquals(600, funded.getTeenyScore());   // CHILD는 DB 기본값 600
         assertEquals(withWallet.getEmail(), funded.getEmail());
+        assertEquals(withWallet.getBirthDate(), funded.getBirthDate());
 
         // 지갑이 아직 없는 자녀도 목록에 남아야 한다. INNER JOIN이면 여기서 통째로 사라진다.
         assertEquals(0L, byId(children, withoutWallet.getId()).getBalance());

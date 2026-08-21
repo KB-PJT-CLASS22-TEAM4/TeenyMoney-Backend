@@ -1,9 +1,12 @@
 package com.teenyfin.teenymoney.domain.member.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.teenyfin.teenymoney.domain.member.vo.MemberChildVO;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import lombok.Getter;
+
+import java.time.LocalDate;
 
 @Getter
 @ApiModel(description = "부모와 연동된 자녀 정보")
@@ -22,6 +25,9 @@ public class MemberChildResponseDTO {
     private final Integer teenyScore;
     @ApiModelProperty(value = "자녀 지갑 잔액(원). 지갑이 없으면 0", example = "96500")
     private final Long balance;
+    @ApiModelProperty(value = "생년월일", example = "2013-03-14")
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private final LocalDate birthDate;
 
     // 생성자·팩토리는 그대로
     private MemberChildResponseDTO(MemberChildVO child, String profileImageUrl) {
@@ -31,6 +37,7 @@ public class MemberChildResponseDTO {
         this.profileImageUrl = profileImageUrl;
         this.teenyScore = child.getTeenyScore();
         this.balance = child.getBalance();
+        this.birthDate = child.getBirthDate();
     }
 
     public static MemberChildResponseDTO of(MemberChildVO child, String profileImageUrl) {
