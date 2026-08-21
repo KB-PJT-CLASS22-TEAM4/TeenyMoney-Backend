@@ -80,6 +80,23 @@ class FinancialProductConsecutiveScoreTest {
     }
 
     @Test
+    @DisplayName("직전 만기에서 연속만기 보너스를 받았으면 카운트를 초기화하고 이번 만기에는 보너스를 반영하지 않는다")
+    void resetsCountAfterPreviousMaturityReceivedBonus() {
+        when(teenyScoreMapper.selectRecentFinalSavingEvents(2L, 1))
+                .thenReturn(List.of(finalEvent("DEPOSIT_MATURED", "DEPOSIT_ENROLLMENT", 6L)));
+        FinancialProductEnrollmentVO previous = new FinancialProductEnrollmentVO();
+        previous.setTermMonths(6);
+        when(mapper.selectDepositEnrollmentByChildIdAndId(2L, 6L)).thenReturn(previous);
+        when(teenyScoreMapper.existsHistoryByEventKey(
+                2L, "SAVING_CONSECUTIVE_MATURITY:6")).thenReturn(true);
+
+        processor.processDeposit(7L, LocalDate.of(2027, 1, 1));
+
+        verify(scoreChangeService, never()).change(argThat(request ->
+                request.getEventKey().startsWith("SAVING_CONSECUTIVE_MATURITY")));
+    }
+
+    @Test
     @DisplayName("직전 이벤트가 중도해지였으면 연속만기 보너스를 반영하지 않는다")
     void skipsBonusWhenPreviousEventWasEarlyTermination() {
         when(teenyScoreMapper.selectRecentFinalSavingEvents(2L, 1))

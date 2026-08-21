@@ -212,6 +212,10 @@ public class FinancialProductMaturityProcessor {
         TeenyScoreEventRecordVO last = recent.get(0);
         if (!MATURED_EVENT_CODES.contains(last.getEventCode())) return;
         if (!isLongTermEnrollment(childId, last)) return;
+        // 직전 만기가 이미 두 번째 만기로서 보너스를 받았다면 연속 횟수는 그 시점에
+        // 초기화된다. 이번 만기는 새 주기의 첫 번째이므로 보너스를 지급하지 않는다.
+        if (teenyScoreMapper.existsHistoryByEventKey(
+                childId, "SAVING_CONSECUTIVE_MATURITY:" + last.getReferenceId())) return;
         scoreChangeService.change(
                 scorePolicyService.consecutiveMaturityBonus(childId, enrollmentId));
     }
