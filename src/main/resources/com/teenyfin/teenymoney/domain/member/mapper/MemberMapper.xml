@@ -73,16 +73,18 @@
             parameterType="com.teenyfin.teenymoney.domain.member.vo.MemberVO"
             useGeneratedKeys="true"
             keyProperty="id">
-        <!-- profile_image_key를 넣지 않는다. 컬럼 DEFAULT(기본 프로필 이미지 key)가
-             적용되게 하려면 컬럼 자체가 빠져야 한다. #{profileImageKey}로 명시적 NULL을
-             보내면 DEFAULT를 덮어써서 NOT NULL 제약에 걸린다. (V007) -->
+        <!-- 기본 프로필 이미지는 role에 따라 갈리므로 컬럼 DEFAULT로 표현할 수 없다.
+             (MySQL DEFAULT는 다른 컬럼을 참조하지 못한다.) 그래서 여기서 넣는다.
+             #{profileImageKey}를 쓰지 않는 이유는 V007 그대로다. VO에 값이 없으면
+             명시적 NULL이 나가 NOT NULL 제약에 걸린다. (V030) -->
         INSERT INTO T_MBR_INFO_M (
             role,
             name,
             birth_date,
             phone_number,
             email,
-            password
+            password,
+            profile_image_key
             <if test="role == 'PARENT'">
                 , teeny_score
             </if>
@@ -92,7 +94,10 @@
             #{birthDate},
             #{phoneNumber},
             #{email},
-            #{password}
+            #{password},
+            CASE WHEN #{role} = 'PARENT'
+                 THEN 'teenymoney_parent.png'
+                 ELSE 'teenymoney_teen.png' END
             <if test="role == 'PARENT'">
                 , NULL
             </if>
