@@ -1,8 +1,10 @@
 package com.teenyfin.teenymoney.domain.permission.controller;
 
 import com.teenyfin.teenymoney.domain.permission.dto.request.PermissionRequestDTO;
+import com.teenyfin.teenymoney.domain.permission.dto.request.PermissionLimitUpdateRequestDTO;
 import com.teenyfin.teenymoney.domain.permission.dto.request.PermissionUpdateRequestDTO;
 import com.teenyfin.teenymoney.domain.permission.dto.response.PermissionResponseDTO;
+import com.teenyfin.teenymoney.domain.permission.dto.response.PermissionLimitResponseDTO;
 import com.teenyfin.teenymoney.domain.permission.dto.response.PermissionStatusResponseDTO;
 import com.teenyfin.teenymoney.domain.permission.service.PermissionService;
 import com.teenyfin.teenymoney.global.response.ApiResponse;
@@ -39,6 +41,27 @@ public class PermissionController {
             @AuthenticationPrincipal MemberPrincipal memberPrincipal,
             @RequestParam(required = false) Long childId) {
         return ApiResponse.ok(permissionService.getPermissionStatus(memberPrincipal.memberId(), memberPrincipal.role(), childId));
+    }
+
+    @ApiOperation(value = "자녀의 오늘만 허용 월간 한도 조회",
+            notes = "부모 설정값이 없으면 자녀의 티니등급 기본 한도를 반환합니다.")
+    @GetMapping("/children/{childId}/monthly-limit")
+    public ApiResponse<PermissionLimitResponseDTO> getMonthlyLimit(
+            @AuthenticationPrincipal MemberPrincipal memberPrincipal,
+            @PathVariable Long childId) {
+        return ApiResponse.ok(permissionService.getMonthlyLimit(
+                memberPrincipal.memberId(), memberPrincipal.role(), childId));
+    }
+
+    @ApiOperation(value = "자녀의 오늘만 허용 월간 한도 설정",
+            notes = "연결된 부모가 한 달에 오늘만 허용을 요청할 수 있는 날짜 수를 설정합니다.")
+    @PutMapping("/children/{childId}/monthly-limit")
+    public ApiResponse<PermissionLimitResponseDTO> updateMonthlyLimit(
+            @AuthenticationPrincipal MemberPrincipal memberPrincipal,
+            @PathVariable Long childId,
+            @Valid @RequestBody PermissionLimitUpdateRequestDTO request) {
+        return ApiResponse.ok(permissionService.updateMonthlyLimit(
+                memberPrincipal.memberId(), memberPrincipal.role(), childId, request));
     }
 
     @ApiOperation(value = "오늘만 허용 요청", notes = "원하는 카테고리와 사유를 포함해 오늘만 허용을 요청합니다.")

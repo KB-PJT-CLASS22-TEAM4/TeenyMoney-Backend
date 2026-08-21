@@ -56,6 +56,26 @@
         AND MONTH(created_at) = MONTH(CURDATE())
     </select>
 
+    <!-- 행 존재 여부와 nullable 부모 설정값을 구분하기 위해 Integer 대신 VO로 매핑한다. -->
+    <select id="selectParentMonthlyLimit"
+            resultType="com.teenyfin.teenymoney.domain.permission.vo.PermissionLimitVO">
+        SELECT monthly_permission_day_limit AS monthlyPermissionDayLimit
+        FROM T_MBR_CONN_R
+        WHERE child_id = #{childId}
+          AND status = 'ACTIVE'
+        LIMIT 1
+    </select>
+
+    <!-- parent_id까지 조건에 포함해 다른 부모가 childId만 바꿔 수정하지 못하게 한다. -->
+    <update id="updateParentMonthlyLimit">
+        UPDATE T_MBR_CONN_R
+        SET monthly_permission_day_limit = #{monthlyAllowedDays},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE parent_id = #{parentId}
+          AND child_id = #{childId}
+          AND status = 'ACTIVE'
+    </update>
+
     <insert id="insertPermission" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         INSERT INTO T_TDP_REQ_L (parent_id, child_id, merchant_category_id, reason, status, expired_at, created_at)
         VALUES (
