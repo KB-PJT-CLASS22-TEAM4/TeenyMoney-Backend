@@ -10,6 +10,7 @@ import com.teenyfin.teenymoney.domain.categoryPolicy.vo.CategoryPolicyVO;
 import com.teenyfin.teenymoney.domain.member.mapper.MemberMapper;
 import com.teenyfin.teenymoney.domain.member.vo.MemberParentVO;
 import com.teenyfin.teenymoney.domain.notification.service.NotificationService;
+import com.teenyfin.teenymoney.domain.notification.vo.NotificationReferenceType;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -287,7 +288,7 @@ class CategoryPolicyServiceTest {
 
         // then
         verify(notificationService).createNotification(
-                eq(childId), eq("카테고리 제한 설정이 바뀌었어요"), eq("편의점"), eq(null), eq(null), eq(true));
+                eq(childId), eq("카테고리 제한 설정이 바뀌었어요"), eq("편의점"), eq(NotificationReferenceType.CATEGORY_POLICY), eq(null), eq(true));
     }
 
     @Test
@@ -314,6 +315,6 @@ class CategoryPolicyServiceTest {
 
         // then: 요청 리스트 순서상 첫 항목(편의점) 기준으로 "외 1건"이 붙는다
         verify(notificationService).createNotification(
-                eq(childId), eq("카테고리 제한 설정이 바뀌었어요"), eq("편의점 외 1건"), eq(null), eq(null), eq(true));
+                eq(childId), eq("카테고리 제한 설정이 바뀌었어요"), eq("편의점 외 1건"), eq(NotificationReferenceType.CATEGORY_POLICY), eq(null), eq(true));
     }
 }
