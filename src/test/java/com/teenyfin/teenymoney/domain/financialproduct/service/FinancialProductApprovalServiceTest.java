@@ -234,7 +234,7 @@ class FinancialProductApprovalServiceTest {
         service.approve(PARENT, "loan", 7L);
 
         verify(notificationService).createNotification(
-                2L, "대출 신청이 승인됐어요", "스타터 원리금균등 대출 · 100000원",
+                2L, "대출 신청이 승인됐어요", "스타터 원리금균등 대출 · 100,000원",
                 NotificationReferenceType.LOAN_ENROLLMENT, 7L, true);
     }
 
