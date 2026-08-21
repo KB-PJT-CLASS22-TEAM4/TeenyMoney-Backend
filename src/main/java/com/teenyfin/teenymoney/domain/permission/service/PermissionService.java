@@ -95,6 +95,7 @@ public class PermissionService {
                 .map(x -> PermissionCategoryStatusResponseDTO.builder()
                         .categoryId(x.getCategoryId())
                         .categoryName(x.getCategoryName())
+                        .policy(x.getPolicy())
                         .status(statusByCategoryId.getOrDefault(x.getCategoryId(), PermissionStatus.AVAILABLE))
                         .build())
                 .toList();
