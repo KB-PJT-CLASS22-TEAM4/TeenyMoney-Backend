@@ -25,16 +25,20 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ThreadPoolExecutor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -45,7 +49,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 
 /**
  * HTTP 경계 검증. 서비스는 목이다.
@@ -75,12 +81,18 @@ class MoneyReportControllerTest {
         reportAnalysisService = mock(ReportAnalysisService.class);
         ObjectMapper objectMapper = Jackson2ObjectMapperBuilder.json().build();
 
+        // analyzeReport()가 이제 difyTaskExecutor(전용 스레드풀)로 작업을 넘기는 방식이라
+        // 컨트롤러 생성자가 이 빈을 요구한다. 실제 앱과 똑같이 initialize()까지 호출해야
+        // execute()가 동작한다 - 안 그러면 "executor not running" 예외가 난다.
+        ThreadPoolTaskExecutor testDifyTaskExecutor = new ThreadPoolTaskExecutor();
+        testDifyTaskExecutor.initialize();
+
         // standaloneSetup은 @PreAuthorize를 실제로 강제하지 않는다(스프링 시큐리티 필터체인이
         // 없는 순수 MockMvc라서) - 그래서 이 테스트 파일에서 /reports/money/analysis의
         // "자녀만 호출 가능" 여부는 검증하지 않는다. 여기서는 컨트롤러가 서비스 호출과
         // 응답 매핑을 제대로 하는지만 본다.
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new MoneyReportController(moneyReportService, reportAnalysisService))
+                .standaloneSetup(new MoneyReportController(moneyReportService, reportAnalysisService, testDifyTaskExecutor))
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .setControllerAdvice(new GlobalExceptionAdvice())
                 .setMessageConverters(new MappingJackson2HttpMessageConverter(objectMapper))
@@ -117,11 +129,72 @@ class MoneyReportControllerTest {
         when(reportAnalysisService.analyze(CHILD))
                 .thenReturn(new ReportAnalysisResponseDTO("이번 달엔 용돈을 받은 날 크게 쓰는 습관이 보였어요."));
 
-        String body = body("/reports/money/analysis");
+        // analyzeReport()가 DeferredResult를 리턴하므로, 다른 테스트들이 쓰는 동기 방식
+        // body()/status() 헬퍼를 그대로 쓰면 difyTaskExecutor 스레드가 결과를 채우기 전에
+        // 응답을 읽어버릴 수 있다. 1단계: 요청을 보내면 비동기로 전환되는지만 먼저 확인.
+        MvcResult mvcResult = mockMvc.perform(get("/reports/money/analysis"))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        // 2단계: difyTaskExecutor 스레드가 setResult()를 호출해 결과를 채운 뒤,
+        // 그 결과를 실제 HTTP 응답으로 디스패치한다.
+        String body = mockMvc.perform(asyncDispatch(mvcResult))
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
 
         assertTrue(body.contains("\"success\":true"), body);
         assertTrue(body.contains("이번 달엔 용돈을 받은 날 크게 쓰는 습관이 보였어요."), body);
         verify(reportAnalysisService).analyze(CHILD);
+    }
+
+    @Test
+    @DisplayName("전용 풀이 꽉 차면(AbortPolicy) 503 MONEY_REPORT_ANALYSIS_SERVER_BUSY로 즉시 거절한다")
+    void analyzeReturns503WhenPoolIsSaturated() throws Exception {
+        authenticate(CHILD);
+
+        // setUp()의 기본 크기 풀(core=1/max=Integer.MAX_VALUE/queue=Integer.MAX_VALUE)로는
+        // 거절이 사실상 안 일어나므로, 이 테스트만 core=1/max=1/queue=0짜리 전용 풀+컨트롤러를
+        // 따로 만든다 (ChatControllerTest.sendMessageReturns503WhenPoolIsSaturated와 같은 이유).
+        ThreadPoolTaskExecutor tinyExecutor = new ThreadPoolTaskExecutor();
+        tinyExecutor.setCorePoolSize(1);
+        tinyExecutor.setMaxPoolSize(1);
+        tinyExecutor.setQueueCapacity(0);
+        tinyExecutor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
+        tinyExecutor.initialize();
+
+        MockMvc tinyMockMvc = MockMvcBuilders
+                .standaloneSetup(new MoneyReportController(moneyReportService, reportAnalysisService, tinyExecutor))
+                .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
+                .setControllerAdvice(new GlobalExceptionAdvice())
+                .setMessageConverters(new MappingJackson2HttpMessageConverter(Jackson2ObjectMapperBuilder.json().build()))
+                .build();
+
+        // 유일한 스레드를 "영원히 안 끝나는 작업"으로 묶어둔다 - 직접 풀어주기 전까지
+        // reportAnalysisService.analyze()가 리턴을 안 해서, 그 스레드가 계속 점유된 상태로 남는다.
+        CountDownLatch blockFirstCall = new CountDownLatch(1);
+        when(reportAnalysisService.analyze(CHILD)).thenAnswer(invocation -> {
+            blockFirstCall.await();
+            return new ReportAnalysisResponseDTO("첫 번째 응답");
+        });
+
+        try {
+            // 첫 번째 요청: 유일한 스레드를 점유하고 블로킹된 채로 남는다.
+            tinyMockMvc.perform(get("/reports/money/analysis"))
+                    .andExpect(request().asyncStarted());
+
+            // 두 번째 요청: 스레드도 큐도 다 차 있어서 TaskRejectedException이 즉시 발생 ->
+            // 컨트롤러가 MONEY_REPORT_ANALYSIS_SERVER_BUSY로 변환. 비동기로 안 넘어가고
+            // 테스트 스레드 위에서 바로 완결된다.
+            var response = tinyMockMvc.perform(get("/reports/money/analysis"))
+                    .andReturn().getResponse();
+            String body = response.getContentAsString(StandardCharsets.UTF_8);
+
+            assertEquals(503, response.getStatus(), body);
+            assertTrue(body.contains("\"code\":\"MONEY_REPORT_ANALYSIS_SERVER_BUSY\""), body);
+        } finally {
+            // 첫 번째 작업을 풀어줘서 스레드가 테스트 종료 후에도 계속 블로킹된 채로 남지 않게 한다.
+            blockFirstCall.countDown();
+            tinyExecutor.shutdown();
+        }
     }
 
     // ---- 정상 -----------------------------------------------------------------

@@ -1,0 +1,159 @@
+diff --git a/src/main/java/com/teenyfin/teenymoney/config/DifyConfig.java b/src/main/java/com/teenyfin/teenymoney/config/DifyConfig.java
+new file mode 100644
+index 0000000..9e04c15
+--- /dev/null
++++ b/src/main/java/com/teenyfin/teenymoney/config/DifyConfig.java
+@@ -0,0 +1,55 @@
++package com.teenyfin.teenymoney.config;
++
++import org.springframework.context.annotation.Bean;
++import org.springframework.context.annotation.Configuration;
++import org.springframework.http.client.SimpleClientHttpRequestFactory;
++import org.springframework.web.client.RestTemplate;
++import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
++import java.util.concurrent.ThreadPoolExecutor;
++
++// Dify(챗봇 + 리포트 분석) 호출 전용 인프라 설정.
++// (readTimeout 120초로), 기존 restTemplate와 같은 설정을 공유한다"는 사실 자체가 문제였다
++// 하나만(예: 스레드풀 작업 때 Dify 쪽 타임아웃) 값을 바꿔야 할 때, 물리적으로 분리된 빈이
++// 아니면 토스 쪽까지 같이 영향받는다. 지금 이 파일을 만드는 건 "값을 다르게 하기 위해서"가
++// 아니라 "둘이 서로 영향 안 주게 끊어놓기 위해서"
++@Configuration
++public class DifyConfig {
++
++    // 연결 자체가 안 되는 상황(Dify 서버 다운, 네트워크 문제)은 응답을 기다릴 이유가 없어
++    // 짧게 잡는다 - 이건 사용자 규모와 무관하게 항상 맞는 값이라 8초로 고정.
++    private static final int DIFY_CONNECT_TIMEOUT_MILLISECONDS = 8_000;
++
++    // 연결은 됐는데 응답이 안 오는 경우 - 120초를 유지한다.
++    private static final int DIFY_READ_TIMEOUT_MILLISECONDS = 120_000;
++
++
++    @Bean
++    public RestTemplate difyRestTemplate() {
++        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
++        requestFactory.setConnectTimeout(DIFY_CONNECT_TIMEOUT_MILLISECONDS);
++        requestFactory.setReadTimeout(DIFY_READ_TIMEOUT_MILLISECONDS);
++        return new RestTemplate(requestFactory);
++    }
++
++    // Dify 호출(챗봇 + 리포트 분석 둘 다)을 전담하는 전용 스레드풀.
++    // 왜 필요한지: 컨트롤러가 이 요청을 처리하는 동안 Tomcat 워커 스레드가 Dify 응답을
++    // 기다리며 블로킹되면, 그 스레드는 그동안 충전/로그인 등 완전히 무관한 다른 요청도
++    // 못 받게 된다. 이 풀로 "Dify를 기다리는 역할"만 따로 떼어내서, Tomcat 스레드는
++    // Dify 응답을 기다리지 않고 바로 반납되게 만든다 (ChatController/MoneyReportController가
++    // 이 빈을 받아서 DeferredResult와 함께 씀).
++    @Bean
++    public ThreadPoolTaskExecutor difyTaskExecutor() {
++        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
++        executor.setCorePoolSize(2);    // 평소 유지하는 스레드 수
++        executor.setMaxPoolSize(4);     // 몰릴 때 최대로 늘어나는 스레드 수
++        executor.setQueueCapacity(8);   // core가 다 찼을 때 추가로 대기시킬 수 있는 요청 수
++        executor.setThreadNamePrefix("dify-");
++        // 큐까지 꽉 찼을 때 호출한 스레드(Tomcat 워커)가 직접 떠맡는 CallerRunsPolicy는
++        // 절대 쓰면 안 된다 - 그러면 우리가 없애려던 "Tomcat 스레드가 Dify를 기다리며
++        // 블로킹"이 그대로 재현된다. AbortPolicy는 큐까지 꽉 차면 그냥 예외를 던져서
++        // "지금 혼잡하니 나중에" 응답을 즉시 준다.
++        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
++        executor.initialize();  // 이 호출이 있어야 내부 ThreadPoolExecutor가 실제로 만들어짐
++        return executor;
++    }
++}
+diff --git a/src/main/java/com/teenyfin/teenymoney/config/WebConfig.java b/src/main/java/com/teenyfin/teenymoney/config/WebConfig.java
+index 8db5ed6..d144919 100644
+--- a/src/main/java/com/teenyfin/teenymoney/config/WebConfig.java
++++ b/src/main/java/com/teenyfin/teenymoney/config/WebConfig.java
+@@ -17,7 +17,8 @@ public class WebConfig extends AbstractAnnotationConfigDispatcherServletInitiali
+                 SecurityConfig.class,
+                 S3Config.class,
+                 RestTemplateConfig.class,
+-                FirebaseConfig.class
++                FirebaseConfig.class,
++                DifyConfig.class
+         };
+     }
+ 
+diff --git a/src/main/java/com/teenyfin/teenymoney/domain/chatbot/dify/DifyClient.java b/src/main/java/com/teenyfin/teenymoney/domain/chatbot/dify/DifyClient.java
+index be0acc3..a663adc 100644
+--- a/src/main/java/com/teenyfin/teenymoney/domain/chatbot/dify/DifyClient.java
++++ b/src/main/java/com/teenyfin/teenymoney/domain/chatbot/dify/DifyClient.java
+@@ -7,6 +7,7 @@ import com.teenyfin.teenymoney.domain.chatbot.exception.ChatbotErrorCode;
+ import com.teenyfin.teenymoney.global.exception.BusinessException;
+ import lombok.extern.slf4j.Slf4j;
+ import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.beans.factory.annotation.Qualifier;
+ import org.springframework.beans.factory.annotation.Value;
+ import org.springframework.http.HttpEntity;
+ import org.springframework.http.HttpHeaders;
+@@ -23,6 +24,7 @@ import org.springframework.web.client.RestTemplate;
+ @Component      // 스프링 빈으로 등록 - @Autowired 없이도 생성자 주입 가능
+ public class DifyClient {
+ 
++
+     private final RestTemplate restTemplate;
+     private final String apiKey;
+     private final String baseUrl;
+@@ -30,7 +32,7 @@ public class DifyClient {
+     // RestTemplate: RestTemplateConfig가 등록해둔 공용 빈을 그대로 주입받음 (토스/finlife와 동일).
+     // apiKey/baseUrl: application.properties의 dify.api-key / dify.base-url 값을 @Value로 주입받음.
+     @Autowired
+-    public DifyClient(RestTemplate restTemplate, @Value("${dify.api-key}") String apiKey, @Value("${dify.base-url:https://api.dify.ai/v1}") String baseUrl) {
++    public DifyClient(@Qualifier("difyRestTemplate") RestTemplate restTemplate, @Value("${dify.api-key}") String apiKey, @Value("${dify.base-url:https://api.dify.ai/v1}") String baseUrl) {
+         this.restTemplate = restTemplate;
+         this.apiKey = apiKey;
+         this.baseUrl = baseUrl;
+diff --git a/src/main/java/com/teenyfin/teenymoney/domain/chatbot/exception/ChatbotErrorCode.java b/src/main/java/com/teenyfin/teenymoney/domain/chatbot/exception/ChatbotErrorCode.java
+index 47bb7be..208610d 100644
+--- a/src/main/java/com/teenyfin/teenymoney/domain/chatbot/exception/ChatbotErrorCode.java
++++ b/src/main/java/com/teenyfin/teenymoney/domain/chatbot/exception/ChatbotErrorCode.java
+@@ -19,7 +19,11 @@ public enum ChatbotErrorCode implements ErrorCode {    // Dify가 4xx/5xx로 응
+     // 403을 씀 - 인증(로그인) 문제가 아니라 "너는 이 자원에 접근 권한이 없다"는 뜻이라 401이 아니라 403이 맞음.
+     CHATBOT_CONVERSATION_FORBIDDEN(
+             HttpStatus.FORBIDDEN, "본인 소유의 대화가 아닙니다."),
+-    CHATBOT_API_KEY_MISSING(HttpStatus.SERVICE_UNAVAILABLE, "챗봇 API 설정이 필요합니다.");
++    CHATBOT_API_KEY_MISSING(HttpStatus.SERVICE_UNAVAILABLE, "챗봇 API 설정이 필요합니다."),
++    // 우리 서버의 Dify 전용 스레드풀이 꽉 차서 거절한 경우 - Dify 자체 실패(CHATBOT_REQUEST_FAILED,
++    // 502)와는 원인이 다르다. 이걸 구분해둬야 나중에 장애 로그에서 "Dify가 죽은 건지 우리 풀이
++    // 혼잡한 건지"를 바로 알 수 있다.
++    CHATBOT_SERVER_BUSY(HttpStatus.SERVICE_UNAVAILABLE, "지금 요청이 많아 잠시 후 다시 시도해주세요.");
+ 
+     private final HttpStatus status;
+     private final String message;
+diff --git a/src/main/java/com/teenyfin/teenymoney/domain/report/dify/ReportAnalysisDifyClient.java b/src/main/java/com/teenyfin/teenymoney/domain/report/dify/ReportAnalysisDifyClient.java
+index 62adffb..075ffcb 100644
+--- a/src/main/java/com/teenyfin/teenymoney/domain/report/dify/ReportAnalysisDifyClient.java
++++ b/src/main/java/com/teenyfin/teenymoney/domain/report/dify/ReportAnalysisDifyClient.java
+@@ -5,6 +5,7 @@ import com.teenyfin.teenymoney.domain.report.dify.dto.DifyReportAnalysisResponse
+ import com.teenyfin.teenymoney.domain.report.exception.MoneyReportErrorCode;
+ import com.teenyfin.teenymoney.global.exception.BusinessException;
+ import lombok.extern.slf4j.Slf4j;
++import org.springframework.beans.factory.annotation.Qualifier;
+ import org.springframework.beans.factory.annotation.Value;
+ import org.springframework.http.HttpEntity;
+ import org.springframework.http.HttpHeaders;
+@@ -27,7 +28,7 @@ public class ReportAnalysisDifyClient {
+     private final String baseUrl;
+ 
+ 
+-    public ReportAnalysisDifyClient(RestTemplate restTemplate, @Value("${dify.report-api-key}")String apiKey, @Value("${dify.base-url:https://api.dify.ai/v1}") String baseUrl) {
++    public ReportAnalysisDifyClient(@Qualifier("difyRestTemplate") RestTemplate restTemplate, @Value("${dify.report-api-key}")String apiKey, @Value("${dify.base-url:https://api.dify.ai/v1}") String baseUrl) {
+         this.restTemplate = restTemplate;
+         this.apiKey = apiKey;
+         this.baseUrl = baseUrl;
+diff --git a/src/main/java/com/teenyfin/teenymoney/domain/report/exception/MoneyReportErrorCode.java b/src/main/java/com/teenyfin/teenymoney/domain/report/exception/MoneyReportErrorCode.java
+index a0bde99..320a69b 100644
+--- a/src/main/java/com/teenyfin/teenymoney/domain/report/exception/MoneyReportErrorCode.java
++++ b/src/main/java/com/teenyfin/teenymoney/domain/report/exception/MoneyReportErrorCode.java
+@@ -32,7 +32,11 @@ public enum MoneyReportErrorCode implements ErrorCode {
+             HttpStatus.BAD_GATEWAY, "리포트 분석 응답이 올바르지 않습니다."),
+ 
+     MONEY_REPORT_ANALYSIS_API_KEY_MISSING(
+-            HttpStatus.SERVICE_UNAVAILABLE, "리포트 분석 AI API 설정이 필요합니다.");
++            HttpStatus.SERVICE_UNAVAILABLE, "리포트 분석 AI API 설정이 필요합니다."),
++    // ChatbotErrorCode.CHATBOT_SERVER_BUSY와 같은 역할 - 우리 Dify 전용 풀이 꽉 차서 거절한 경우.
++
++    MONEY_REPORT_ANALYSIS_SERVER_BUSY(
++            HttpStatus.SERVICE_UNAVAILABLE, "지금 요청이 많아 잠시 후 다시 시도해주세요.");
+ 
+ 
+     private final HttpStatus status;
