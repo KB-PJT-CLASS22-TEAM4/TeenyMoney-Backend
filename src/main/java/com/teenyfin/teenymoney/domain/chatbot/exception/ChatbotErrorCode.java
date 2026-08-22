@@ -19,7 +19,11 @@ public enum ChatbotErrorCode implements ErrorCode {    // Dify가 4xx/5xx로 응
     // 403을 씀 - 인증(로그인) 문제가 아니라 "너는 이 자원에 접근 권한이 없다"는 뜻이라 401이 아니라 403이 맞음.
     CHATBOT_CONVERSATION_FORBIDDEN(
             HttpStatus.FORBIDDEN, "본인 소유의 대화가 아닙니다."),
-    CHATBOT_API_KEY_MISSING(HttpStatus.SERVICE_UNAVAILABLE, "챗봇 API 설정이 필요합니다.");
+    CHATBOT_API_KEY_MISSING(HttpStatus.SERVICE_UNAVAILABLE, "챗봇 API 설정이 필요합니다."),
+    // 우리 서버의 Dify 전용 스레드풀이 꽉 차서 거절한 경우 - Dify 자체 실패(CHATBOT_REQUEST_FAILED,
+    // 502)와는 원인이 다르다. 이걸 구분해둬야 나중에 장애 로그에서 "Dify가 죽은 건지 우리 풀이
+    // 혼잡한 건지"를 바로 알 수 있다.
+    CHATBOT_SERVER_BUSY(HttpStatus.SERVICE_UNAVAILABLE, "지금 요청이 많아 잠시 후 다시 시도해주세요.");
 
     private final HttpStatus status;
     private final String message;
