@@ -7,6 +7,7 @@ import com.teenyfin.teenymoney.domain.chatbot.exception.ChatbotErrorCode;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -23,6 +24,7 @@ import org.springframework.web.client.RestTemplate;
 @Component      // 스프링 빈으로 등록 - @Autowired 없이도 생성자 주입 가능
 public class DifyClient {
 
+
     private final RestTemplate restTemplate;
     private final String apiKey;
     private final String baseUrl;
@@ -30,7 +32,7 @@ public class DifyClient {
     // RestTemplate: RestTemplateConfig가 등록해둔 공용 빈을 그대로 주입받음 (토스/finlife와 동일).
     // apiKey/baseUrl: application.properties의 dify.api-key / dify.base-url 값을 @Value로 주입받음.
     @Autowired
-    public DifyClient(RestTemplate restTemplate, @Value("${dify.api-key}") String apiKey, @Value("${dify.base-url:https://api.dify.ai/v1}") String baseUrl) {
+    public DifyClient(@Qualifier("difyRestTemplate") RestTemplate restTemplate, @Value("${dify.api-key}") String apiKey, @Value("${dify.base-url:https://api.dify.ai/v1}") String baseUrl) {
         this.restTemplate = restTemplate;
         this.apiKey = apiKey;
         this.baseUrl = baseUrl;
