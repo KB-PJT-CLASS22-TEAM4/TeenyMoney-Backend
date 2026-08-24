@@ -27,6 +27,8 @@ public class DepositProductVO {
     private BigDecimal earlyTerminationRate;
     private Long minAmount;
     private Long maxAmount;
+    private Long requiredGradeId;
+    private String requiredGradeName;
     private String description;
     private Boolean active;
 }

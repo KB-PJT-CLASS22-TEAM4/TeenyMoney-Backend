@@ -53,6 +53,7 @@ class CustomFinancialProductServiceTest {
         FinancialProductBenefitVO benefit = new FinancialProductBenefitVO();
         benefit.setChildId(2L);
         when(mapper.selectBenefitByChildId(2L)).thenReturn(benefit);
+        when(mapper.countGradeById(2L)).thenReturn(1);
     }
 
     @Test
@@ -68,7 +69,7 @@ class CustomFinancialProductServiceTest {
                 PARENT, 2L, new CustomDepositProductRequestDTO(
                         "목표 예금", "목표 달성 예금", "SIMPLE",
                         allTermRates(), new BigDecimal("1.00"),
-                        10_000L, 500_000L));
+                        10_000L, 500_000L, 2L));
 
         ArgumentCaptor<DepositProductVO> captor =
                 ArgumentCaptor.forClass(DepositProductVO.class);
@@ -83,6 +84,7 @@ class CustomFinancialProductServiceTest {
         assertEquals(new BigDecimal("3.00"), product.getRate6m());
         assertEquals(new BigDecimal("4.00"), product.getRate12m());
         assertEquals(new BigDecimal("1.00"), product.getEarlyTerminationRate());
+        assertEquals(2L, product.getRequiredGradeId());
         assertEquals(15L, response.getProductId());
         assertEquals("PARENT", response.getProductSource());
     }
@@ -97,7 +99,7 @@ class CustomFinancialProductServiceTest {
         assertThrows(BusinessException.class, () -> service.createSaving(
                 PARENT, 2L, new CustomSavingProductRequestDTO(
                         "목표 적금", null, "FIXED", "SIMPLE", rates,
-                        new BigDecimal("1.00"), 10_000L, 500_000L)));
+                        new BigDecimal("1.00"), 10_000L, 500_000L, 2L)));
 
         verify(mapper, never()).insertCustomSavingProduct(any());
     }
@@ -110,7 +112,7 @@ class CustomFinancialProductServiceTest {
                         new CustomSavingProductRequestDTO(
                                 "목표 적금", null, "FIXED", "SIMPLE",
                                 allTermRates(), new BigDecimal("2.10"),
-                                10_000L, 500_000L)));
+                                10_000L, 500_000L, 2L)));
 
         assertEquals(FinancialProductErrorCode
                         .FINANCIAL_PRODUCT_CUSTOM_INVALID_CONDITION,
@@ -121,7 +123,6 @@ class CustomFinancialProductServiceTest {
     @Test
     @DisplayName("부모는 자녀 전용 대출의 가입기간을 지정할 수 있다")
     void createParentLoanWithFixedTerm() {
-        when(mapper.countGradeById(2L)).thenReturn(1);
         doAnswer(invocation -> {
             LoanProductVO product = invocation.getArgument(0);
             product.setId(21L);
@@ -142,6 +143,23 @@ class CustomFinancialProductServiceTest {
         assertEquals(false, captor.getValue().getAvailable6m());
         assertEquals(true, captor.getValue().getAvailable12m());
         assertEquals(21L, response.getProductId());
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 요구등급이면 부모 예금 생성을 차단한다")
+    void createParentDepositRejectsUnknownRequiredGrade() {
+        when(mapper.countGradeById(99L)).thenReturn(0);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.createDeposit(PARENT, 2L,
+                        new CustomDepositProductRequestDTO(
+                                "목표 예금", null, "SIMPLE", allTermRates(),
+                                new BigDecimal("1.00"), 10_000L, 500_000L, 99L)));
+
+        assertEquals(FinancialProductErrorCode
+                        .FINANCIAL_PRODUCT_CUSTOM_INVALID_CONDITION,
+                exception.getErrorCode());
+        verify(mapper, never()).insertCustomDepositProduct(any());
     }
 
     @Test

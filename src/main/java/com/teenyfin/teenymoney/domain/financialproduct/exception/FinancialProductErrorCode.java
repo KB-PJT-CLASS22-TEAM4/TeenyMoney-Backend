@@ -30,6 +30,10 @@ public enum FinancialProductErrorCode implements ErrorCode {
             HttpStatus.BAD_REQUEST, "상품의 가입 가능 금액 범위를 벗어났습니다."),
     FINANCIAL_PRODUCT_INSUFFICIENT_GRADE(
             HttpStatus.BAD_REQUEST, "월간 적용 등급이 대출상품의 요구등급보다 낮습니다."),
+    FINANCIAL_PRODUCT_DEPOSIT_INSUFFICIENT_GRADE(
+            HttpStatus.BAD_REQUEST, "월간 적용 등급이 예금상품의 요구등급보다 낮습니다."),
+    FINANCIAL_PRODUCT_SAVING_INSUFFICIENT_GRADE(
+            HttpStatus.BAD_REQUEST, "월간 적용 등급이 적금상품의 요구등급보다 낮습니다."),
     FINANCIAL_PRODUCT_LOAN_GRADE_RESTRICTED(
             HttpStatus.BAD_REQUEST, "현재 월간 적용 등급으로는 대출에 가입할 수 없습니다."),
     FINANCIAL_PRODUCT_PARENT_NOT_CONNECTED(

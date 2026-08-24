@@ -2,6 +2,8 @@ package com.teenyfin.teenymoney.domain.financialproduct.mapper;
 
 import com.teenyfin.teenymoney.config.LazyBeanInitializer;
 import com.teenyfin.teenymoney.config.RootConfig;
+import com.teenyfin.teenymoney.domain.financialproduct.vo.DepositProductVO;
+import com.teenyfin.teenymoney.domain.financialproduct.vo.SavingProductVO;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -140,5 +142,34 @@ class FinancialProductMapperContextTest {
         assertTrue(sql.contains("product.product_source IN ('TEENY', 'FINLIFE')"));
         assertTrue(sql.contains("product.target_child_id = ?"));
         assertTrue(sql.contains("product.created_by_parent_id = ?"));
+    }
+
+    @Test
+    @DisplayName("예적금 상품 조회와 생성 SQL에 요구등급을 포함한다")
+    void depositAndSavingQueriesIncludeRequiredGrade() {
+        String namespace = FinancialProductMapper.class.getName();
+        String depositSelect = sqlSessionFactory.getConfiguration()
+                .getMappedStatement(namespace + ".selectVisibleDepositProducts")
+                .getBoundSql(Map.of("memberId", 2L)).getSql()
+                .replaceAll("\\s+", " ").trim();
+        String savingSelect = sqlSessionFactory.getConfiguration()
+                .getMappedStatement(namespace + ".selectVisibleSavingProducts")
+                .getBoundSql(Map.of("memberId", 2L)).getSql()
+                .replaceAll("\\s+", " ").trim();
+        String depositInsert = sqlSessionFactory.getConfiguration()
+                .getMappedStatement(namespace + ".insertCustomDepositProduct")
+                .getBoundSql(new DepositProductVO()).getSql()
+                .replaceAll("\\s+", " ").trim();
+        String savingInsert = sqlSessionFactory.getConfiguration()
+                .getMappedStatement(namespace + ".insertCustomSavingProduct")
+                .getBoundSql(new SavingProductVO()).getSql()
+                .replaceAll("\\s+", " ").trim();
+
+        assertTrue(depositSelect.contains(
+                "product.required_grade_id = required_grade.grade_id"));
+        assertTrue(savingSelect.contains(
+                "product.required_grade_id = required_grade.grade_id"));
+        assertTrue(depositInsert.contains("required_grade_id"));
+        assertTrue(savingInsert.contains("required_grade_id"));
     }
 }

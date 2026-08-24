@@ -33,4 +33,7 @@ public class CustomDepositProductRequestDTO {
     private BigDecimal earlyTerminationRate;
     @NotNull @Positive private Long minimumAmount;
     @NotNull @Positive private Long maximumAmount;
+    @NotNull @Positive
+    @ApiModelProperty(value = "가입에 필요한 최소 월간 적용 등급 ID", example = "2")
+    private Long requiredGradeId;
 }

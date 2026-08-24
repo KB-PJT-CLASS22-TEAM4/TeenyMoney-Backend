@@ -23,6 +23,8 @@
         <result property="earlyTerminationRate" column="early_termination_rate"/>
         <result property="minAmount" column="min_amount"/>
         <result property="maxAmount" column="max_amount"/>
+        <result property="requiredGradeId" column="required_grade_id"/>
+        <result property="requiredGradeName" column="required_grade_name"/>
         <result property="description" column="description"/>
         <result property="active" column="is_active"/>
     </resultMap>
@@ -46,6 +48,8 @@
         <result property="earlyTerminationRate" column="early_termination_rate"/>
         <result property="minMonthAmount" column="min_month_amount"/>
         <result property="maxMonthAmount" column="max_month_amount"/>
+        <result property="requiredGradeId" column="required_grade_id"/>
+        <result property="requiredGradeName" column="required_grade_name"/>
         <result property="description" column="description"/>
         <result property="active" column="is_active"/>
     </resultMap>
@@ -178,16 +182,20 @@
     </sql>
 
     <select id="selectVisibleDepositProducts" resultMap="depositProductResultMap">
-        SELECT product.*
+        SELECT product.*, required_grade.grade_name AS required_grade_name
         FROM T_DPT_PROD_M product
+        LEFT JOIN T_TNY_GRADE_A required_grade
+               ON product.required_grade_id = required_grade.grade_id
         WHERE product.is_active = TRUE
           AND (<include refid="visibleProductCondition"/>)
         ORDER BY product.id
     </select>
 
     <select id="selectVisibleSavingProducts" resultMap="savingProductResultMap">
-        SELECT product.*
+        SELECT product.*, required_grade.grade_name AS required_grade_name
         FROM T_SVG_PROD_M product
+        LEFT JOIN T_TNY_GRADE_A required_grade
+               ON product.required_grade_id = required_grade.grade_id
         WHERE product.is_active = TRUE
           AND (<include refid="visibleProductCondition"/>)
         ORDER BY product.id
@@ -226,13 +234,19 @@
     </select>
 
     <select id="selectVisibleDepositProductById" resultMap="depositProductResultMap">
-        SELECT product.* FROM T_DPT_PROD_M product
+        SELECT product.*, required_grade.grade_name AS required_grade_name
+        FROM T_DPT_PROD_M product
+        LEFT JOIN T_TNY_GRADE_A required_grade
+               ON product.required_grade_id = required_grade.grade_id
         WHERE product.id = #{id} AND product.is_active = TRUE
           AND (<include refid="visibleProductCondition"/>)
     </select>
 
     <select id="selectVisibleSavingProductById" resultMap="savingProductResultMap">
-        SELECT product.* FROM T_SVG_PROD_M product
+        SELECT product.*, required_grade.grade_name AS required_grade_name
+        FROM T_SVG_PROD_M product
+        LEFT JOIN T_TNY_GRADE_A required_grade
+               ON product.required_grade_id = required_grade.grade_id
         WHERE product.id = #{id} AND product.is_active = TRUE
           AND (<include refid="visibleProductCondition"/>)
     </select>
@@ -252,11 +266,13 @@
         INSERT INTO T_DPT_PROD_M
             (product_source, created_by_parent_id, target_child_id, name,
              interest_calculation_type, rate_1m, rate_3m, rate_6m, rate_12m,
-             early_termination_rate, min_amount, max_amount, description, is_active)
+             early_termination_rate, min_amount, max_amount,
+             required_grade_id, description, is_active)
         VALUES
             ('PARENT', #{createdByParentId}, #{targetChildId}, #{name},
              #{interestCalculationType}, #{rate1m}, #{rate3m}, #{rate6m}, #{rate12m},
-             #{earlyTerminationRate}, #{minAmount}, #{maxAmount}, #{description}, TRUE)
+             #{earlyTerminationRate}, #{minAmount}, #{maxAmount},
+             #{requiredGradeId}, #{description}, TRUE)
     </insert>
 
     <!-- 부모 전용 적금의 기간별 금리를 각 금리 컬럼에 저장한다. -->
@@ -266,13 +282,13 @@
              savings_type, interest_calculation_type,
              rate_1m, rate_3m, rate_6m, rate_12m,
              early_termination_rate, min_month_amount, max_month_amount,
-             description, is_active)
+             required_grade_id, description, is_active)
         VALUES
             ('PARENT', #{createdByParentId}, #{targetChildId}, #{name},
              #{savingsType}, #{interestCalculationType},
              #{rate1m}, #{rate3m}, #{rate6m}, #{rate12m},
              #{earlyTerminationRate}, #{minMonthAmount}, #{maxMonthAmount},
-             #{description}, TRUE)
+             #{requiredGradeId}, #{description}, TRUE)
     </insert>
 
     <!-- 부모 전용 대출은 기존 단일 기본금리 구조를 사용한다. -->
@@ -296,20 +312,26 @@
 
     <!-- 부모가 이 자녀에게 만든 커스텀 상품만 조회한다. 잠그지 않는 단순 목록 조회다. -->
     <select id="selectCustomDepositProductsByParentAndChild" resultMap="depositProductResultMap">
-        SELECT * FROM T_DPT_PROD_M
-        WHERE created_by_parent_id = #{parentId}
-          AND target_child_id = #{childId}
-          AND product_source = 'PARENT'
-          AND is_active = TRUE
-        ORDER BY id DESC
+        SELECT product.*, required_grade.grade_name AS required_grade_name
+        FROM T_DPT_PROD_M product
+        LEFT JOIN T_TNY_GRADE_A required_grade
+               ON product.required_grade_id = required_grade.grade_id
+        WHERE product.created_by_parent_id = #{parentId}
+          AND product.target_child_id = #{childId}
+          AND product.product_source = 'PARENT'
+          AND product.is_active = TRUE
+        ORDER BY product.id DESC
     </select>
     <select id="selectCustomSavingProductsByParentAndChild" resultMap="savingProductResultMap">
-        SELECT * FROM T_SVG_PROD_M
-        WHERE created_by_parent_id = #{parentId}
-          AND target_child_id = #{childId}
-          AND product_source = 'PARENT'
-          AND is_active = TRUE
-        ORDER BY id DESC
+        SELECT product.*, required_grade.grade_name AS required_grade_name
+        FROM T_SVG_PROD_M product
+        LEFT JOIN T_TNY_GRADE_A required_grade
+               ON product.required_grade_id = required_grade.grade_id
+        WHERE product.created_by_parent_id = #{parentId}
+          AND product.target_child_id = #{childId}
+          AND product.product_source = 'PARENT'
+          AND product.is_active = TRUE
+        ORDER BY product.id DESC
     </select>
     <select id="selectCustomLoanProductsByParentAndChild" resultMap="loanProductResultMap">
         SELECT * FROM T_LON_PROD_M

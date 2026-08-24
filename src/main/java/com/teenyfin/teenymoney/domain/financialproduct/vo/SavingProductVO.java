@@ -28,6 +28,8 @@ public class SavingProductVO {
     private BigDecimal earlyTerminationRate;
     private Long minMonthAmount;
     private Long maxMonthAmount;
+    private Long requiredGradeId;
+    private String requiredGradeName;
     private String description;
     private Boolean active;
 }
