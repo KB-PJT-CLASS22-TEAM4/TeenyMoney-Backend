@@ -22,7 +22,6 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.time.YearMonth;
 import java.util.List;
 import java.util.Set;
 
@@ -186,10 +185,18 @@ public class FinancialProductMaturityProcessor {
                     maturity.getChildId(), maturity.getEnrollmentId(), termMonths,
                     paymentRate, progress);
         } else {
-            int firstShortfallProgress = firstFreeShortfallProgress(maturity, contributions);
+            // 자유적금은 납입 금액이 아니라 납입한 회차가 70% 이상인지 판단한다.
+            int paidInstallmentCount = financialProductMapper
+                    .selectPaidSavingInstallmentCount(maturity.getEnrollmentId());
+            int installmentRate = percentage(
+                    paidInstallmentCount, termMonths);
+            Integer firstMissed = financialProductMapper
+                    .selectFirstMissedSavingInstallment(maturity.getEnrollmentId());
+            int firstShortfallProgress = firstMissed == null ? 0
+                    : Math.min(99, (firstMissed - 1) * 100 / termMonths);
             scoreRequest = scorePolicyService.freeSavingMaturity(
                     maturity.getChildId(), maturity.getEnrollmentId(), termMonths,
-                    paymentRate, firstShortfallProgress);
+                    installmentRate, firstShortfallProgress);
         }
         // 납입률 미달로 실제로는 중도해지 취급된 경우는 연속만기 스트릭 대상이 아니다.
         // 이 이벤트가 이력에 쌓이기 전에 먼저 "직전" 이벤트를 확인해야 자기 자신과 비교하지 않는다.
@@ -254,22 +261,6 @@ public class FinancialProductMaturityProcessor {
             default -> null;
         };
         return termMonths != null && termMonths >= CONSECUTIVE_MATURITY_MIN_TERM_MONTHS;
-    }
-
-    private int firstFreeShortfallProgress(
-            FinancialProductMaturityVO maturity,
-            List<SavingContributionVO> contributions) {
-        YearMonth firstMonth = YearMonth.from(maturity.getStartDate());
-        for (int index = 0; index < maturity.getTermMonths(); index++) {
-            YearMonth month = firstMonth.plusMonths(index);
-            long paid = contributions.stream()
-                    .filter(c -> YearMonth.from(c.getPaidAt()).equals(month))
-                    .mapToLong(SavingContributionVO::getPaidAmount).sum();
-            if (paid < maturity.getMonthlyAmount()) {
-                return Math.min(99, index * 100 / maturity.getTermMonths());
-            }
-        }
-        return 0;
     }
 
     private int percentage(long paid, long target) {

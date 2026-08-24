@@ -108,7 +108,7 @@ class SavingAutoPaymentProcessorTest {
     }
 
     @Test
-    @DisplayName("자유적금은 지정일까지 납입 이력이 없으면 자동 출금 없이 MISSED 이력을 생성한다")
+    @DisplayName("자유적금은 정액적금 자동납입 처리에서 제외한다")
     void freeSavingWithoutPaymentCreatesMissedHistory() {
         LocalDate paymentDate = LocalDate.of(2026, 8, 23);
         SavingPaymentDueVO payment = duePayment();
@@ -120,8 +120,8 @@ class SavingAutoPaymentProcessorTest {
         processor.process(7L, paymentDate);
 
         verifyNoInteractions(walletMapper, transferService);
-        verify(mapper).insertSavingPaymentHistory(
-                7L, null, 1, 30_000L, 0L, "MISSED");
+        verify(mapper, never()).insertSavingPaymentHistory(
+                any(), any(), any(), any(), any(), any());
     }
 
     private SavingPaymentDueVO duePayment() {

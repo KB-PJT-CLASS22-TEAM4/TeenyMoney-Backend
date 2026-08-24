@@ -165,9 +165,10 @@ public interface FinancialProductMapper {
     FreeSavingPaymentVO selectFreeSavingPaymentByIdempotencyKey(
             @Param("enrollmentId") Long enrollmentId,
             @Param("idempotencyKey") String idempotencyKey);
-    long selectFreeSavingPaidAmountInMonth(
+    long selectFreeSavingPaidAmountInCycle(
             @Param("enrollmentId") Long enrollmentId,
-            @Param("paymentDate") LocalDate paymentDate);
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to);
     int insertFreeSavingPayment(@Param("enrollmentId") Long enrollmentId,
                                 @Param("transferId") Long transferId,
                                 @Param("installmentNo") Integer installmentNo,
@@ -187,17 +188,15 @@ public interface FinancialProductMapper {
     int markDepositMatured(@Param("enrollmentId") Long enrollmentId);
     int markSavingMatured(@Param("enrollmentId") Long enrollmentId);
 
-    List<Long> selectFreeSavingMonthlyTargetIds(
-            @Param("monthStart") LocalDate monthStart,
-            @Param("monthEndExclusive") LocalDate monthEndExclusive);
+    List<Long> selectFreeSavingDueTargetIds(@Param("dueDate") LocalDate dueDate);
     FreeSavingMonthlyVO selectFreeSavingMonthlyForUpdate(
             @Param("enrollmentId") Long enrollmentId,
-            @Param("monthStart") LocalDate monthStart,
-            @Param("monthEndExclusive") LocalDate monthEndExclusive);
+            @Param("dueDate") LocalDate dueDate);
     long selectSavingPaidAmountBetween(
             @Param("enrollmentId") Long enrollmentId,
             @Param("from") LocalDateTime from,
             @Param("to") LocalDateTime to);
+    int selectPaidSavingInstallmentCount(@Param("enrollmentId") Long enrollmentId);
 
     FinancialProductTerminationVO selectDepositTermination(
             @Param("childId") Long childId, @Param("enrollmentId") Long enrollmentId);

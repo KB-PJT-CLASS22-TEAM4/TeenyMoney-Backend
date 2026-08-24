@@ -19,6 +19,7 @@ public class FreeSavingPaymentVO {
     private String status;
     private Long maxMonthAmount;
     private Integer paymentDay;
+    private Integer termMonths;
     private LocalDate startDate;
     private LocalDate maturityDate;
     private Long transferId;

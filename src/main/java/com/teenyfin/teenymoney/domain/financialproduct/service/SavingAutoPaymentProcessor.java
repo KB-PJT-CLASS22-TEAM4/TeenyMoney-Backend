@@ -54,11 +54,8 @@ public class SavingAutoPaymentProcessor {
             return;
         }
 
-        // 자유적금은 자동 출금하지 않고 지정일까지 납입 이력이 없을 때만 미납으로 확정한다.
+        // 자유적금 회차는 지정일 다음 날 01시 전용 배치에서 확정한다.
         if ("FREE".equals(payment.getSavingsType())) {
-            financialProductMapper.insertSavingPaymentHistory(
-                    enrollmentId, null, payment.getInstallmentNo(),
-                    payment.getMonthlyAmount(), 0L, "MISSED");
             return;
         }
 

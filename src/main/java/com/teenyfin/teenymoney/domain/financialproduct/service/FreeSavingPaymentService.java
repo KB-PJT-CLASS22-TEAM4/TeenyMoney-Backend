@@ -20,7 +20,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
 
 @Service
 public class FreeSavingPaymentService {
@@ -29,18 +28,21 @@ public class FreeSavingPaymentService {
     private final TransferService transferService;
     private final Clock clock;
     private final NotificationService notificationService;
+    private final FreeSavingCycleCalculator cycleCalculator;
 
     public FreeSavingPaymentService(
             FinancialProductMapper financialProductMapper,
             WalletMapper walletMapper,
             TransferService transferService,
             Clock clock,
-            NotificationService notificationService) {
+            NotificationService notificationService,
+            FreeSavingCycleCalculator cycleCalculator) {
         this.financialProductMapper = financialProductMapper;
         this.walletMapper = walletMapper;
         this.transferService = transferService;
         this.clock = clock;
         this.notificationService = notificationService;
+        this.cycleCalculator = cycleCalculator;
     }
 
     /**
@@ -76,7 +78,8 @@ public class FreeSavingPaymentService {
                     saving.getProductWalletId());
         }
 
-        validatePayable(saving, request.getAmount(), paymentDate);
+        FreeSavingCycle cycle = validatePayable(
+                saving, request.getAmount(), paymentDate);
         WalletVO childWallet = walletMapper.selectMemberWalletByMemberId(childId);
         if (childWallet == null) {
             throw new BusinessException(WalletErrorCode.WALLET_NOT_FOUND);
@@ -87,7 +90,7 @@ public class FreeSavingPaymentService {
                 childWallet.getId(), saving.getProductWalletId(), request.getAmount(),
                 TransferType.SAVING, request.getIdempotencyKey());
         financialProductMapper.insertFreeSavingPayment(
-                enrollmentId, transfer.getId(), installmentNo(saving, paymentDate),
+                enrollmentId, transfer.getId(), cycle.installmentNo(),
                 request.getAmount());
         // 멱등 재요청은 위에서 이미 반환되므로 알림은 실제 납입이 일어난 최초 요청에만 발송된다.
         notificationService.createNotification(
@@ -101,8 +104,8 @@ public class FreeSavingPaymentService {
                 saving.getProductWalletId());
     }
 
-    private void validatePayable(FreeSavingPaymentVO saving, long amount,
-                                 LocalDate paymentDate) {
+    private FreeSavingCycle validatePayable(
+            FreeSavingPaymentVO saving, long amount, LocalDate paymentDate) {
         if (!"FREE".equals(saving.getSavingsType())) {
             throw new BusinessException(
                     FinancialProductErrorCode.FINANCIAL_PRODUCT_SAVING_NOT_FREE);
@@ -113,32 +116,24 @@ public class FreeSavingPaymentService {
             throw new BusinessException(
                     FinancialProductErrorCode.FINANCIAL_PRODUCT_ENROLLMENT_NOT_ACTIVE);
         }
-        long paidThisMonth = financialProductMapper
-                .selectFreeSavingPaidAmountInMonth(saving.getEnrollmentId(), paymentDate);
+        FreeSavingCycle cycle = cycleCalculator.forPayment(
+                saving.getStartDate(), saving.getPaymentDay(), paymentDate);
+        // 마지막 약정 회차 이후에는 만기 전이라도 추가 납입할 수 없다.
+        if (saving.getTermMonths() == null
+                || cycle.installmentNo() > saving.getTermMonths()) {
+            throw new BusinessException(
+                    FinancialProductErrorCode.FINANCIAL_PRODUCT_ENROLLMENT_NOT_ACTIVE);
+        }
+        long paidThisCycle = financialProductMapper
+                .selectFreeSavingPaidAmountInCycle(
+                        saving.getEnrollmentId(), cycle.startInclusive(),
+                        cycle.endExclusive());
         if (amount > saving.getMaxMonthAmount()
-                || paidThisMonth > saving.getMaxMonthAmount() - amount) {
+                || paidThisCycle > saving.getMaxMonthAmount() - amount) {
             throw new BusinessException(
                     FinancialProductErrorCode.FINANCIAL_PRODUCT_SAVING_MONTHLY_LIMIT_EXCEEDED);
         }
-    }
-
-    private int installmentNo(FreeSavingPaymentVO saving, LocalDate paymentDate) {
-        if (saving.getStartDate() == null || saving.getPaymentDay() == null) {
-            return 1;
-        }
-        // 승인일보다 납입일이 이미 지났으면 다음 달을 1회차로 본다.
-        LocalDate firstPaymentDate = firstPaymentDate(
-                saving.getStartDate(), saving.getPaymentDay());
-        if (!paymentDate.isAfter(firstPaymentDate)) return 1;
-        return Math.toIntExact(ChronoUnit.MONTHS.between(
-                firstPaymentDate.withDayOfMonth(1),
-                paymentDate.withDayOfMonth(1)) + 1);
-    }
-
-    private LocalDate firstPaymentDate(LocalDate startDate, int paymentDay) {
-        LocalDate sameMonth = startDate.withDayOfMonth(paymentDay);
-        return paymentDay > startDate.getDayOfMonth()
-                ? sameMonth : sameMonth.plusMonths(1);
+        return cycle;
     }
 
     private SavingPaymentResponseDTO response(

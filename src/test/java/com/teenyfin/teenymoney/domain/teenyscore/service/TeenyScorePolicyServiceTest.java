@@ -188,27 +188,25 @@ class TeenyScorePolicyServiceTest {
     }
 
     @Test
-    @DisplayName("자유적금은 월 납입률 구간별 점수를 적용한다")
+    @DisplayName("자유적금은 회차 납입률 구간별 점수를 적용한다")
     void freeSavingMonthlyResultUsesPaymentRateBoundaries() {
         int[] paymentRates = {0, 1, 29, 30, 59, 60, 99, 100, 120};
         int[] expectedScores = {0, 2, 2, 4, 4, 6, 6, 8, 8};
-        YearMonth targetMonth = YearMonth.of(2026, 8);
-
         for (int index = 0; index < paymentRates.length; index++) {
             TeenyScoreChangeRequestDTO request =
                     teenyScorePolicyService.freeSavingMonthlyResult(
                             2L,
                             10L,
-                            targetMonth,
+                            3,
                             paymentRates[index]);
 
             assertEquals(expectedScores[index], request.getAmount());
             assertEquals(
-                    "SAVING_FREE_MONTHLY:10:2026-08",
+                    "SAVING_FREE_INSTALLMENT:10:3",
                     request.getEventKey());
         }
 
-        printResult("자유적금 월 납입률",
+        printResult("자유적금 회차 납입률",
                 "0%=0 / 1~29%=+2 / 30~59%=+4 / 60~99%=+6 / 100% 이상=+8");
     }
 

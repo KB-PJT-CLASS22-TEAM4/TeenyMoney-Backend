@@ -169,35 +169,37 @@ class FinancialProductSchedulerRerunTest {
     }
 
     @Test
-    @DisplayName("자유적금 월 점수 배치를 같은 월로 재실행해도 점수와 이력은 한 번만 반영한다")
+    @DisplayName("자유적금 회차 확정을 재실행해도 점수와 이력은 한 번만 반영한다")
     void freeSavingMonthlyScoreRerunIsIdempotent() {
         FinancialProductMapper mapper = mock(FinancialProductMapper.class);
         TeenyScoreMapper scoreMapper = mock(TeenyScoreMapper.class);
-        YearMonth month = YearMonth.of(2026, 8);
+        LocalDate dueDate = LocalDate.of(2026, 8, 20);
         FreeSavingMonthlyVO saving = new FreeSavingMonthlyVO();
         saving.setEnrollmentId(9L);
         saving.setChildId(2L);
         saving.setMonthlyAmount(10_000L);
-        when(mapper.selectFreeSavingMonthlyForUpdate(
-                9L, month.atDay(1), month.plusMonths(1).atDay(1)))
+        saving.setPaymentDay(20);
+        saving.setStartDate(LocalDate.of(2026, 8, 1));
+        when(mapper.selectFreeSavingMonthlyForUpdate(9L, dueDate))
                 .thenReturn(saving);
         when(mapper.selectSavingPaidAmountBetween(anyLong(), any(), any()))
                 .thenReturn(10_000L);
         when(scoreMapper.selectScoreForUpdate(2L)).thenReturn(600);
         when(scoreMapper.existsHistoryByEventKey(
-                2L, "SAVING_FREE_MONTHLY:9:2026-08"))
+                2L, "SAVING_FREE_INSTALLMENT:9:1"))
                 .thenReturn(false, true);
         FreeSavingMonthlyScoreProcessor processor = new FreeSavingMonthlyScoreProcessor(
                 mapper, new TeenyScorePolicyService(),
-                new TeenyScoreChangeService(scoreMapper));
+                new TeenyScoreChangeService(scoreMapper),
+                new FreeSavingCycleCalculator());
 
-        processor.process(9L, month);
-        processor.process(9L, month);
+        processor.process(9L, dueDate);
+        processor.process(9L, dueDate);
 
         verify(scoreMapper, times(1)).updateTeenyScore(2L, 608);
         verify(scoreMapper, times(1)).insertScoreHistory(
                 eq(2L), eq(8), eq(608), eq("SAVING_FREE_MONTHLY_RESULT"),
-                eq("SAVING_FREE_MONTHLY:9:2026-08"), anyString(),
+                eq("SAVING_FREE_INSTALLMENT:9:1"), anyString(),
                 eq("SAVING_ENROLLMENT"), eq(9L));
     }
 

@@ -13,6 +13,7 @@ public class FreeSavingMonthlyVO {
     private Long enrollmentId;
     private Long childId;
     private Long monthlyAmount;
+    private Integer paymentDay;
     private LocalDate startDate;
     private LocalDate maturityDate;
 }
