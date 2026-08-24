@@ -306,6 +306,45 @@ class FinancialProductEnrollmentServiceTest {
     }
 
     @Test
+    @DisplayName("월간 적용 등급이 요구등급보다 낮으면 예금 가입 요청을 차단한다")
+    void insufficientAppliedGradeDepositRequestIsRejected() {
+        DepositProductVO product = new DepositProductVO();
+        product.setId(4L);
+        product.setRequiredGradeId(3L);
+        product.setMinAmount(10_000L);
+        product.setMaxAmount(500_000L);
+        when(mapper.selectVisibleDepositProductById(4L, 2L)).thenReturn(product);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.requestDeposit(CHILD,
+                        new DepositEnrollmentRequestDTO(4L, 50_000L, 12)));
+
+        assertEquals(FinancialProductErrorCode.FINANCIAL_PRODUCT_DEPOSIT_INSUFFICIENT_GRADE,
+                exception.getErrorCode());
+        verify(mapper, never()).insertDepositEnrollment(any());
+    }
+
+    @Test
+    @DisplayName("월간 적용 등급이 요구등급보다 낮으면 적금 가입 요청을 차단한다")
+    void insufficientAppliedGradeSavingRequestIsRejected() {
+        SavingProductVO product = new SavingProductVO();
+        product.setId(5L);
+        product.setRequiredGradeId(3L);
+        product.setMinMonthAmount(1_000L);
+        product.setMaxMonthAmount(500_000L);
+        when(mapper.selectVisibleSavingProductById(5L, 2L)).thenReturn(product);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.requestSaving(CHILD,
+                        new SavingEnrollmentRequestDTO(
+                                5L, 30_000L, 12, 25, true)));
+
+        assertEquals(FinancialProductErrorCode.FINANCIAL_PRODUCT_SAVING_INSUFFICIENT_GRADE,
+                exception.getErrorCode());
+        verify(mapper, never()).insertSavingEnrollment(any());
+    }
+
+    @Test
     @DisplayName("승인 대기 중인 본인 신청을 취소하면 상태가 CANCELED로 바뀐다")
     void cancelPendingEnrollmentSucceeds() {
         when(mapper.cancelDepositEnrollment(2L, 100L)).thenReturn(1);

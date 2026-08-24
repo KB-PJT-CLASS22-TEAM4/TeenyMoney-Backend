@@ -41,7 +41,8 @@ class FreeSavingPaymentServiceTest {
                 Instant.parse("2026-08-14T00:00:00Z"), ZoneId.of("Asia/Seoul"));
         service = new FreeSavingPaymentService(
                 mapper, walletMapper, transferService, clock,
-                mock(com.teenyfin.teenymoney.domain.notification.service.NotificationService.class));
+                mock(com.teenyfin.teenymoney.domain.notification.service.NotificationService.class),
+                new FreeSavingCycleCalculator());
     }
 
     @Test
@@ -49,7 +50,9 @@ class FreeSavingPaymentServiceTest {
     void paysFreeSavingWithExistingTransferSystem() {
         FreeSavingPaymentVO saving = activeFreeSaving();
         when(mapper.selectFreeSavingForPaymentForUpdate(2L, 7L)).thenReturn(saving);
-        when(mapper.selectFreeSavingPaidAmountInMonth(7L, java.time.LocalDate.of(2026, 8, 14)))
+        when(mapper.selectFreeSavingPaidAmountInCycle(
+                7L, java.time.LocalDate.of(2026, 8, 1).atStartOfDay(),
+                java.time.LocalDate.of(2026, 8, 26).atStartOfDay()))
                 .thenReturn(20_000L);
         when(walletMapper.selectMemberWalletByMemberId(2L)).thenReturn(wallet(10L, 100_000L));
         when(walletMapper.selectWalletForUpdate(20L)).thenReturn(wallet(20L, 50_000L));
@@ -110,11 +113,13 @@ class FreeSavingPaymentServiceTest {
     }
 
     @Test
-    @DisplayName("해당 월 누적 납입액이 최대 한도를 넘으면 송금하지 않는다")
+    @DisplayName("해당 회차 누적 납입액이 최대 한도를 넘으면 송금하지 않는다")
     void rejectsMonthlyLimitExceeded() {
         when(mapper.selectFreeSavingForPaymentForUpdate(2L, 7L))
                 .thenReturn(activeFreeSaving());
-        when(mapper.selectFreeSavingPaidAmountInMonth(7L, java.time.LocalDate.of(2026, 8, 14)))
+        when(mapper.selectFreeSavingPaidAmountInCycle(
+                7L, java.time.LocalDate.of(2026, 8, 1).atStartOfDay(),
+                java.time.LocalDate.of(2026, 8, 26).atStartOfDay()))
                 .thenReturn(90_000L);
 
         BusinessException exception = assertThrows(BusinessException.class, () ->
@@ -151,7 +156,8 @@ class FreeSavingPaymentServiceTest {
         saving.setStatus("ACTIVE");
         saving.setMaxMonthAmount(100_000L);
         saving.setPaymentDay(25);
-        saving.setStartDate(java.time.LocalDate.of(2026, 8, 25));
+        saving.setTermMonths(3);
+        saving.setStartDate(java.time.LocalDate.of(2026, 8, 1));
         saving.setMaturityDate(java.time.LocalDate.of(2026, 11, 25));
         return saving;
     }

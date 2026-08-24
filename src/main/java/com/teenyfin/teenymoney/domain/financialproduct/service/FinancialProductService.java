@@ -350,7 +350,7 @@ public class FinancialProductService {
     FinancialProductListResponseDTO depositListItem(
             DepositProductVO product,
             FinancialProductBenefitVO benefit) {
-        boolean eligible = !isParentView(benefit);
+        boolean eligible = gradeEligible(product.getRequiredGradeId(), benefit);
         List<ProductRateResponseDTO> rates = rates(
                 product.getRate1m(), product.getRate3m(),
                 product.getRate6m(), product.getRate12m(),
@@ -363,6 +363,8 @@ public class FinancialProductService {
                 .productName(product.getName())
                 .appliedGradeId(benefit.getGradeId())
                 .appliedGradeName(benefit.getGradeName())
+                .requiredGradeId(product.getRequiredGradeId())
+                .requiredGradeName(product.getRequiredGradeName())
                 .eligible(eligible)
                 .ineligibleReason(ineligibleReason(eligible, benefit))
                 .availableTerms(terms(rates))
@@ -377,7 +379,7 @@ public class FinancialProductService {
     FinancialProductListResponseDTO savingListItem(
             SavingProductVO product,
             FinancialProductBenefitVO benefit) {
-        boolean eligible = !isParentView(benefit);
+        boolean eligible = gradeEligible(product.getRequiredGradeId(), benefit);
         List<ProductRateResponseDTO> rates = rates(
                 product.getRate1m(), product.getRate3m(),
                 product.getRate6m(), product.getRate12m(),
@@ -390,6 +392,8 @@ public class FinancialProductService {
                 .productName(product.getName())
                 .appliedGradeId(benefit.getGradeId())
                 .appliedGradeName(benefit.getGradeName())
+                .requiredGradeId(product.getRequiredGradeId())
+                .requiredGradeName(product.getRequiredGradeName())
                 .eligible(eligible)
                 .ineligibleReason(ineligibleReason(eligible, benefit))
                 .availableTerms(terms(rates))
@@ -430,7 +434,7 @@ public class FinancialProductService {
     private FinancialProductDetailResponseDTO depositDetail(
             DepositProductVO product,
             FinancialProductBenefitVO benefit) {
-        boolean eligible = !isParentView(benefit);
+        boolean eligible = gradeEligible(product.getRequiredGradeId(), benefit);
         List<ProductRateResponseDTO> rates = rates(
                 product.getRate1m(), product.getRate3m(),
                 product.getRate6m(), product.getRate12m(),
@@ -444,6 +448,8 @@ public class FinancialProductService {
                 .description(product.getDescription())
                 .appliedGradeId(benefit.getGradeId())
                 .appliedGradeName(benefit.getGradeName())
+                .requiredGradeId(product.getRequiredGradeId())
+                .requiredGradeName(product.getRequiredGradeName())
                 .eligible(eligible)
                 .ineligibleReason(ineligibleReason(eligible, benefit))
                 .availableTerms(terms(rates))
@@ -459,7 +465,7 @@ public class FinancialProductService {
     private FinancialProductDetailResponseDTO savingDetail(
             SavingProductVO product,
             FinancialProductBenefitVO benefit) {
-        boolean eligible = !isParentView(benefit);
+        boolean eligible = gradeEligible(product.getRequiredGradeId(), benefit);
         List<ProductRateResponseDTO> rates = rates(
                 product.getRate1m(), product.getRate3m(),
                 product.getRate6m(), product.getRate12m(),
@@ -473,6 +479,8 @@ public class FinancialProductService {
                 .description(product.getDescription())
                 .appliedGradeId(benefit.getGradeId())
                 .appliedGradeName(benefit.getGradeName())
+                .requiredGradeId(product.getRequiredGradeId())
+                .requiredGradeName(product.getRequiredGradeName())
                 .eligible(eligible)
                 .ineligibleReason(ineligibleReason(eligible, benefit))
                 .availableTerms(terms(rates))
@@ -518,6 +526,14 @@ public class FinancialProductService {
                 && benefit.getGradeId() != null
                 && product.getRequiredGradeId() != null
                 && benefit.getGradeId() >= product.getRequiredGradeId();
+    }
+
+    private boolean gradeEligible(
+            Long requiredGradeId, FinancialProductBenefitVO benefit) {
+        return !isParentView(benefit)
+                && (requiredGradeId == null
+                || benefit.getGradeId() != null
+                && benefit.getGradeId() >= requiredGradeId);
     }
 
     /** 부모 생성 상품을 포함한 대출의 예상금리는 상품에 설정된 기본금리를 사용한다. */

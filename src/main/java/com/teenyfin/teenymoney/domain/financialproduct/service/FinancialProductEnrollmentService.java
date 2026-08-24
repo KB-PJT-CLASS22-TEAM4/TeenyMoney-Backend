@@ -54,6 +54,8 @@ public class FinancialProductEnrollmentService {
         ensureNoPending(financialProductMapper.countPendingDepositEnrollment(
                 childId, product.getId()));
         FinancialProductBenefitVO benefit = benefit(childId);
+        validateRequiredGrade(product.getRequiredGradeId(), benefit,
+                FinancialProductErrorCode.FINANCIAL_PRODUCT_DEPOSIT_INSUFFICIENT_GRADE);
         // 부모 생성 예금도 일반 예금과 동일하게 월간 적용 등급 우대금리를 더한다.
         BigDecimal rate = rateCalculator.depositRate(product,
                 request.getTermMonths(), benefit.getBonusRate());
@@ -88,6 +90,8 @@ public class FinancialProductEnrollmentService {
         ensureNoPending(financialProductMapper.countPendingSavingEnrollment(
                 childId, product.getId()));
         FinancialProductBenefitVO benefit = benefit(childId);
+        validateRequiredGrade(product.getRequiredGradeId(), benefit,
+                FinancialProductErrorCode.FINANCIAL_PRODUCT_SAVING_INSUFFICIENT_GRADE);
         // 부모 생성 적금도 일반 적금과 동일하게 월간 적용 등급 우대금리를 더한다.
         BigDecimal rate = rateCalculator.savingRate(product,
                 request.getTermMonths(), benefit.getBonusRate());
@@ -235,6 +239,20 @@ public class FinancialProductEnrollmentService {
                 || benefit.getGradeId() < product.getRequiredGradeId()) {
             throw new BusinessException(
                     FinancialProductErrorCode.FINANCIAL_PRODUCT_INSUFFICIENT_GRADE);
+        }
+    }
+
+    /** 실시간 점수가 아닌 월간 확정 등급(applied_grade_id)으로 가입 가능 여부를 판단한다. */
+    private void validateRequiredGrade(
+            Long requiredGradeId, FinancialProductBenefitVO benefit,
+            FinancialProductErrorCode insufficientGradeError) {
+        if (requiredGradeId == null) {
+            return;
+        }
+        if (benefit.getGradeId() == null
+                || benefit.getGradeId() < requiredGradeId) {
+            throw new BusinessException(
+                    insufficientGradeError);
         }
     }
 

@@ -16,9 +16,8 @@ public class FinancialProductSyncScheduler {
         this.financialProductSyncService = financialProductSyncService;
     }
 
-    @Scheduled(
-            initialDelayString = "${finlife.sync.initial-delay-ms:60000}",
-            fixedDelayString = "${finlife.sync.fixed-delay-ms:86400000}")
+    @Scheduled(cron = "${finlife.sync.cron:0 0 3 * * *}",
+            zone = "Asia/Seoul")
     public void sync() {
         if (!financialProductSyncService.isConfigured()) {
             log.info("FINLIFE_API_KEY가 없어 금융상품 동기화를 건너뜁니다.");

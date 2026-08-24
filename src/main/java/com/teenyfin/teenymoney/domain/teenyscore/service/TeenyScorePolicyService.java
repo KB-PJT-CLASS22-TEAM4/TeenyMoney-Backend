@@ -205,18 +205,18 @@ public class TeenyScorePolicyService {
     public TeenyScoreChangeRequestDTO freeSavingMonthlyResult(
             Long childId,
             Long savingEnrollmentId,
-            YearMonth targetMonth,
+            int installmentNo,
             int paymentRate) {
-        if (targetMonth == null) {
-            throw new IllegalArgumentException("targetMonth는 필수입니다.");
+        if (installmentNo <= 0) {
+            throw new IllegalArgumentException("installmentNo는 0보다 커야 합니다.");
         }
         requireNonNegative(paymentRate, "paymentRate");
         return request(
                 childId,
-                TeenyScoreEventCode.SAVING_FREE_MONTHLY_RESULT, // 자유적금의 해당 월 누적 납입률 평가 결과
+                TeenyScoreEventCode.SAVING_FREE_MONTHLY_RESULT,
                 freeSavingMonthlyScore(paymentRate),
-                "SAVING_FREE_MONTHLY:" + savingEnrollmentId + ":" + targetMonth,
-                "자유적립식 적금 월 납입률 확정",
+                "SAVING_FREE_INSTALLMENT:" + savingEnrollmentId + ":" + installmentNo,
+                "자유적립식 적금 회차 납입률 확정",
                 "SAVING_ENROLLMENT",
                 savingEnrollmentId);
     }

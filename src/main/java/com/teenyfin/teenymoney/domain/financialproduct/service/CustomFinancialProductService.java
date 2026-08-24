@@ -53,6 +53,7 @@ public class CustomFinancialProductService {
         validateAmount(request.getMinimumAmount(), request.getMaximumAmount());
         validateInterestType(request.getInterestCalculationType());
         validateRates(request.getRates(), request.getEarlyTerminationRate());
+        validateRequiredGrade(request.getRequiredGradeId());
 
         DepositProductVO product = new DepositProductVO();
         setScope(product, parentId, childId);
@@ -63,6 +64,7 @@ public class CustomFinancialProductService {
         product.setEarlyTerminationRate(request.getEarlyTerminationRate());
         product.setMinAmount(request.getMinimumAmount());
         product.setMaxAmount(request.getMaximumAmount());
+        product.setRequiredGradeId(request.getRequiredGradeId());
         financialProductMapper.insertCustomDepositProduct(product);
         return response(product.getId(), FinancialProductType.DEPOSIT,
                 product.getName(), childId);
@@ -78,6 +80,7 @@ public class CustomFinancialProductService {
         validateInterestType(request.getInterestCalculationType());
         if (!SAVING_TYPES.contains(request.getSavingsType())) invalid();
         validateRates(request.getRates(), request.getEarlyTerminationRate());
+        validateRequiredGrade(request.getRequiredGradeId());
 
         SavingProductVO product = new SavingProductVO();
         setScope(product, parentId, childId);
@@ -89,6 +92,7 @@ public class CustomFinancialProductService {
         product.setEarlyTerminationRate(request.getEarlyTerminationRate());
         product.setMinMonthAmount(request.getMinimumMonthlyAmount());
         product.setMaxMonthAmount(request.getMaximumMonthlyAmount());
+        product.setRequiredGradeId(request.getRequiredGradeId());
         financialProductMapper.insertCustomSavingProduct(product);
         return response(product.getId(), FinancialProductType.SAVING,
                 product.getName(), childId);
@@ -267,6 +271,13 @@ public class CustomFinancialProductService {
 
     private void validateInterestType(String type) {
         if (!INTEREST_TYPES.contains(type)) invalid();
+    }
+
+    private void validateRequiredGrade(Long requiredGradeId) {
+        if (requiredGradeId == null
+                || financialProductMapper.countGradeById(requiredGradeId) == 0) {
+            invalid();
+        }
     }
 
     /** 기간 중복을 막고 1·3·6·12개월 금리만 허용한다. */

@@ -6,7 +6,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
-import java.time.YearMonth;
+import java.time.LocalDate;
 
 @Slf4j
 @Component
@@ -20,11 +20,11 @@ public class FreeSavingMonthlyScoreScheduler {
         this.clock = clock;
     }
 
-    @Scheduled(cron = "${financial-product.free-saving-score.cron:0 1 0 1 * *}",
+    @Scheduled(cron = "${financial-product.free-saving-score.cron:0 0 1 * * *}",
             zone = "Asia/Seoul")
-    public void processPreviousMonth() {
-        YearMonth targetMonth = YearMonth.now(clock).minusMonths(1);
-        int count = scoreService.processMonthlyScores(targetMonth);
-        log.info("자유적금 월별 점수 처리 완료: month={}, count={}", targetMonth, count);
+    public void processPreviousDueDate() {
+        LocalDate dueDate = LocalDate.now(clock).minusDays(1);
+        int count = scoreService.processDueDate(dueDate);
+        log.info("자유적금 회차 확정 완료: dueDate={}, count={}", dueDate, count);
     }
 }
