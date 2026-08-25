@@ -21,7 +21,7 @@ public class SavingAutoPaymentScheduler {
         this.clock = clock;
     }
 
-    @Scheduled(cron = "${financial-product.saving-payment.cron:0 0 16 * * *}",
+    @Scheduled(cron = "${financial-product.saving-payment.cron:0 50 16 * * *}",
             zone = "Asia/Seoul")
     public void processSavingPayments() {
         LocalDate paymentDate = LocalDate.now(clock);

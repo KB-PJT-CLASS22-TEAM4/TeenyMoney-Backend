@@ -20,7 +20,7 @@ public class LoanRepaymentScheduler {
         this.clock = clock;
     }
 
-    @Scheduled(cron = "${financial-product.loan-repayment.cron:0 0 15 * * *}",
+    @Scheduled(cron = "${financial-product.loan-repayment.cron:0 30 16 * * *}",
             zone = "Asia/Seoul")
     public void processLoanRepayments() {
         LocalDate date = LocalDate.now(clock);
