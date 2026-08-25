@@ -19,10 +19,10 @@ class FinancialProductSchedulerCronTest {
         assertCron(FinancialProductSyncScheduler.class,
                 "sync", "${finlife.sync.cron:0 0 3 * * *}");
         assertCron(FinancialProductMaturityScheduler.class,
-                "processMaturities", "${financial-product.maturity.cron:0 0 12 * * *}");
+                "processMaturities", "${financial-product.maturity.cron:0 0 14 * * *}");
         assertCron(LoanRepaymentScheduler.class,
                 "processLoanRepayments",
-                "${financial-product.loan-repayment.cron:0 0 14 * * *}");
+                "${financial-product.loan-repayment.cron:0 0 15 * * *}");
         assertCron(SavingAutoPaymentScheduler.class,
                 "processSavingPayments",
                 "${financial-product.saving-payment.cron:0 0 16 * * *}");
