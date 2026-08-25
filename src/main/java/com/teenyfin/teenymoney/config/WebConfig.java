@@ -17,7 +17,8 @@ public class WebConfig extends AbstractAnnotationConfigDispatcherServletInitiali
                 SecurityConfig.class,
                 S3Config.class,
                 RestTemplateConfig.class,
-                FirebaseConfig.class
+                FirebaseConfig.class,
+                DifyConfig.class
         };
     }
 

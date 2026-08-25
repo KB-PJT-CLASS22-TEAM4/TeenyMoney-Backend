@@ -5,6 +5,7 @@ import com.teenyfin.teenymoney.domain.report.dify.dto.DifyReportAnalysisResponse
 import com.teenyfin.teenymoney.domain.report.exception.MoneyReportErrorCode;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -27,7 +28,7 @@ public class ReportAnalysisDifyClient {
     private final String baseUrl;
 
 
-    public ReportAnalysisDifyClient(RestTemplate restTemplate, @Value("${dify.report-api-key}")String apiKey, @Value("${dify.base-url:https://api.dify.ai/v1}") String baseUrl) {
+    public ReportAnalysisDifyClient(@Qualifier("difyRestTemplate") RestTemplate restTemplate, @Value("${dify.report-api-key}")String apiKey, @Value("${dify.base-url:https://api.dify.ai/v1}") String baseUrl) {
         this.restTemplate = restTemplate;
         this.apiKey = apiKey;
         this.baseUrl = baseUrl;

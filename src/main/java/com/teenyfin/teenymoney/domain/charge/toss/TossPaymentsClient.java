@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.teenyfin.teenymoney.domain.charge.exception.ChargeErrorCode;
 import com.teenyfin.teenymoney.domain.charge.toss.dto.*;
 import com.teenyfin.teenymoney.global.exception.BusinessException;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,7 +42,7 @@ public class TossPaymentsClient {
     // new TossPaymentsClient(가짜RestTemplate, "테스트키", "테스트URL") 식으로 쓰면 됨 -
     // 예전의 package-private 전용 생성자가 더 이상 필요 없어짐.
     @Autowired
-    public TossPaymentsClient(RestTemplate restTemplate, @Value("${toss.secret-key}") String secretKey, @Value("${toss.base-url:https://api.tosspayments.com}") String baseUrl) {
+    public TossPaymentsClient(@Qualifier("restTemplate") RestTemplate restTemplate, @Value("${toss.secret-key}") String secretKey, @Value("${toss.base-url:https://api.tosspayments.com}") String baseUrl) {
         this.restTemplate = restTemplate;
         this.objectMapper = new ObjectMapper();
         this.secretKey = secretKey;

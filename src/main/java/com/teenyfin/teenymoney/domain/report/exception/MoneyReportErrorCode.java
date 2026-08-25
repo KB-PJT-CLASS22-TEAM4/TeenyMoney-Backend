@@ -32,7 +32,11 @@ public enum MoneyReportErrorCode implements ErrorCode {
             HttpStatus.BAD_GATEWAY, "리포트 분석 응답이 올바르지 않습니다."),
 
     MONEY_REPORT_ANALYSIS_API_KEY_MISSING(
-            HttpStatus.SERVICE_UNAVAILABLE, "리포트 분석 AI API 설정이 필요합니다.");
+            HttpStatus.SERVICE_UNAVAILABLE, "리포트 분석 AI API 설정이 필요합니다."),
+    // ChatbotErrorCode.CHATBOT_SERVER_BUSY와 같은 역할 - 우리 Dify 전용 풀이 꽉 차서 거절한 경우.
+
+    MONEY_REPORT_ANALYSIS_SERVER_BUSY(
+            HttpStatus.SERVICE_UNAVAILABLE, "지금 요청이 많아 잠시 후 다시 시도해주세요.");
 
 
     private final HttpStatus status;
