@@ -20,7 +20,7 @@ public class FinancialProductMaturityScheduler {
         this.clock = clock;
     }
 
-    @Scheduled(cron = "${financial-product.maturity.cron:0 10 16 * * *}",
+    @Scheduled(cron = "${financial-product.maturity.cron:0 20 16 * * *}",
             zone = "Asia/Seoul")
     public void processMaturities() {
         LocalDate date = LocalDate.now(clock);
