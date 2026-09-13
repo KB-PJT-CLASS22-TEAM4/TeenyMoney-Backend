@@ -1,195 +1,170 @@
-# TeenyMoney Backend
+# 티니머니 백엔드 (TeenyMoney Backend)
 
-부모와 자녀가 함께 만들어 가는 가족 금융 교육 서비스
-**티니머니(TeenyMoney)**의 백엔드 저장소입니다.
+부모와 자녀가 함께 금융 습관을 만드는 가족 금융 교육 서비스 **티니머니**의 백엔드 저장소입니다.
 
-부모의 일방적인 소비 통제보다 자녀가 퀘스트, 금융 활동, 소비 경험을 통해
-신뢰를 쌓고 점진적으로 금융 자율성을 얻는 것을 목표로 합니다.
+부모가 일방적으로 소비를 통제하는 대신 자녀가 퀘스트, 금융 활동, 소비 경험으로 신뢰를 쌓고
+금융 자율성을 조금씩 넓혀 가도록 돕는 것을 목표로 합니다.
 
-## 프로젝트 정보
-
-- 팀명: Teenypin
-- 개발 기간: 2026년 7월 ~ 2026년 8월
-- 구성: Backend 4명, Frontend 2명
-- API 기본 경로: `/api/v1`
-- 패키징: WAR (`ROOT.war`)
-- 배포 구성: AWS EC2, Nginx, Tomcat 9, Docker MySQL, Docker Redis
-
-## 현재 구현 상태
-
-현재 저장소에서 실행 가능한 범위입니다.
-
-- Java 17 및 Spring MVC 기반 WAR 프로젝트
-- 공통 API 응답과 전역 예외 처리
-- MyBatis 및 MySQL 연결 설정
-- Redis 및 Spring Security 기본 설정
-- JWT 로그인·재발급 Rotation·계정 단위 로그아웃
-- Access Token 인증 세대 검증과 Refresh Token Redis 저장
-- Cookie 기반 CSRF 보호와 401/403/503 JSON 응답
-- 공개 경로를 제외한 전 요청 인증 강제 (`anyRequest().authenticated()`)
-- 애플리케이션 상태 확인 API
-- 데이터베이스 연결 확인 API
-- springfox 애노테이션 기반 API 명세와 Swagger UI
-- GitHub Actions 테스트 및 WAR 빌드 CI
-
-가족 연결, 지갑, 결제, 금융상품, 퀘스트, 알림 도메인은 구현 예정입니다.
-
-## 인가 규칙
-
-**공개 경로를 제외한 모든 요청은 인증이 필요합니다.** 이 규칙은 이미 적용되어
-있습니다(`SecurityConfig`의 `anyRequest().authenticated()`).
-
-공개 경로의 유일한 기준은 `SecurityConfig.PUBLIC_ENDPOINTS`입니다.
-
-| 경로 | 공개 이유 |
+| 항목 | 내용 |
 | --- | --- |
-| `/api/v1/auth/signup` | 회원가입 — 토큰이 있을 수 없다 |
-| `/api/v1/auth/login` | 로그인 — 토큰을 받으러 오는 곳 |
-| `/api/v1/auth/reissue` | 재발급 — Access가 만료된 상태로 온다 |
-| `/api/v1/auth/logout` | 로그아웃 — Access가 없거나 만료돼도 Cookie로 처리 |
-| `/api/v1/auth/csrf` | Cookie 인증 API용 CSRF 토큰 발급 |
-| `/api/v1/auth/check-email` | 이메일 중복 확인 — 가입 전이라 토큰이 없다 |
-| `/api/v1/auth/phone-verification/send` | 회원가입 전 휴대폰 인증번호 발송 |
-| `/api/v1/health`, `/api/v1/health/**` | 모니터링이 토큰 없이 호출 |
-| `/swagger-ui.html`, `/webjars/**`, `/swagger-resources`, `/swagger-resources/**`, `/v2/api-docs` | springfox Swagger UI와 명세 JSON |
+| 과정 | KB IT's Your Life 7기 최종 프로젝트 (22회차 4팀, Teenypin) |
+| 개발 기간 | 2026년 7월 ~ 8월 |
+| 팀 구성 | 6명 (Backend 4, Frontend 2) |
+| 개발 통합 서버 | https://www.teenymoney.kro.kr |
+| API 문서 | https://www.teenymoney.kro.kr/swagger-ui.html |
+| 프론트엔드 저장소 | [TeenyMoney-FrontEnd](https://github.com/KB-PJT-CLASS22-TEAM4/TeenyMoney-FrontEnd) |
 
-유효한 Access Token을 보내면 Redis의 현재 인증 세대와 일치할 때만 인증 정보가
-채워지고 컨트롤러가 `@AuthenticationPrincipal MemberPrincipal`로 받습니다.
-로그아웃은 해당 계정의 인증 세대를 제거하므로 그 계정의 기존 Access Token도 즉시
-무효화되며 다른 계정에는 영향을 주지 않습니다.
+## 주요 기능
 
-브라우저는 먼저 `GET /api/v1/auth/csrf`를 호출하고 응답의 `data.token`을 로그인,
-재발급, 로그아웃 요청의 `X-XSRF-TOKEN` 헤더로 보냅니다. Refresh Token은
-`HttpOnly; SameSite=Strict` Cookie로만 전달됩니다.
+| 영역 | 기능 | 도메인 패키지 |
+| --- | --- | --- |
+| 회원·인증 | 회원가입, 휴대폰 SMS 인증, 법정대리인 동의, JWT 로그인·재발급·로그아웃, 약관 조회 | `auth`, `member` |
+| 가족 연동 | 부모가 발급한 6자리 코드로 자녀 연결, 연동 해제와 재연동 | `family` |
+| 지갑·용돈 | 지갑 잔액과 거래내역, 부모 카드 등록과 충전(Toss Payments), 즉시·정기 용돈 | `wallet`, `charge`, `allowance` |
+| 결제 | QR 결제, 결제 비밀번호, 업종 카테고리별 결제 정책(ALLOW·WATCH·BLOCK), 오늘만 허용 요청·승인과 한도 | `payment`, `paymentPassword`, `categoryPolicy`, `permission` |
+| 금융상품 | 예금·적금·대출, 부모 맞춤 상품, 가입 승인, 만기·자동 납입·상환 처리, 금융감독원 상품 정보 동기화 | `financialproduct` |
+| 퀘스트 | 퀘스트 생성·수락·인증 제출·승인·반려와 보상 지급, 기한이 지난 퀘스트 자동 마감 | `quest` |
+| 티니점수 | 금융 활동에 따른 점수와 월간 등급 산정, 등급별 한도와 상품 가입 조건 | `teenyscore` |
+| 리포트·AI | 월간 머니 리포트, Dify 기반 소비 분석과 AI 챗봇 | `report`, `chatbot` |
+| 알림 | 알림 목록과 설정, FCM 푸시, SSE 실시간 이벤트 | `notification`, `global/sse` |
 
-인증 파이프라인의 설계 근거는 [JWT·Spring Security 구현 플랜](docs/jwt-security-pipeline.md)을 참고합니다.
-
-## 기술 스택
-
-### Backend
-
-- Java 17
-- Spring Framework 5.3.37
-- Spring MVC
-- Spring Security 5.8.16
-- MyBatis 3.4.6
-- MySQL Connector/J 8.1.0
-- HikariCP
-- Spring Data Redis, Lettuce
-- Gradle 8.8
-- Lombok 1.18.30
-- Jackson 2.15.4
-- Log4j2 2.18.0
-- Swagger UI 5.31.0
-
-### Infrastructure
-
-- AWS EC2 Ubuntu 24.04 LTS
-- Nginx
-- Apache Tomcat 9
-- Docker MySQL 8
-- Docker Redis
-- HTTPS
-- GitHub Actions
+모든 API는 `/api/v1` 아래에 있으며 전체 명세는 Swagger UI에서 확인합니다.
 
 ## 시스템 구성
 
-```text
-사용자 브라우저
-       |
-       v
-     Nginx
-   /        \
-Vue 정적 파일  /api, /swagger-ui, /api-docs
-                  |
-                  v
-               Tomcat 9
-                  |
-             Spring MVC WAR
-               /       \
-            MySQL     Redis
+```mermaid
+flowchart LR
+    U[부모·자녀 브라우저] --> N[Nginx]
+    subgraph EC2[AWS EC2]
+        N -->|정적 파일| F[Vue 빌드 결과물]
+        N -->|/api, /swagger-ui| T[Tomcat 9<br/>Spring MVC WAR]
+        T --> M[(MySQL 8<br/>Docker)]
+        T --> R[(Redis<br/>Docker)]
+    end
+    T --> S3[AWS S3<br/>이미지 저장]
+    T --> FCM[Firebase<br/>푸시 알림]
+    T --> TOSS[Toss Payments<br/>카드 충전]
+    T --> DIFY[Dify<br/>AI 챗봇·리포트]
+    T --> FIN[금융감독원<br/>금융상품 API]
+    T --> SMS[Solapi<br/>SMS 인증]
 ```
 
-Nginx는 프론트엔드 정적 파일을 제공하고 백엔드 요청을 Tomcat의
-`ROOT.war` 애플리케이션으로 전달합니다.
+Nginx가 프론트엔드 정적 파일을 제공하고 API 요청은 Tomcat의 `ROOT.war`로 전달합니다.
+현재 EC2는 운영 환경이 아니라 팀 개발 통합 환경입니다.
+
+## 기술 스택
+
+| 구분 | 기술 |
+| --- | --- |
+| Language | Java 17 |
+| Framework | Spring Framework 5.3.37 (Spring MVC, WAR 패키징), Spring Security 5.8.16 |
+| Data | MyBatis 3.4.6, MySQL 8, HikariCP, Spring Data Redis (Lettuce) |
+| 인증 | JWT, Refresh Token Rotation, Cookie 기반 CSRF |
+| 외부 연동 | AWS S3, Firebase Admin (FCM), Toss Payments, Dify, 금융감독원 금융상품통합비교공시 API, Solapi |
+| API 문서 | springfox Swagger 2.9.2 |
+| Build·Infra | Gradle, AWS EC2 (Ubuntu 24.04), Nginx, Tomcat 9, Docker, GitHub Actions |
 
 ## 프로젝트 구조
 
 ```text
 .
-├── .github/
-│   ├── ISSUE_TEMPLATE/
-│   ├── pull_request_template.md
-│   └── workflows/
-│       ├── ci.yml
-│       └── README.md
-├── docs/
-│   ├── FRONTEND_DEV.md
-│   ├── LOCAL_TEST.md
-│   └── PROJECT_STRUCTURE.md
+├── .github/                 # Issue·PR 템플릿, CI·배포 workflow
+├── docs/                    # 설계·연동·배포 문서
 ├── sql/
-│   ├── schema/
-│   ├── migration/
-│   ├── seed/
-│   └── README.md
-├── src/
-│   ├── main/
-│   │   ├── java/com/teenyfin/teenymoney/
-│   │   │   ├── config/
-│   │   │   ├── domain/
-│   │   │   └── global/
-│   │   │       ├── auth/
-│   │   │       ├── exception/
-│   │   │       ├── health/
-│   │   │       │   ├── controller/
-│   │   │       │   ├── dto/response/
-│   │   │       │   ├── mapper/
-│   │   │       │   ├── service/
-│   │   │       │   └── vo/
-│   │   │       ├── idempotency/
-│   │   │       ├── response/
-│   │   │       └── security/
-│   │   └── resources/
-│   │       ├── application.properties
-│   │       ├── mybatis-config.xml
-│   │       └── com/teenyfin/teenymoney/
-│   └── test/java/com/teenyfin/teenymoney/
-├── build.gradle
-├── settings.gradle
-├── gradlew
-└── gradlew.bat
+│   ├── schema/              # 현재 전체 스키마
+│   ├── migration/           # 순서대로 적용하는 변경 SQL (V001 ~ V032)
+│   └── seed/                # 로컬 전용 테스트 데이터
+└── src/
+    ├── main/java/com/teenyfin/teenymoney/
+    │   ├── config/          # Root·Servlet Context, Security, Redis, S3, Firebase, Dify 등
+    │   ├── global/          # auth, exception, health, idempotency, response, security, sms, sse, storage
+    │   └── domain/          # allowance, auth, categoryPolicy, charge, chatbot, family,
+    │                        # financialproduct, member, notification, payment, paymentPassword,
+    │                        # permission, quest, report, teenyscore, wallet
+    ├── main/resources/      # application.properties, MyBatis 설정과 Mapper XML
+    └── test/java/           # 단위·통합 테스트 (테스트 클래스 128개)
 ```
 
-### 최상위 패키지 역할
+도메인 패키지는 `controller / dto(request, response) / service / mapper / vo` 구조를 기본으로 하고,
+MyBatis Mapper XML은 Java 패키지와 같은 경로의 `src/main/resources` 아래에 둡니다.
+상세 규칙은 [프로젝트 구조 문서](docs/PROJECT_STRUCTURE.md)를 참고합니다.
 
-| 패키지 | 역할 |
+## 핵심 설계
+
+### 인증과 인가
+
+공개 경로를 제외한 모든 요청은 인증이 필요합니다(`SecurityConfig`의 `anyRequest().authenticated()`).
+공개 경로의 유일한 기준은 `SecurityConfig.PUBLIC_ENDPOINTS`입니다.
+
+| 경로 | 공개 이유 |
 | --- | --- |
-| `config` | Spring Root/Servlet Context, MyBatis, Redis, Security 등 애플리케이션 구성 |
-| `global` | 여러 도메인이 공유하는 응답, 예외, 인증, 보안, 상태 확인 기능 |
-| `domain` | 회원, 지갑, 결제 등 비즈니스 기능별 구현 |
+| `/api/v1/auth/signup`, `/api/v1/auth/login` | 가입·로그인 전에는 토큰이 없다 |
+| `/api/v1/auth/reissue`, `/api/v1/auth/logout` | Access Token이 만료된 상태에서도 Cookie로 처리한다 |
+| `/api/v1/auth/csrf` | Cookie 인증 API에 쓸 CSRF 토큰을 발급한다 |
+| `/api/v1/auth/check-email`, `/api/v1/auth/phone-verification/send` | 가입 전 이메일 중복 확인과 휴대폰 인증 |
+| `/api/v1/auth/legal-guardian-verification/send`, `/confirm` | 가입 전 법정대리인 SMS 인증과 동의 토큰 발급 |
+| `/api/v1/terms`, `/api/v1/terms/**` | 가입 전에도 약관을 볼 수 있어야 한다 |
+| `/api/v1/health`, `/api/v1/health/**` | 모니터링이 토큰 없이 호출한다 |
+| `/api/v1/sse/subscribe` | EventSource는 헤더를 붙일 수 없어 1회용 티켓으로 따로 인증한다 |
+| `/swagger-ui.html`, `/webjars/**`, `/swagger-resources/**`, `/v2/api-docs` | Swagger UI와 명세 JSON |
 
-`auth`, `idempotency`, `security` 패키지는 향후 공통 기능을 위한 확장 위치입니다.
-새로운 비즈니스 도메인은 다음 전체 경로와 구조를 기본으로 사용합니다.
+- Access Token은 Redis에 저장된 계정별 **인증 세대**와 일치할 때만 인증됩니다.
+  로그아웃하면 그 계정의 세대가 제거되어 기존 Access Token도 즉시 무효화되고, 다른 계정에는 영향이 없습니다.
+- Refresh Token은 `HttpOnly; SameSite=Strict` Cookie로만 전달하고 재발급할 때마다 교체합니다.
+- 브라우저는 `GET /api/v1/auth/csrf`로 받은 토큰을 로그인·재발급·로그아웃 요청의 `X-XSRF-TOKEN` 헤더에 담습니다.
+- 부모와 자녀의 역할에 따라 호출할 수 있는 API를 구분합니다. 예를 들어 연동 코드 발급은 부모만, 코드 입력은 자녀만 가능합니다.
 
-```text
-src/main/java/com/teenyfin/teenymoney/domain/<feature>/
-├── controller/
-├── dto/
-│   ├── request/
-│   └── response/
-├── service/
-├── mapper/
-└── vo/
-```
+설계 근거는 [JWT·Spring Security 인증 파이프라인](docs/jwt-security-pipeline.md)에 정리했습니다.
 
-MyBatis Mapper XML은 Java 패키지와 대응하도록
-`src/main/resources/com/teenyfin/teenymoney/.../mapper/` 아래에 둡니다.
+### 가족 연동 코드
 
-상세 기준은 [프로젝트 구조 문서](docs/PROJECT_STRUCTURE.md)를 참고합니다.
+부모가 발급한 6자리 코드를 자녀가 입력하면 가족 관계가 만들어집니다. 코드가 금융 데이터 접근 권한으로
+이어지기 때문에 동시 요청에서도 코드가 엉뚱한 사람에게 연결되지 않도록 여러 겹으로 막았습니다.
+
+- **발급**: `SecureRandom`으로 만든 6자리 코드에 10분 TTL을 적용합니다. 같은 멱등 키로 다시 요청하면 같은 코드를 돌려줍니다.
+- **재발급**: 이전 코드의 소유자 확인, 이전 코드 삭제, 새 코드·부모 슬롯·멱등 기록 저장을 **Redis Lua 스크립트 한 번**으로 처리합니다.
+  같은 번호가 이미 다른 부모에게 발급된 경우에는 지우지 않으므로, 한 부모의 재발급이 다른 부모의 정상 코드를 삭제하지 못합니다.
+- **소비**: `GETDEL`로 코드를 한 번만 소비하고, 자녀별 입력 실패는 10분에 5회로 제한합니다(`INCR + PEXPIRE`를 Lua로 원자 처리).
+- **DB 방어선**: `active_child_id` 생성 컬럼의 UNIQUE 제약으로 한 자녀가 활성 관계를 둘 이상 갖지 못하게 합니다.
+- **실패 정책**: 코드 소비 후 DB 저장이 실패해도 코드를 되살리지 않습니다(fail-closed). 되살린 코드가 부모의 재발급과 경쟁할 수 있기 때문입니다.
+
+자세한 내용은 [가족 연동 코드 API 연동 안내](docs/FRONTEND_FAMILY_LINK_CODE.md)와
+[코드 소비 강화 설계](docs/superpowers/specs/2026-08-06-family-link-consume-hardening-design.md)를 참고합니다.
+
+### 실시간 알림 (SSE + FCM)
+
+- 앱을 보고 있는 사용자에게는 SSE로 이벤트를 보냅니다. EventSource는 `Authorization` 헤더를 붙일 수 없으므로
+  `POST /api/v1/sse/ticket`(Bearer 인증)으로 Redis에 저장한 1회용 티켓을 받은 뒤 `GET /api/v1/sse/subscribe`로 구독합니다.
+- 연결 유지를 위한 heartbeat(기본 25초)와 emitter 만료 시간(기본 30분)은 환경변수로 조정합니다.
+- 앱 밖의 사용자에게는 Firebase Cloud Messaging으로 푸시 알림을 보냅니다.
+
+SSE를 고른 이유는 [SSE를 선택한 이유](docs/SSE_RATIONALE.md)에 정리했습니다.
+
+### 외부 AI 호출 격리
+
+Dify(챗봇·리포트 분석) 호출은 전용 `RestTemplate`(연결 8초, 응답 120초)과 전용 스레드풀을 사용합니다.
+Tomcat 워커 스레드가 AI 응답을 기다리며 묶이면 충전이나 로그인 같은 다른 요청까지 막히기 때문에,
+기다리는 역할을 별도 스레드로 떼어 냈습니다. 타임아웃 설정도 Toss Payments 호출과 분리해 서로 영향을 주지 않습니다.
+
+### 스케줄러
+
+| 스케줄러 | 기본 주기 | 역할 |
+| --- | --- | --- |
+| `AllowanceScheduler` | 매일 00:10 | 정기 용돈 지급 |
+| `FreeSavingMonthlyScoreScheduler` | 매일 01:00 | 자유적금 월간 점수 반영 |
+| `FinancialProductSyncScheduler` | 매일 03:00 | 금융감독원 금융상품 정보 동기화 |
+| `FinancialProductMaturityScheduler` | 매일 16:20 | 예금·적금 만기 처리 |
+| `LoanRepaymentScheduler` | 매일 16:40 | 대출 상환 처리 |
+| `SavingAutoPaymentScheduler` | 매일 17:00 | 적금 자동 납입 |
+| `QuestDeadlineScheduler` | 1분 간격 | 기한이 지난 퀘스트 마감 |
+| `TeenyScoreGradeScheduler` | 매월 1일 00:00 | 티니등급 산정 |
+
+cron 값은 대부분 `application.properties`의 속성으로 바꿀 수 있습니다. 스케줄러는 서비스·트랜잭션과 함께
+Root 컨텍스트에 등록합니다(`RootConfig`의 `@EnableScheduling`).
 
 ## 공통 API 응답
 
-모든 REST API 응답은 다음 형태를 사용합니다.
+모든 REST API는 다음 형식으로 응답합니다.
 
 ```json
 {
@@ -200,36 +175,9 @@ MyBatis Mapper XML은 Java 패키지와 대응하도록
 }
 ```
 
-실패 응답은 `success=false`로 반환하며, `code`에는 서버에서 정의한
-에러 코드 값을 사용합니다. 내부 예외 메시지, SQL, 서버 경로는
-응답에 노출하지 않고 서버 로그에만 기록합니다.
-
-에러 코드는 `ErrorCode` 인터페이스(`getStatus`, `getMessage`, `getCode`)로 정의합니다.
-공통 인프라 오류와 시큐리티 교차 관심사(`AUTH_UNAUTHORIZED`, `AUTH_FORBIDDEN`)는
-`CommonErrorCode`에서 관리하고, 도메인 업무 오류는 도메인별 enum(예: `AuthErrorCode`)이
-`ErrorCode`를 구현해 `domain/<도메인>/exception`에 둡니다. 각 enum의 `getCode()`는
-`name()`을 반환하며, 공통 파일(`CommonErrorCode`, `GlobalExceptionAdvice`, `ApiResponse`)에
-도메인 코드를 추가하지 않습니다.
-
-성공 응답의 `code`는 공통으로 `OK`를 사용합니다. 도메인별 성공 코드는 별도
-팀 결정 없이 추가하지 않습니다.
-
-애플리케이션 상태 확인 응답 예시는 다음과 같습니다.
-
-```json
-{
-  "success": true,
-  "code": "OK",
-  "message": "성공",
-  "data": {
-    "status": "UP",
-    "time": "2026-07-28 10:20:00"
-  }
-}
-```
-
-공통 응답 메타데이터로 `timestamp`를 추가하지 않습니다. 상태 확인 API의
-`data.time`은 서버 시간 확인을 위한 해당 API 전용 응답 필드입니다.
+- 실패하면 `success=false`와 서버가 정의한 에러 코드를 반환합니다. 내부 예외 메시지, SQL, 서버 경로는 응답에 담지 않고 로그에만 남깁니다.
+- 에러 코드는 `ErrorCode` 인터페이스로 정의합니다. 공통 오류는 `CommonErrorCode`, 도메인 오류는 `domain/<도메인>/exception`의 enum이 담당합니다.
+- 성공 응답의 `code`는 `OK` 하나만 사용합니다.
 
 ## 로컬 개발 환경
 
@@ -237,250 +185,136 @@ MyBatis Mapper XML은 Java 패키지와 대응하도록
 
 - JDK 17
 - MySQL 8
-- Git
-- Tomcat 9
+- Redis
+- Tomcat 9 (IntelliJ 실행 구성 권장)
 
-Redis를 사용하는 기능을 개발할 때는 로컬 Redis도 실행해야 합니다. IntelliJ IDEA,
-MySQL Workbench 또는 DataGrip, Postman은 선택 도구입니다.
-
-### 저장소 복제
+### 저장소 복제와 DB 준비
 
 ```bash
 git clone https://github.com/KB-PJT-CLASS22-TEAM4/TeenyMoney-Backend.git
 cd TeenyMoney-Backend
 ```
 
+로컬 MySQL에 `sql/schema/teenymoney_schema_renamed.sql`을 적용한 뒤 `sql/seed`의 파일을 번호 순서대로 실행합니다.
+자세한 순서와 주의사항은 [SQL 변경 관리 문서](sql/README.md)를 참고합니다.
+
 ### 환경변수
 
-현재 애플리케이션이 사용하는 환경변수입니다.
+값은 IntelliJ 실행 구성, 운영체제 환경변수 또는 Tomcat 실행 환경에 주입하고 저장소에는 커밋하지 않습니다.
 
-```text
-DB_DRIVER=net.sf.log4jdbc.sql.jdbcapi.DriverSpy
-DB_URL=jdbc:log4jdbc:mysql://localhost:3306/teenymoney?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
-DB_USERNAME=<LOCAL_MYSQL_USERNAME>
-DB_PASSWORD=<LOCAL_MYSQL_PASSWORD>
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_PASSWORD=
-JWT_SECRET=<openssl rand -base64 32 으로 생성한 값>
-JWT_ACCESS_EXPIRATION_MS=1800000
-JWT_REFRESH_EXPIRATION_MS=1209600000
-COOKIE_SECURE=false
-```
+**기본값이 없어 반드시 설정해야 하는 값**
 
-`DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET`, `COOKIE_SECURE`는 필수입니다.
-실제 값은 IntelliJ 실행 구성, 운영체제 환경변수 또는 Tomcat 실행 환경에 주입하며
-저장소에 작성하지 않습니다.
+| 변수 | 설명 |
+| --- | --- |
+| `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | MySQL 접속 정보 |
+| `JWT_SECRET` | Base64로 인코딩한 서명 키. 없으면 애플리케이션이 기동하지 않습니다 |
+| `COOKIE_SECURE` | Refresh Token 쿠키의 `Secure` 속성. 로컬 HTTP는 `false`, HTTPS 배포는 `true` |
+| `FCM_KEY` | Firebase Admin 인증 정보 |
 
-`REDIS_PASSWORD`는 `requirepass`가 걸린 서버에 붙을 때만 필요합니다. 비밀번호가
-없는 로컬 Redis는 비워 둡니다. 값이 틀리면 앱은 정상 기동하고 **첫 Redis 명령에서**
-`NOAUTH`로 실패합니다. Lettuce가 연결을 지연 생성하기 때문입니다.
+**기능별 선택 값** (기본값이 있거나 비워 두면 해당 기능만 동작하지 않습니다)
 
-`JWT_SECRET`에는 Base64로 인코딩된 키를 반드시 주입합니다. 로컬과 운영은 서로 다른
-키를 사용하고, 운영 키는 재배포 후에도 같은 값을 유지합니다. 값이 없으면 애플리케이션이
-기동하지 않으므로 설정 누락을 즉시 확인할 수 있습니다.
+| 구분 | 변수 |
+| --- | --- |
+| DB·Redis | `DB_DRIVER`, `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD` |
+| JWT | `JWT_ACCESS_EXPIRATION_MS`(기본 30분), `JWT_REFRESH_EXPIRATION_MS`(기본 14일) |
+| SMS 인증 | `SOLAPI_API_KEY`, `SOLAPI_API_SECRET`, `SOLAPI_SENDER_NUMBER`, `SMS_TEST_MODE`, `SMS_TEST_CODE`, `SMS_VERIFICATION_TTL_SECONDS`, `SMS_MAX_ATTEMPTS`, `SMS_RESEND_COOLDOWN_SECONDS`, `LEGAL_GUARDIAN_CONSENT_TOKEN_TTL_SECONDS` |
+| 충전 | `TOSS_BASE_URL`, `TOSS_SECRET_KEY`, `CHARGE_BILLING_KEY_ENCRYPTION_KEY` |
+| 금융상품 | `FINLIFE_API_KEY`, `FINLIFE_BASE_URL`, `FINLIFE_TOP_FIN_GROUP_NO`, `FINLIFE_SYNC_INITIAL_DELAY_MS`, `FINLIFE_SYNC_FIXED_DELAY_MS` |
+| AI | `DIFY_API_KEY`, `DIFY_REPORT_API_KEY`, `DIFY_BASE_URL`, `DIFY_CONVERSATION_OWNER_TTL_MINUTES` |
+| 파일·실시간 | `AWS_REGION`, `SSE_EMITTER_TIMEOUT_MS`, `SSE_HEARTBEAT_INTERVAL_MS` |
 
-```bash
-openssl rand -base64 32      # Base64로 인코딩된 32바이트 키를 생성한다
-```
+- `JWT_SECRET`은 `openssl rand -base64 32`로 만들고 로컬과 배포 환경에서 서로 다른 값을 씁니다. 인스턴스를 늘리면 모든 인스턴스가 같은 값을 가져야 하고 서버 시각(NTP)도 맞아야 합니다.
+- `REDIS_PASSWORD`는 `requirepass`가 걸린 서버에서만 필요합니다. 값이 틀려도 앱은 뜨고 **첫 Redis 명령에서** `NOAUTH`로 실패합니다.
+- `TOSS_SECRET_KEY`와 `CHARGE_BILLING_KEY_ENCRYPTION_KEY`는 개발용 기본값이 있지만 배포 환경에서는 반드시 별도 값을 주입합니다.
 
-`JWT_ACCESS_EXPIRATION_MS`(기본 30분)와 `JWT_REFRESH_EXPIRATION_MS`(기본 14일)는
-선택 항목입니다. 기본값을 그대로 사용하면 됩니다.
-
-`COOKIE_SECURE`는 Refresh Token 쿠키에 `Secure` 속성을 붙일지 결정하는 필수값입니다.
-로컬 HTTP에서는 `false`, HTTPS 배포 환경에서는 `true`로 설정합니다. 로컬에서
-`true`로 설정하면 브라우저가 HTTP 응답의 쿠키를 저장하지 않아 재발급이 실패합니다.
-
-인스턴스를 여러 대로 늘릴 경우 **모든 인스턴스가 같은 `JWT_SECRET`을 가져야
-합니다.** A 서버가 발급한 토큰을 B 서버가 검증하기 때문입니다. 또 `exp` 검증에
-허용 오차가 없으므로 서버 시각(NTP)이 동기화되어 있어야 합니다.
-
-자세한 실행 방법은 [로컬 테스트 문서](docs/LOCAL_TEST.md)를 참고합니다.
-
-## 빌드 및 테스트
-
-Windows PowerShell:
-
-```powershell
-.\gradlew.bat clean test war
-```
-
-macOS 또는 Linux:
+### 빌드와 테스트
 
 ```bash
-./gradlew clean test war
+./gradlew clean test war        # macOS, Linux
+.\gradlew.bat clean test war    # Windows PowerShell
 ```
 
-빌드 결과는 다음 위치에 생성됩니다.
+결과물은 `build/libs/ROOT.war`에 생성됩니다. IntelliJ Tomcat으로 실행할 때는 애플리케이션 컨텍스트 경로를 `/`로 설정합니다.
 
-```text
-build/libs/ROOT.war
-```
-
-IntelliJ Tomcat으로 실행할 때는 애플리케이션 컨텍스트 경로를 `/`로 설정해야
-아래 주소를 그대로 사용할 수 있습니다.
-
-## API 및 문서
-
-### 로컬
-
-| 구분 | URL |
+| 구분 | 로컬 주소 |
 | --- | --- |
 | 애플리케이션 상태 | `http://localhost:8080/api/v1/health` |
 | 데이터베이스 상태 | `http://localhost:8080/api/v1/health/db` |
 | Swagger UI | `http://localhost:8080/swagger-ui.html` |
 | OpenAPI JSON | `http://localhost:8080/v2/api-docs` |
 
-### 개발 통합 서버
+API를 추가하거나 바꿀 때는 Controller의 `@Api`, `@ApiOperation`과 DTO의 `@ApiModel`, `@ApiModelProperty`를 함께 갱신합니다.
+프론트엔드 연동 기준은 [프론트엔드 API 연동 안내](docs/FRONTEND_DEV.md)를 참고합니다.
 
-| 구분 | URL |
-| --- | --- |
-| 서비스 | `https://www.teenymoney.kro.kr` |
-| 애플리케이션 상태 | `https://www.teenymoney.kro.kr/api/v1/health` |
-| 데이터베이스 상태 | `https://www.teenymoney.kro.kr/api/v1/health/db` |
-| Swagger UI | `https://www.teenymoney.kro.kr/swagger-ui.html` |
-| OpenAPI JSON | `https://www.teenymoney.kro.kr/v2/api-docs` |
+## CI/CD
 
-명세는 springfox가 코드에서 자동 생성합니다. API를 추가하거나 변경할 때
-Controller에 `@Api`, `@ApiOperation`, `@ApiResponses`를, Request/Response DTO에
-`@ApiModel`, `@ApiModelProperty`를 함께 갱신하고 `/swagger-ui.html`에서 확인합니다.
-DB를 사용하지 않는 API는 Mapper와 VO가 필요하지 않습니다.
-
-프론트엔드 연동 기준은 [프론트엔드 개발 문서](docs/FRONTEND_DEV.md)를 참고합니다.
-
-## 데이터베이스 개발 원칙
-
-- 개인 기능 개발과 SQL 실험은 각자의 로컬 MySQL에서 진행합니다.
-- EC2 MySQL은 팀 공용 통합 테스트 환경으로 사용합니다.
-- 검토되지 않은 DDL이나 테스트 데이터를 EC2에 직접 반영하지 않습니다.
-- 실제 개인정보, 운영 계정, 비밀번호를 SQL이나 문서에 기록하지 않습니다.
-
-현재 환경 구분은 다음과 같습니다.
-
-| 환경 | 목적 | 데이터베이스 |
+| Workflow | 실행 시점 | 하는 일 |
 | --- | --- | --- |
-| Local | 개인 기능 개발 및 반복 테스트 | 개인 로컬 MySQL |
-| EC2 Integration | 프론트엔드·백엔드 통합 테스트, 멘토링, 시연 | EC2 Docker MySQL |
-| Production | 현재 별도 구성 없음 | 추후 결정 |
+| [CI](.github/workflows/ci.yml) | `dev`, `main` 대상 PR, `main` push, 수동 실행 | 필수 파일·민감 파일 검사, Java 17 테스트와 `ROOT.war` 빌드 |
+| [Deploy development](.github/workflows/deploy-dev.yml) | `dev` push, 수동 실행 | 테스트·빌드 후 EC2에 WAR 배포, 헬스 체크, 실패 시 자동 복원 |
 
-현재 EC2는 실제 운영 환경이 아니라 팀 개발 통합 환경입니다.
+개발 서버 배포는 다음 순서로 진행됩니다.
 
-현재 Flyway는 도입되지 않았습니다. Flyway 도입 전까지 DDL과 테스트 데이터는
-다음 위치에서 관리합니다.
+1. 테스트와 WAR 빌드를 실행하고 SHA-256 값을 기록합니다.
+2. GitHub OIDC로 AWS 역할을 받아 러너 IP를 보안 그룹에 임시로 허용합니다.
+3. WAR를 EC2로 전송하고 파일명의 Git SHA와 SHA-256 값을 다시 검증합니다.
+4. 기존 WAR를 백업한 뒤 Tomcat을 재시작하고 `/api/v1/health`, `/api/v1/health/db`, 공개 URL을 확인합니다.
+5. 헬스 체크에 실패하면 직전 WAR로 자동 복원합니다. 백업은 최근 5개만 보관합니다.
+6. 성공 여부와 관계없이 임시 SSH 키와 보안 그룹 규칙을 회수합니다.
 
-```text
-sql/
-├── schema/       # 현재 전체 스키마
-├── migration/    # 순서대로 적용할 변경 SQL
-└── seed/         # 로컬 전용 테스트 데이터
-```
+운영 방법은 [GitHub Actions 운영 문서](.github/workflows/README.md)와 [EC2 배포와 환경 설정](docs/DEPLOY.md)을 참고합니다.
 
-- EC2에는 Pull Request 검토가 끝난 SQL만 반영합니다.
-- EC2에 적용한 migration 파일은 수정하지 않고 새 파일을 추가합니다.
-- schema 파일은 승인된 migration 반영 후 현재 구조와 일치하도록 갱신합니다.
-- seed에는 실제 개인정보와 공용 환경용 자격증명을 넣지 않습니다.
-- 현재 SQL은 자동 적용되지 않으며 담당자가 적용 대상 환경을 확인한 뒤 실행합니다.
+## 데이터베이스 관리
 
-세부 규칙은 [SQL 변경 관리 문서](sql/README.md)를 참고합니다.
+- Flyway는 아직 도입하지 않았습니다. `sql/migration`의 파일을 담당자가 순서대로 직접 적용합니다.
+- 개인 기능 개발과 SQL 실험은 각자의 로컬 MySQL에서 진행하고, EC2 MySQL에는 PR 검토를 마친 SQL만 반영합니다.
+- EC2에 적용한 migration 파일은 수정하지 않고 다음 번호의 파일을 추가합니다.
+- 실제 개인정보, 운영 계정, 비밀번호를 SQL과 문서에 넣지 않습니다.
 
-## CI
+## 협업 규칙
 
-[GitHub Actions CI](.github/workflows/ci.yml)는 `dev`, `main` 대상 Pull Request와
-두 브랜치의 push에서 실행됩니다.
+- `main`, `dev`에는 직접 push하지 않고 Issue 단위 브랜치에서 작업한 뒤 PR로 병합합니다.
+- PR은 CI(`repo-policy`, `backend-build`)와 코드 리뷰를 통과해야 병합합니다.
+- 브랜치 이름은 `<이슈번호>-<타입>-<담당자이니셜>-<작업요약>` 형식을 씁니다. 예: `7-chore-psh-github-templates`
+- 커밋 메시지는 `feat`, `fix`, `refactor`, `docs`, `test`, `chore` 접두어를 씁니다.
+- PR 제목은 `type(scope): 변경 내용` 형식을 쓰고, `scope`에는 `auth`, `family`, `wallet`, `quest`, `infra` 같은 변경 영역을 적습니다.
+- Issue의 작업 종류, 우선순위(`Priority`, `Effort`), 일정(`Start date`, `Target date`)은 Organization 설정으로 관리합니다.
 
-CI는 다음 항목을 검사합니다.
+## 보안 원칙
 
-- 필수 Gradle, GitHub 템플릿 파일
-- SQL 변경 관리 문서
-- `.idea`, 실제 `.env`, 로컬 설정, 키 및 인증서 파일 커밋 여부
-- DB 접속 정보의 환경변수 사용 여부
-- Java 17 기반 전체 테스트
-- `ROOT.war` 생성
-
-CI는 실제 MySQL, Redis 또는 EC2에 연결하지 않으며 배포도 수행하지 않습니다.
-브랜치 보호 규칙에서는 `repo-policy`, `backend-build`를 Required Check로
-설정합니다.
-
-## 개발 예정 범위
-
-- ~~회원가입과 로그인 (JWT 토큰 발급)~~ — **완료**
-- ~~Redis Refresh Token Rotation과 계정 단위 로그아웃~~ — **완료**
-- ~~`JWT_SECRET` 미설정 시 기동 실패 처리~~ — **완료**
-- 가족 연결
-- 지갑, 거래 원장, 용돈
-- 결제와 업종별 결제 정책
-- 티니점수와 신뢰도
-- 예금, 적금 등 금융상품
-- 퀘스트와 보상
-- 알림
-- 역할 기반 인가
-- EC2 자동 배포
-
-예정 기능의 API, 보안 정책, 데이터 모델은 구현과 리뷰를 거친 뒤 확정합니다.
-구현되지 않은 정책을 현재 동작으로 간주하지 않습니다.
-
-## Git 작업 규칙
-
-- 초기 저장소 등록 이후 `main`, `dev`에는 직접 push하지 않습니다.
-- Issue 단위로 작업 브랜치를 생성합니다.
-- Pull Request에서 CI와 코드 리뷰를 통과한 뒤 병합합니다.
-- API 변경 시 Swagger 애노테이션과 관련 문서를 함께 갱신합니다.
-- 비밀번호, 토큰, SSH 키, 실제 개인정보를 커밋하지 않습니다.
-
-Issue와 Pull Request의 메타데이터는 다음 기준으로 관리합니다.
-
-- Issue 제목에는 접두어 없이 실제 작업 내용만 작성합니다.
-- Backend와 Frontend 작업은 Repository로 구분합니다.
-- 작업 종류는 Organization Issue Type으로 관리합니다.
-- 우선순위와 작업량은 Organization Issue Field의 `Priority`, `Effort`로 관리합니다.
-- 일정은 `Start date`, `Target date`로 관리합니다.
-- 상위 작업 관계는 Parent issue와 Sub-issue로 연결합니다.
-- `domain:*` Label은 업무 기능 영역, `area:*` Label은 기술 작업 영역을 나타냅니다.
-- 논의가 필요한 작업은 `needs: discussion`, 진행이 차단된 작업은 `status: blocked` Label을 사용합니다.
-
-브랜치 이름은 `<이슈번호>-<타입>-<담당자이니셜>-<작업요약>` 형식을 사용합니다.
-
-```text
-7-chore-psh-github-templates
-```
-
-커밋 메시지 예시:
-
-```text
-feat: 회원가입 API 구현
-fix: 토큰 만료 검증 오류 수정
-refactor: 회원 조회 로직 분리
-docs: 로컬 실행 방법 추가
-test: 로그인 서비스 테스트 추가
-chore: Redis 의존성 추가
-```
-
-Pull Request 제목은 `type(scope): 변경 내용` 형식을 사용합니다. 허용하는 `type`은
-`feat`, `fix`, `refactor`, `test`, `docs`, `chore`이며, `scope`에는 `auth`,
-`member`, `wallet`, `common`, `github`, `infra` 등 변경 영역을 작성합니다.
-
-## 보안 주의사항
-
-- 비밀번호, JWT Secret, DB 자격증명, SSH 키를 저장소와 로그에 남기지 않습니다.
-  로컬과 운영 모두 `JWT_SECRET`을 실행 환경에서 주입합니다.
+- 비밀번호, JWT Secret, DB 자격증명, SSH 키, 결제 키를 저장소와 로그에 남기지 않습니다.
 - 토큰 값과 서명 키를 로그에 출력하지 않습니다. 인증 필터에 로거를 두지 않은 이유입니다.
-- 실제 개인정보를 테스트 데이터로 사용하지 않습니다.
-- 클라이언트가 전달한 회원 ID와 권한을 그대로 신뢰하지 않습니다.
+- 클라이언트가 보낸 회원 ID와 권한을 그대로 믿지 않고 인증 정보(`MemberPrincipal`)로 확인합니다.
 - 금융 요청에는 트랜잭션과 멱등성을 적용합니다.
-- `/api/v1/health/db`는 개발 통합 확인용입니다. 운영 환경에서는 공개 범위와
-  응답 정보 수준을 다시 검토해야 합니다. 현재 응답은 선택된 DB 이름을 포함하며,
-  DB URL, 사용자명, 내부 IP, SQL 예외, 스택 트레이스는 반환하지 않습니다.
+- `/api/v1/health/db`는 개발 통합 확인용입니다. 운영 환경에서는 공개 범위와 응답 정보를 다시 검토해야 합니다.
 
 ## 문서
 
-- [프로젝트 구조와 구현 규칙](docs/PROJECT_STRUCTURE.md)
-- [로컬 테스트 및 Tomcat 실행](docs/LOCAL_TEST.md)
-- [EC2 배포와 환경 설정](docs/DEPLOY.md)
-- [프론트엔드 연동 및 Swagger](docs/FRONTEND_DEV.md)
-- [가족 연동 코드 API 연동 안내](docs/FRONTEND_FAMILY_LINK_CODE.md)
-- [GitHub Actions 운영](.github/workflows/README.md)
+| 문서 | 내용 |
+| --- | --- |
+| [PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md) | 백엔드 구조와 개발 규칙 |
+| [LOCAL_TEST.md](docs/LOCAL_TEST.md) | 로컬 빌드와 API 확인 |
+| [DEPLOY.md](docs/DEPLOY.md) | EC2 배포와 환경 설정 |
+| [FRONTEND_DEV.md](docs/FRONTEND_DEV.md) | 프론트엔드 API 연동 안내 |
+| [FRONTEND_FAMILY_LINK_CODE.md](docs/FRONTEND_FAMILY_LINK_CODE.md) | 가족 연동 코드 API 연동 안내 |
+| [jwt-security-pipeline.md](docs/jwt-security-pipeline.md) | JWT·Spring Security 인증 파이프라인 설계 |
+| [SSE_RATIONALE.md](docs/SSE_RATIONALE.md) | SSE를 선택한 이유 |
+| [QUEST_FEATURE_DESIGN.md](docs/QUEST_FEATURE_DESIGN.md) | 퀘스트 기능 전체 인수인계 문서 |
+| [ISSUE_104_IMPLEMENTATION_REPORT.md](docs/ISSUE_104_IMPLEMENTATION_REPORT.md) | 이슈 #104 구현 보고서 |
+| [sql/README.md](sql/README.md) | SQL 변경 관리 |
+| [.github/workflows/README.md](.github/workflows/README.md) | GitHub Actions 운영 |
+
+## 팀
+
+| 역할 | GitHub | 주요 담당 |
+| --- | --- | --- |
+| 팀장 · Backend | [@we5046](https://github.com/we5046) | 프로젝트 기반과 공통 응답·예외, 인증·회원, 가족 연동, 퀘스트, SSE, CI/CD와 EC2 배포 |
+| Backend | [@wjdgh123](https://github.com/wjdgh123) | 금융상품(예금·적금·대출), 티니점수 |
+| Backend | [@dkzndkqh](https://github.com/dkzndkqh) | 지갑·충전, 용돈, 머니 리포트 AI 분석, AI 챗봇 |
+| Backend | [@kimjm9841](https://github.com/kimjm9841) | 카테고리 결제 정책, 오늘만 허용, 결제·결제 비밀번호, 알림 |
+| Frontend | [@yxngbxyxn1003](https://github.com/yxngbxyxn1003) | 부모 화면, 회원가입·로그인 |
+| Frontend | [@soobin-shin](https://github.com/soobin-shin) | 자녀 화면 |
 
 ## 프로젝트 성격
 
-본 프로젝트는 KB IT's Your Life 교육 과정의 팀 프로젝트로 제작되었습니다.
-별도의 오픈소스 라이선스는 현재 부여하지 않았습니다.
+KB IT's Your Life 교육 과정의 팀 프로젝트로 제작했습니다. 별도의 오픈소스 라이선스는 부여하지 않았습니다.
